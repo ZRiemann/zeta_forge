@@ -1,0 +1,28 @@
+get_filename_component(_hpx_build_root "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+if(CMAKE_BUILD_TYPE)
+  set(_hpx_build_type "${CMAKE_BUILD_TYPE}")
+else()
+  set(_hpx_build_type "Release")
+endif()
+set(_hpx_conan_generators_dir "${_hpx_build_root}/build/${_hpx_build_type}/conan/build/${_hpx_build_type}/generators")
+
+include("${_hpx_conan_generators_dir}/jemalloc-config.cmake")
+
+set(Jemalloc_FOUND TRUE)
+
+if(TARGET jemalloc::jemalloc)
+  set(Jemalloc_LIBRARIES jemalloc::jemalloc)
+  get_target_property(_jemalloc_include_dirs jemalloc::jemalloc INTERFACE_INCLUDE_DIRECTORIES)
+  if(_jemalloc_include_dirs)
+    list(LENGTH _jemalloc_include_dirs _jemalloc_include_count)
+    set(Jemalloc_INCLUDE_DIRS "${_jemalloc_include_dirs}")
+    list(GET _jemalloc_include_dirs 0 Jemalloc_INCLUDE_DIR)
+    if(_jemalloc_include_count GREATER 1)
+      list(GET _jemalloc_include_dirs 1 Jemalloc_ADDITIONAL_INCLUDE_DIR)
+    endif()
+  endif()
+endif()
+
+if(TARGET jemalloc::jemalloc AND NOT TARGET Jemalloc::Jemalloc)
+  add_library(Jemalloc::Jemalloc ALIAS jemalloc::jemalloc)
+endif()

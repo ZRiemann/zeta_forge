@@ -1,0 +1,70 @@
+* Zeta Forge
+
+Zeta Forge is a superproject for unified source management, reproducible builds, and dependency integration across modern C++ libraries and applications.
+
+中文 README: [[file:doc/readme_cn.org][doc/readme_cn.org]]
+
+* Clone And Initialize
+
+Clone with submodules:
+
+#+begin_src bash
+git clone --recurse-submodules <repo-url>
+#+end_src
+
+If the repository has already been cloned, initialize all submodules recursively:
+
+#+begin_src bash
+git submodule update --init --recursive
+#+end_src
+
+This is required because some source repositories also contain nested submodules, for example zpp.
+
+* Source Layout
+
+Default source checkouts live under =3rd_party/=:
+
+- =3rd_party/hpx=
+- =3rd_party/folly=
+- =3rd_party/abseil-cpp=
+- =3rd_party/nng=
+- =3rd_party/taskflow=
+- =3rd_party/rapidjson=
+- =3rd_party/zpp=
+
+Builder scripts in this repository use these submodules by default.
+
+* Override Source Directories
+
+If you want to build against your own local checkout instead of the managed submodules, override the corresponding environment variable before running a builder script:
+
+#+begin_src bash
+source common/build.env
+export ZETA_HPX_SRC_DIR=/path/to/hpx
+export ZETA_FOLLY_SRC_DIR=/path/to/folly
+export ZETA_ABSEIL_SRC_DIR=/path/to/abseil-cpp
+export ZETA_NNG_SRC_DIR=/path/to/nng
+export ZETA_TASKFLOW_SRC_DIR=/path/to/taskflow
+export ZETA_RAPIDJSON_SRC_DIR=/path/to/rapidjson
+export ZETA_ZPP_SRC_DIR=/path/to/zpp
+#+end_src
+
+If an override is not provided, the default from =common/build.env= is used.
+
+* Build Scripts
+
+Examples:
+
+#+begin_src bash
+./hpx/cbuild.sh --rebuild --install
+./folly/cbuild.sh --rebuild --install
+./abseil-cpp/cbuild.sh --rebuild --install
+./nng/cbuild.sh --rebuild --install
+./zpp/cbuild.sh --rebuild
+#+end_src
+
+* Current Notes
+
+- zpp is wired to use Taskflow and RapidJSON from =3rd_party/= by default.
+- RapidJSON is passed to zpp through =RAPIDJSON_ROOT=.
+- zpp currently still depends on the installed HPX package for HPX examples; if HPX was built without a discoverable Asio installation, configuring zpp HPX examples can fail until Asio is provided or HPX is rebuilt accordingly.

@@ -1,0 +1,68 @@
+* Zeta Forge
+
+Zeta Forge 是一个用于统一源码管理、可复现构建和依赖集成的 C++ 超级工程。
+
+English README: [[file:../readme.org][../readme.org]]
+
+* 克隆与初始化
+
+建议在克隆时直接拉取全部 submodules：
+
+#+begin_src bash
+git clone --recurse-submodules <repo-url>
+#+end_src
+
+如果仓库已经克隆完成，可以再执行一次递归初始化：
+
+#+begin_src bash
+git submodule update --init --recursive
+#+end_src
+
+之所以要使用递归方式，是因为某些源码仓库自身也带有 submodules，例如 zpp。
+
+* 源码布局
+
+默认源码目录位于 =3rd_party/= 下：
+
+- =3rd_party/hpx=
+- =3rd_party/folly=
+- =3rd_party/abseil-cpp=
+- =3rd_party/nng=
+- =3rd_party/taskflow=
+- =3rd_party/rapidjson=
+- =3rd_party/zpp=
+
+本仓库中的构建脚本默认都使用这些 submodules 作为源码输入。
+
+* 覆盖源码目录
+
+如果你希望使用自己的本地源码仓库，而不是 zeta_forge 管理的 submodules，可以在运行构建脚本前覆盖对应环境变量：
+
+#+begin_src bash
+source common/build.env
+export ZETA_HPX_SRC_DIR=/path/to/hpx
+export ZETA_FOLLY_SRC_DIR=/path/to/folly
+export ZETA_ABSEIL_SRC_DIR=/path/to/abseil-cpp
+export ZETA_NNG_SRC_DIR=/path/to/nng
+export ZETA_TASKFLOW_SRC_DIR=/path/to/taskflow
+export ZETA_RAPIDJSON_SRC_DIR=/path/to/rapidjson
+export ZETA_ZPP_SRC_DIR=/path/to/zpp
+#+end_src
+
+如果没有显式覆盖，则默认使用 =common/build.env= 中定义的 submodule 路径。
+
+* 构建脚本示例
+
+#+begin_src bash
+./hpx/cbuild.sh --rebuild --install
+./folly/cbuild.sh --rebuild --install
+./abseil-cpp/cbuild.sh --rebuild --install
+./nng/cbuild.sh --rebuild --install
+./zpp/cbuild.sh --rebuild
+#+end_src
+
+* 当前说明
+
+- zpp 默认使用 =3rd_party/taskflow= 和 =3rd_party/rapidjson=。
+- RapidJSON 通过 =RAPIDJSON_ROOT= 传递给 zpp。
+- zpp 的 HPX examples 仍依赖系统中已安装的 HPX；如果该 HPX 安装缺少可发现的 Asio，配置 HPX examples 时可能失败，此时需要补齐 Asio 或重新构建 HPX。

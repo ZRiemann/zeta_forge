@@ -26,9 +26,22 @@ git submodule update --init --recursive
 
 #+begin_src bash
 ./common/prepare_debian.sh
+./common/prepare_debian.sh --python-version 3.12
 #+end_src
 
 该脚本面向 Debian 家族发行版，例如 Debian 和 Ubuntu。它会安装构建工具链、Python 工具、=uv=、Conan 2，并初始化 submodules。
+
+* 顶层统一构建入口
+
+你可以直接在仓库根目录使用统一调度入口来触发构建：
+
+#+begin_src bash
+./cbuild.sh hpx --rebuild --install
+./cbuild.sh zpp --rebuild --no-tests
+./cbuild.sh all --rebuild
+#+end_src
+
+=cbuild.sh= 会转发到顶层 =cbuild.py=，再由它分发到 =builder/= 下对应项目的构建脚本。
 
 * 源码布局
 
@@ -50,7 +63,6 @@ git submodule update --init --recursive
 如果你希望使用自己的本地源码仓库，而不是 zeta_forge 管理的 submodules，可以在运行构建脚本前覆盖对应环境变量：
 
 #+begin_src bash
-source common/build.env
 export ZETA_HPX_SRC_DIR=/path/to/hpx
 export ZETA_FOLLY_SRC_DIR=/path/to/folly
 export ZETA_ABSEIL_SRC_DIR=/path/to/abseil-cpp
@@ -61,18 +73,18 @@ export ZETA_ZPP_SRC_DIR=/path/to/zpp
 export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 #+end_src
 
-如果没有显式覆盖，则默认使用 =common/build.env= 中定义的 submodule 路径。
+如果没有显式覆盖，构建脚本默认使用 =3rd_party/= 下对应的 submodule 路径。
 
 =ZETA_INSTALL_PREFIX= 默认值为 =~/.local=。
 
 * 构建脚本示例
 
 #+begin_src bash
-./builder/hpx/cbuild.sh --rebuild --install
-./builder/folly/cbuild.sh --rebuild --install
-./builder/abseil-cpp/cbuild.sh --rebuild --install
-./builder/nng/cbuild.sh --rebuild --install
-./builder/zpp/cbuild.sh --rebuild
+./builder/hpx/cbuild.py --rebuild --install
+./builder/folly/cbuild.py --rebuild --install
+./builder/abseil-cpp/cbuild.py --rebuild --install
+./builder/nng/cbuild.py --rebuild --install
+./builder/zpp/cbuild.py --rebuild
 #+end_src
 
 * 当前说明

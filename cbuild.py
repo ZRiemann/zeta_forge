@@ -19,17 +19,76 @@ TARGET_SCRIPTS = {
     "nng": REPO_ROOT / "builder" / "nng" / "cbuild.py",
     "zpp": REPO_ROOT / "builder" / "zpp" / "cbuild.py",
 }
-BUILD_SEQUENCE = ["hpx", "folly", "abseil-cpp", "nng", "zpp"]
+TARGET_ORDER = ["hpx", "folly", "abseil-cpp", "nng", "zpp"]
+TARGET_DEPENDENCIES = {
+    "hpx": (),
+    "folly": (),
+    "abseil-cpp": (),
+    "nng": (),
+    "zpp": ("hpx", "folly", "abseil-cpp", "nng"),
+}
+
+
+def format_target_lines() -> str:
+    lines: list[str] = []
+    for target in TARGET_ORDER:
+        dependencies = TARGET_DEPENDENCIES[target]
+        if dependencies:
+            lines.append(f"  {target} (depends on: {', '.join(dependencies)})")
+        else:
+            lines.append(f"  {target} (independent)")
+    lines.append("  all")
+    lines.append("  prepare-debian")
+    lines.append("  list")
+    return "\n".join(lines)
+
+
+def resolve_build_order() -> list[str]:
+    remaining = {target: set(dependencies) for target, dependencies in TARGET_DEPENDENCIES.items()}
+    resolved: list[str] = []
+
+    while remaining:
+        ready = [target for target in TARGET_ORDER if target in remaining and not remaining[target]]
+        if not ready:
+            unresolved = ", ".join(sorted(remaining))
+            raise RuntimeError(f"Circular or unresolved target dependencies: {unresolved}")
+
+        for target in ready:
+            resolved.append(target)
+            remaining.pop(target)
+        for dependencies in remaining.values():
+            dependencies.difference_update(ready)
+
+    return resolved
+
+
+def help_epilog() -> str:
+    build_order = " -> ".join(resolve_build_order())
+    return (
+        "Targets:\n"
+        f"{format_target_lines()}\n\n"
+        "Dependency-aware all order:\n"
+        f"  {build_order}\n\n"
+        "Examples:\n"
+        "  ./cbuild.py hpx --rebuild --install\n"
+        "  ./cbuild.py zpp --rebuild --no-tests\n"
+        "  ./cbuild.py all --BUILD_TYPE=Debug --continue-on-error\n"
+        "  ./cbuild.py prepare-debian -- --python-version 3.12"
+    )
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Unified zeta_forge build dispatcher")
+    parser = argparse.ArgumentParser(
+        description="Unified zeta_forge build dispatcher",
+        epilog=help_epilog(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("command", nargs="?", help="Target name, all, prepare-debian, or list")
     parser.add_argument("args", nargs=argparse.REMAINDER)
     return parser
 
 
 def build_all_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="cbuild.py all", description="Build all configured targets in sequence")
+    parser = argparse.ArgumentParser(prog="./cbuild.py all", description="Build all configured targets in sequence")
     parser.add_argument("--BUILD_TYPE", dest="build_type", default="Release", choices=("Release", "Debug"))
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--rebuild", action="store_true")
@@ -39,12 +98,6 @@ def build_all_parser() -> argparse.ArgumentParser:
 
 def print_help(parser: argparse.ArgumentParser) -> None:
     parser.print_help()
-    print("\nTargets:")
-    for target in BUILD_SEQUENCE:
-        print(f"  {target}")
-    print("  all")
-    print("  prepare-debian")
-    print("  list")
 
 
 def normalize_forward_args(args: list[str]) -> list[str]:
@@ -67,7 +120,7 @@ def run_all(namespace: argparse.Namespace, repo_root: Path) -> int:
         forwarded.append("--rebuild")
 
     failures: list[str] = []
-    for target in BUILD_SEQUENCE:
+    for target in resolve_build_order():
         try:
             run_single(target, forwarded, repo_root)
         except Exception:
@@ -102,9 +155,7 @@ def main() -> int:
     if namespace.command == "prepare-debian":
         return run_prepare(namespace.args, repo_config.repo_root)
     if namespace.command == "list":
-        for target in BUILD_SEQUENCE:
-            print(target)
-        print("prepare-debian")
+        print(format_target_lines())
         return 0
     parser.error(f"Unknown command: {namespace.command}")
     return 2

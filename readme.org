@@ -36,12 +36,13 @@ The script is intended for Debian-family distributions such as Debian and Ubuntu
 You can invoke builds from the repository root through the unified dispatcher:
 
 #+begin_src bash
-./cbuild.sh hpx --rebuild --install
-./cbuild.sh zpp --rebuild --no-tests
-./cbuild.sh all --rebuild
+./cbuild.py hpx --rebuild --install
+./cbuild.py zpp --rebuild --no-tests
+./cbuild.py all --rebuild
 #+end_src
 
-The shell entry delegates to =cbuild.py=, which routes commands to the corresponding builder under =builder/=.
+=cbuild.py= can be executed directly and routes commands to the corresponding builder under =builder/=.
+When running =./cbuild.py all=, the dispatcher treats =hpx=, =folly=, =abseil-cpp=, and =nng= as independent targets, then builds =zpp= after those four are complete.
 
 * Source Layout
 

@@ -36,12 +36,13 @@ git submodule update --init --recursive
 你可以直接在仓库根目录使用统一调度入口来触发构建：
 
 #+begin_src bash
-./cbuild.sh hpx --rebuild --install
-./cbuild.sh zpp --rebuild --no-tests
-./cbuild.sh all --rebuild
+./cbuild.py hpx --rebuild --install
+./cbuild.py zpp --rebuild --no-tests
+./cbuild.py all --rebuild
 #+end_src
 
-=cbuild.sh= 会转发到顶层 =cbuild.py=，再由它分发到 =builder/= 下对应项目的构建脚本。
+=cbuild.py= 可以直接执行，并分发到 =builder/= 下对应项目的构建脚本。
+当执行 =./cbuild.py all= 时，调度器会把 =hpx=、=folly=、=abseil-cpp=、=nng= 视为相互独立的目标，并在这四个完成后再构建 =zpp=。
 
 * 源码布局
 

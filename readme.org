@@ -20,6 +20,16 @@ git submodule update --init --recursive
 
 This is required because some source repositories also contain nested submodules, for example zpp.
 
+* Prepare Debian-Based Systems
+
+On Debian-family systems with =apt=, you can install the required host tools with:
+
+#+begin_src bash
+./common/prepare_debian.sh
+#+end_src
+
+The script is intended for Debian-family distributions such as Debian and Ubuntu, and installs the build toolchain, Python tooling, =uv=, Conan 2, and initializes submodules.
+
 * Source Layout
 
 Default source checkouts live under =3rd_party/=:
@@ -33,6 +43,7 @@ Default source checkouts live under =3rd_party/=:
 - =3rd_party/zpp=
 
 Builder scripts in this repository use these submodules by default.
+The build orchestration scripts live under =builder/=.
 
 * Override Source Directories
 
@@ -47,20 +58,23 @@ export ZETA_NNG_SRC_DIR=/path/to/nng
 export ZETA_TASKFLOW_SRC_DIR=/path/to/taskflow
 export ZETA_RAPIDJSON_SRC_DIR=/path/to/rapidjson
 export ZETA_ZPP_SRC_DIR=/path/to/zpp
+export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 #+end_src
 
 If an override is not provided, the default from =common/build.env= is used.
+
+By default, =ZETA_INSTALL_PREFIX= is set to =~/.local=.
 
 * Build Scripts
 
 Examples:
 
 #+begin_src bash
-./hpx/cbuild.sh --rebuild --install
-./folly/cbuild.sh --rebuild --install
-./abseil-cpp/cbuild.sh --rebuild --install
-./nng/cbuild.sh --rebuild --install
-./zpp/cbuild.sh --rebuild
+./builder/hpx/cbuild.sh --rebuild --install
+./builder/folly/cbuild.sh --rebuild --install
+./builder/abseil-cpp/cbuild.sh --rebuild --install
+./builder/nng/cbuild.sh --rebuild --install
+./builder/zpp/cbuild.sh --rebuild
 #+end_src
 
 * Current Notes

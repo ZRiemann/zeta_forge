@@ -20,6 +20,16 @@ git submodule update --init --recursive
 
 之所以要使用递归方式，是因为某些源码仓库自身也带有 submodules，例如 zpp。
 
+* Debian 系系统准备
+
+在使用 =apt= 的 Debian 家族系统上，可以通过下面的脚本安装宿主机构建工具：
+
+#+begin_src bash
+./common/prepare_debian.sh
+#+end_src
+
+该脚本面向 Debian 家族发行版，例如 Debian 和 Ubuntu。它会安装构建工具链、Python 工具、=uv=、Conan 2，并初始化 submodules。
+
 * 源码布局
 
 默认源码目录位于 =3rd_party/= 下：
@@ -33,6 +43,7 @@ git submodule update --init --recursive
 - =3rd_party/zpp=
 
 本仓库中的构建脚本默认都使用这些 submodules 作为源码输入。
+构建编排脚本统一放在 =builder/= 目录下。
 
 * 覆盖源码目录
 
@@ -47,18 +58,21 @@ export ZETA_NNG_SRC_DIR=/path/to/nng
 export ZETA_TASKFLOW_SRC_DIR=/path/to/taskflow
 export ZETA_RAPIDJSON_SRC_DIR=/path/to/rapidjson
 export ZETA_ZPP_SRC_DIR=/path/to/zpp
+export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 #+end_src
 
 如果没有显式覆盖，则默认使用 =common/build.env= 中定义的 submodule 路径。
 
+=ZETA_INSTALL_PREFIX= 默认值为 =~/.local=。
+
 * 构建脚本示例
 
 #+begin_src bash
-./hpx/cbuild.sh --rebuild --install
-./folly/cbuild.sh --rebuild --install
-./abseil-cpp/cbuild.sh --rebuild --install
-./nng/cbuild.sh --rebuild --install
-./zpp/cbuild.sh --rebuild
+./builder/hpx/cbuild.sh --rebuild --install
+./builder/folly/cbuild.sh --rebuild --install
+./builder/abseil-cpp/cbuild.sh --rebuild --install
+./builder/nng/cbuild.sh --rebuild --install
+./builder/zpp/cbuild.sh --rebuild
 #+end_src
 
 * 当前说明

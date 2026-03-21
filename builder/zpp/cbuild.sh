@@ -50,13 +50,10 @@ if [[ $build_examples -eq 0 && $build_hpx_examples -eq 1 ]]; then
 fi
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-shared_config="$script_dir/../common/build.env"
+shared_config="$script_dir/../../common/build.env"
 build_root="$script_dir/build"
 build_dir="$build_root/$build_type"
 conan_generators_dir="$build_dir/conan/build/$build_type/generators"
-folly_prefix_dir="$HOME/.local"
-folly_cmake_dir="$folly_prefix_dir/lib/cmake/folly"
-folly_conan_generators_dir="$HOME/git/zeta_forge/folly/build/$build_type/conan/build/$build_type/generators"
 conan_stamp="$build_dir/.conan.stamp"
 configure_stamp="$build_dir/.configure.stamp"
 
@@ -65,12 +62,25 @@ if [[ -f "$shared_config" ]]; then
 fi
 
 cxx_standard="${ZETA_CXX_STANDARD:-20}"
+install_prefix="${ZETA_INSTALL_PREFIX:-$HOME/.local}"
+builder_root_dir="${ZETA_BUILDER_DIR:-$(cd "$script_dir/.." && pwd)}"
+folly_conan_generators_dir="$builder_root_dir/folly/build/$build_type/conan/build/$build_type/generators"
+folly_prefix_dir="$install_prefix"
+folly_cmake_dir="$folly_prefix_dir/lib/cmake/folly"
 source_dir="${ZETA_ZPP_SRC_DIR}"
 taskflow_source_dir="${ZETA_TASKFLOW_SRC_DIR}"
 rapidjson_source_dir="${ZETA_RAPIDJSON_SRC_DIR}"
 cmake_build_tests="OFF"
 cmake_build_examples="OFF"
 cmake_build_hpx_examples="OFF"
+moved_build_dir=0
+
+if [[ -f "$build_dir/CMakeCache.txt" ]]; then
+	cached_build_dir="$(grep '^CMAKE_CACHEFILE_DIR:INTERNAL=' "$build_dir/CMakeCache.txt" | cut -d= -f2- || true)"
+	if [[ -n "$cached_build_dir" && "$cached_build_dir" != "$build_dir" ]]; then
+		moved_build_dir=1
+	fi
+fi
 
 if [[ ! -d "$source_dir" ]]; then
 	echo "zpp source directory not found: $source_dir" >&2
@@ -108,6 +118,13 @@ fi
 
 mkdir -p "$build_dir"
 
+if [[ $moved_build_dir -eq 1 ]]; then
+	rm -rf "$build_dir/conan"
+	rm -f "$conan_stamp" "$configure_stamp"
+	rm -f "$build_dir/CMakeCache.txt"
+	rm -rf "$build_dir/CMakeFiles"
+fi
+
 if [[ $do_rebuild -eq 1 ]] || [[ ! -f "$conan_stamp" ]] || [[ "$script_dir/conanfile.py" -nt "$conan_stamp" ]]; then
 	conan profile detect --force || true
 	rm -rf "$build_dir/conan"
@@ -140,7 +157,7 @@ if [[ $needs_configure -eq 1 ]]; then
 		-DCMAKE_BUILD_TYPE="$build_type" \
 		-DCMAKE_TOOLCHAIN_FILE="$conan_generators_dir/conan_toolchain.cmake" \
 		-DCMAKE_PREFIX_PATH="$folly_prefix_dir;$folly_conan_generators_dir" \
-		-DCMAKE_INSTALL_PREFIX="$HOME/.local" \
+		-DCMAKE_INSTALL_PREFIX="$install_prefix" \
 		-DCMAKE_CXX_STANDARD="$cxx_standard" \
 		-Dfolly_DIR="$folly_cmake_dir" \
 		-DRAPIDJSON_ROOT="$rapidjson_source_dir/include" \

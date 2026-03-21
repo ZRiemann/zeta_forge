@@ -33,7 +33,7 @@ case "$build_type" in
 esac
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-shared_config="$script_dir/../common/build.env"
+shared_config="$script_dir/../../common/build.env"
 build_root="$script_dir/build"
 build_dir="$build_root/$build_type"
 user_toolchain="$script_dir/cmake/conan_user_toolchain.cmake"
@@ -46,7 +46,16 @@ if [[ -f "$shared_config" ]]; then
 fi
 
 cxx_standard="${ZETA_CXX_STANDARD:-20}"
+install_prefix="${ZETA_INSTALL_PREFIX:-$HOME/.local}"
 source_dir="${ZETA_HPX_SRC_DIR}"
+moved_build_dir=0
+
+if [[ -f "$build_dir/CMakeCache.txt" ]]; then
+  cached_build_dir="$(grep '^CMAKE_CACHEFILE_DIR:INTERNAL=' "$build_dir/CMakeCache.txt" | cut -d= -f2- || true)"
+  if [[ -n "$cached_build_dir" && "$cached_build_dir" != "$build_dir" ]]; then
+    moved_build_dir=1
+  fi
+fi
 
 if [[ ! -d "$source_dir" ]]; then
   echo "HPX source directory not found: $source_dir" >&2
@@ -59,6 +68,13 @@ if [[ $do_rebuild -eq 1 ]]; then
 fi
 
 mkdir -p "$build_dir"
+
+if [[ $moved_build_dir -eq 1 ]]; then
+  rm -rf "$build_dir/conan"
+  rm -f "$conan_stamp" "$configure_stamp"
+  rm -f "$build_dir/CMakeCache.txt"
+  rm -rf "$build_dir/CMakeFiles"
+fi
 
 if [[ $do_rebuild -eq 1 ]] || [[ ! -f "$conan_stamp" ]] || [[ "$script_dir/conanfile.py" -nt "$conan_stamp" ]] || [[ "$user_toolchain" -nt "$conan_stamp" ]]; then
   conan profile detect --force || true
@@ -94,7 +110,7 @@ if [[ $needs_configure -eq 1 ]]; then
     -DHPX_WITH_MALLOC=jemalloc \
     -DHPX_WITH_NETWORKING=ON \
     -DHPX_WITH_PARCELPORT_MPI=ON \
-    -DCMAKE_INSTALL_PREFIX="$HOME/.local" \
+    -DCMAKE_INSTALL_PREFIX="$install_prefix" \
     -DHPX_WITH_FETCH_ASIO=OFF \
     -DHPX_WITH_FETCH_BOOST=OFF \
     -DHPX_WITH_FETCH_HWLOC=OFF \

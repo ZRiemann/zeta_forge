@@ -33,9 +33,10 @@ case "$build_type" in
 esac
 
 script_dir="$(cd "$(dirname "$0")" && pwd)"
-shared_config="$script_dir/../common/build.env"
+shared_config="$script_dir/../../common/build.env"
 build_root="$script_dir/build"
 build_dir="$build_root/$build_type"
+user_toolchain="$script_dir/cmake/conan_user_toolchain.cmake"
 conan_generators_dir="$build_dir/conan/build/$build_type/generators"
 conan_stamp="$build_dir/.conan.stamp"
 configure_stamp="$build_dir/.configure.stamp"
@@ -45,11 +46,20 @@ if [[ -f "$shared_config" ]]; then
 fi
 
 cxx_standard="${ZETA_CXX_STANDARD:-20}"
-source_dir="${ZETA_ABSEIL_SRC_DIR}"
+install_prefix="${ZETA_INSTALL_PREFIX:-$HOME/.local}"
+source_dir="${ZETA_FOLLY_SRC_DIR}"
+moved_build_dir=0
+
+if [[ -f "$build_dir/CMakeCache.txt" ]]; then
+	cached_build_dir="$(grep '^CMAKE_CACHEFILE_DIR:INTERNAL=' "$build_dir/CMakeCache.txt" | cut -d= -f2- || true)"
+	if [[ -n "$cached_build_dir" && "$cached_build_dir" != "$build_dir" ]]; then
+		moved_build_dir=1
+	fi
+fi
 
 if [[ ! -d "$source_dir" ]]; then
-	echo "Abseil source directory not found: $source_dir" >&2
-	echo "Set ZETA_ABSEIL_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd_party/abseil-cpp" >&2
+	echo "Folly source directory not found: $source_dir" >&2
+	echo "Set ZETA_FOLLY_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd_party/folly" >&2
 	exit 2
 fi
 
@@ -59,7 +69,14 @@ fi
 
 mkdir -p "$build_dir"
 
-if [[ $do_rebuild -eq 1 ]] || [[ ! -f "$conan_stamp" ]] || [[ "$script_dir/conanfile.py" -nt "$conan_stamp" ]]; then
+if [[ $moved_build_dir -eq 1 ]]; then
+	rm -rf "$build_dir/conan"
+	rm -f "$conan_stamp" "$configure_stamp"
+	rm -f "$build_dir/CMakeCache.txt"
+	rm -rf "$build_dir/CMakeFiles"
+fi
+
+if [[ $do_rebuild -eq 1 ]] || [[ ! -f "$conan_stamp" ]] || [[ "$script_dir/conanfile.py" -nt "$conan_stamp" ]] || [[ "$user_toolchain" -nt "$conan_stamp" ]]; then
 	conan profile detect --force || true
 
 	conan install "$script_dir/conanfile.py" \
@@ -67,7 +84,8 @@ if [[ $do_rebuild -eq 1 ]] || [[ ! -f "$conan_stamp" ]] || [[ "$script_dir/conan
 		--build=missing \
 		-s build_type="$build_type" \
 		-s compiler.cppstd="$cxx_standard" \
-		-c tools.cmake.cmaketoolchain:generator=Ninja
+		-c tools.cmake.cmaketoolchain:generator=Ninja \
+		-c "tools.cmake.cmaketoolchain:user_toolchain=[\"$user_toolchain\"]"
 	touch "$conan_stamp"
 fi
 
@@ -89,13 +107,13 @@ if [[ $needs_configure -eq 1 ]]; then
 		-Wno-dev \
 		-DCMAKE_BUILD_TYPE="$build_type" \
 		-DCMAKE_TOOLCHAIN_FILE="$conan_generators_dir/conan_toolchain.cmake" \
-		-DCMAKE_INSTALL_PREFIX="$HOME/.local" \
+		-DCMAKE_INSTALL_PREFIX="$install_prefix" \
 		-DCMAKE_CXX_STANDARD="$cxx_standard" \
-		-DBUILD_TESTING=OFF \
-		-DABSL_BUILD_TESTING=OFF \
-		-DABSL_BUILD_TEST_HELPERS=OFF \
-		-DABSL_USE_GOOGLETEST_HEAD=OFF \
-		-DABSL_BUILD_MONOLITHIC_SHARED_LIBS=OFF
+		-DBUILD_SHARED_LIBS=OFF \
+		-DBOOST_LINK_STATIC=ON \
+		-DBUILD_TESTS=OFF \
+		-DBUILD_BENCHMARKS=OFF \
+		-DPYTHON_EXTENSIONS=OFF
 	touch "$configure_stamp"
 fi
 
@@ -104,3 +122,4 @@ cmake --build "$build_dir" -j"$(nproc)"
 if [[ $do_install -eq 1 ]]; then
 	cmake --install "$build_dir"
 fi
+

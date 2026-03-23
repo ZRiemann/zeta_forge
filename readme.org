@@ -36,13 +36,14 @@ The script is intended for Debian-family distributions such as Debian and Ubuntu
 You can invoke builds from the repository root through the unified dispatcher:
 
 #+begin_src bash
-./cbuild.py hpx --rebuild --install
-./cbuild.py zpp --rebuild --no-tests
-./cbuild.py all --rebuild
+./zbuild.py hpx --rebuild --install
+./zbuild.py zpp --rebuild --no-tests
+./zbuild.py all --rebuild
 #+end_src
 
-=cbuild.py= can be executed directly and routes commands to the corresponding builder under =builder/=.
-When running =./cbuild.py all=, the dispatcher treats =hpx=, =folly=, =abseil-cpp=, and =nng= as independent targets, then builds =zpp= after those four are complete.
+=zbuild.py= uses the =z= from =zeta_forge= to represent the top-level workspace entry rather than a CMake-specific command.
+=zbuild.py= can be executed directly and routes commands to the corresponding workspace target entrypoints under =builder/=.
+When running =./zbuild.py all=, the dispatcher treats =hpx=, =folly=, =abseil-cpp=, and =nng= as independent targets, then builds =zpp= after those four are complete.
 
 * Source Layout
 
@@ -56,12 +57,12 @@ Default source checkouts live under =3rd_party/=:
 - =3rd_party/rapidjson=
 - =3rd_party/zpp=
 
-Builder scripts in this repository use these submodules by default.
-The build orchestration scripts live under =builder/=.
+The workspace target entrypoints in this repository use these submodules by default.
+The workspace orchestration entrypoints live under =builder/=.
 
 * Override Source Directories
 
-If you want to build against your own local checkout instead of the managed submodules, override the corresponding environment variable before running a builder script:
+If you want to build against your own local checkout instead of the managed submodules, override the corresponding environment variable before running a workspace target entrypoint:
 
 #+begin_src bash
 export ZETA_HPX_SRC_DIR=/path/to/hpx
@@ -74,20 +75,20 @@ export ZETA_ZPP_SRC_DIR=/path/to/zpp
 export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 #+end_src
 
-If an override is not provided, builders default to the corresponding path under =3rd_party/=.
+If an override is not provided, the workspace target entrypoints default to the corresponding path under =3rd_party/=.
 
 By default, =ZETA_INSTALL_PREFIX= is set to =~/.local=.
 
-* Build Scripts
+* Workspace Target Entrypoints
 
 Examples:
 
 #+begin_src bash
-./builder/hpx/cbuild.py --rebuild --install
-./builder/folly/cbuild.py --rebuild --install
-./builder/abseil-cpp/cbuild.py --rebuild --install
-./builder/nng/cbuild.py --rebuild --install
-./builder/zpp/cbuild.py --rebuild
+./builder/hpx/zbuild.py --rebuild --install
+./builder/folly/zbuild.py --rebuild --install
+./builder/abseil-cpp/zbuild.py --rebuild --install
+./builder/nng/zbuild.py --rebuild --install
+./builder/zpp/zbuild.py --rebuild
 #+end_src
 
 * Current Notes

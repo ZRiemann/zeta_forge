@@ -36,13 +36,14 @@ git submodule update --init --recursive
 你可以直接在仓库根目录使用统一调度入口来触发构建：
 
 #+begin_src bash
-./cbuild.py hpx --rebuild --install
-./cbuild.py zpp --rebuild --no-tests
-./cbuild.py all --rebuild
+./zbuild.py hpx --rebuild --install
+./zbuild.py zpp --rebuild --no-tests
+./zbuild.py all --rebuild
 #+end_src
 
-=cbuild.py= 可以直接执行，并分发到 =builder/= 下对应项目的构建脚本。
-当执行 =./cbuild.py all= 时，调度器会把 =hpx=、=folly=、=abseil-cpp=、=nng= 视为相互独立的目标，并在这四个完成后再构建 =zpp=。
+=zbuild.py= 中的 =z= 取自 =zeta_forge=，用于表达仓库顶层统一入口，而不是局限于 CMake 的 =c=。
+=zbuild.py= 可以直接执行，并分发到 =builder/= 下对应项目的工作区目标入口。
+当执行 =./zbuild.py all= 时，调度器会把 =hpx=、=folly=、=abseil-cpp=、=nng= 视为相互独立的目标，并在这四个完成后再构建 =zpp=。
 
 * 源码布局
 
@@ -56,12 +57,12 @@ git submodule update --init --recursive
 - =3rd_party/rapidjson=
 - =3rd_party/zpp=
 
-本仓库中的构建脚本默认都使用这些 submodules 作为源码输入。
-构建编排脚本统一放在 =builder/= 目录下。
+本仓库中的工作区目标入口默认都使用这些 submodules 作为源码输入。
+工作区编排入口统一放在 =builder/= 目录下。
 
 * 覆盖源码目录
 
-如果你希望使用自己的本地源码仓库，而不是 zeta_forge 管理的 submodules，可以在运行构建脚本前覆盖对应环境变量：
+如果你希望使用自己的本地源码仓库，而不是 zeta_forge 管理的 submodules，可以在运行工作区目标入口前覆盖对应环境变量：
 
 #+begin_src bash
 export ZETA_HPX_SRC_DIR=/path/to/hpx
@@ -74,18 +75,18 @@ export ZETA_ZPP_SRC_DIR=/path/to/zpp
 export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 #+end_src
 
-如果没有显式覆盖，构建脚本默认使用 =3rd_party/= 下对应的 submodule 路径。
+如果没有显式覆盖，工作区目标入口默认使用 =3rd_party/= 下对应的 submodule 路径。
 
 =ZETA_INSTALL_PREFIX= 默认值为 =~/.local=。
 
-* 构建脚本示例
+* 工作区目标入口示例
 
 #+begin_src bash
-./builder/hpx/cbuild.py --rebuild --install
-./builder/folly/cbuild.py --rebuild --install
-./builder/abseil-cpp/cbuild.py --rebuild --install
-./builder/nng/cbuild.py --rebuild --install
-./builder/zpp/cbuild.py --rebuild
+./builder/hpx/zbuild.py --rebuild --install
+./builder/folly/zbuild.py --rebuild --install
+./builder/abseil-cpp/zbuild.py --rebuild --install
+./builder/nng/zbuild.py --rebuild --install
+./builder/zpp/zbuild.py --rebuild
 #+end_src
 
 * 当前说明

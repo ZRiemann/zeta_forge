@@ -13,11 +13,11 @@ from zeta_forge.process import run_command
 
 
 TARGET_SCRIPTS = {
-    "hpx": REPO_ROOT / "builder" / "hpx" / "cbuild.py",
-    "folly": REPO_ROOT / "builder" / "folly" / "cbuild.py",
-    "abseil-cpp": REPO_ROOT / "builder" / "abseil-cpp" / "cbuild.py",
-    "nng": REPO_ROOT / "builder" / "nng" / "cbuild.py",
-    "zpp": REPO_ROOT / "builder" / "zpp" / "cbuild.py",
+    "hpx": REPO_ROOT / "builder" / "hpx" / "zbuild.py",
+    "folly": REPO_ROOT / "builder" / "folly" / "zbuild.py",
+    "abseil-cpp": REPO_ROOT / "builder" / "abseil-cpp" / "zbuild.py",
+    "nng": REPO_ROOT / "builder" / "nng" / "zbuild.py",
+    "zpp": REPO_ROOT / "builder" / "zpp" / "zbuild.py",
 }
 TARGET_ORDER = ["hpx", "folly", "abseil-cpp", "nng", "zpp"]
 TARGET_DEPENDENCIES = {
@@ -70,10 +70,10 @@ def help_epilog() -> str:
         "Dependency-aware all order:\n"
         f"  {build_order}\n\n"
         "Examples:\n"
-        "  ./cbuild.py hpx --rebuild --install\n"
-        "  ./cbuild.py zpp --rebuild --no-tests\n"
-        "  ./cbuild.py all --BUILD_TYPE=Debug --continue-on-error\n"
-        "  ./cbuild.py prepare-debian -- --python-version 3.12"
+        "  ./zbuild.py hpx --rebuild --install\n"
+        "  ./zbuild.py zpp --rebuild --no-tests\n"
+        "  ./zbuild.py all --BUILD_TYPE=Debug --continue-on-error\n"
+        "  ./zbuild.py prepare-debian -- --python-version 3.12"
     )
 
 def build_parser() -> argparse.ArgumentParser:
@@ -88,7 +88,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def build_all_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="./cbuild.py all", description="Build all configured targets in sequence")
+    parser = argparse.ArgumentParser(prog="./zbuild.py all", description="Build all configured targets in sequence")
     parser.add_argument("--BUILD_TYPE", dest="build_type", default="Release", choices=("Release", "Debug"))
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--rebuild", action="store_true")

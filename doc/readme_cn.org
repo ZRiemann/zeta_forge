@@ -22,14 +22,25 @@ git submodule update --init --recursive
 
 * Debian 系系统准备
 
-在使用 =apt= 的 Debian 家族系统上，可以通过下面的脚本安装宿主机构建工具：
+推荐把环境准备拆成两层：
+
+1. =zsa= 负责 Debian/Ubuntu 宿主机环境 bootstrap。
+2. =zeta_forge= 负责仓库内部工具链和依赖准备。
+
+如果 =zsa= 与 =zeta_forge= 以兄弟目录方式检出，可以先执行：
+
+#+begin_src bash
+../zsa/util/bootstrap_debian.sh --minimal
+#+end_src
+
+然后再执行 =zeta_forge= 仓库内准备脚本：
 
 #+begin_src bash
 ./common/prepare_debian.sh
 ./common/prepare_debian.sh --python-version 3.12
 #+end_src
 
-该脚本面向 Debian 家族发行版，例如 Debian 和 Ubuntu。它会安装构建工具链、Python 工具、=uv=、Conan 2，并初始化 submodules。
+=./common/prepare_debian.sh= 专注于 =zeta_forge= 内部工具链管理：构建依赖、Conan 2 和 submodule 初始化。如果当前系统还没有 Python，且存在兄弟目录 =zsa=，这个 wrapper 会自动桥接到 =../zsa/util/bootstrap_debian.sh --minimal=。
 
 * 顶层统一构建入口
 

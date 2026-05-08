@@ -22,14 +22,25 @@ This is required because some source repositories also contain nested submodules
 
 * Prepare Debian-Based Systems
 
-On Debian-family systems with =apt=, you can install the required host tools with:
+The recommended flow is split into two layers:
+
+1. =zsa= bootstraps the Debian/Ubuntu host environment.
+2. =zeta_forge= prepares repo-local toolchains and dependencies.
+
+If =zsa= is checked out next to =zeta_forge=, you can bootstrap the host with:
+
+#+begin_src bash
+../zsa/util/bootstrap_debian.sh --minimal
+#+end_src
+
+Then prepare the =zeta_forge= workspace with:
 
 #+begin_src bash
 ./common/prepare_debian.sh
 ./common/prepare_debian.sh --python-version 3.12
 #+end_src
 
-The script is intended for Debian-family distributions such as Debian and Ubuntu, and installs the build toolchain, Python tooling, =uv=, Conan 2, and initializes submodules.
+=./common/prepare_debian.sh= focuses on =zeta_forge=-local toolchain management: build dependencies, Conan 2, and submodule initialization. If Python is not available yet and a sibling =zsa= checkout exists, the wrapper delegates the host bootstrap step to =../zsa/util/bootstrap_debian.sh --minimal=.
 
 * Unified Build Entry
 

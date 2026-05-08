@@ -14,7 +14,7 @@ from zeta_forge.debian_prep import DebianPreparer
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Prepare a Debian-family system for building zeta_forge dependencies."
+        description="Prepare zeta_forge-local dependencies after the host bootstrap layer is ready."
     )
     parser.add_argument(
         "--python-version",

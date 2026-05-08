@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import sys
 from pathlib import Path
 
 from .config import RepoConfig
@@ -100,7 +101,17 @@ class DebianPreparer:
     def install_or_upgrade_uv(self) -> None:
         uv_cmd = Path.home() / ".local" / "bin" / "uv"
         if uv_cmd.is_file() and os.access(uv_cmd, os.X_OK):
-            run_command([uv_cmd, "self", "update"], env=self.repo_config.env)
+            update_result = run_command(
+                [uv_cmd, "self", "update"],
+                env=self.repo_config.env,
+                check=False,
+                capture_output=True,
+            )
+            if update_result.returncode != 0:
+                print(
+                    "uv self update is unavailable for the current installation; continuing with the existing uv binary",
+                    file=sys.stderr,
+                )
         else:
             run_command(["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"], env=self.repo_config.env)
         if not uv_cmd.is_file():

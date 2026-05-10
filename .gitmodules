@@ -1,21 +1,22 @@
-[submodule "3rd_party/hpx"]
-	path = 3rd_party/hpx
+[submodule "3rd/hpx"]
+	path = 3rd/hpx
 	url = https://github.com/STEllAR-GROUP/hpx.git
-[submodule "3rd_party/folly"]
-	path = 3rd_party/folly
+[submodule "3rd/folly"]
+	path = 3rd/folly
 	url = https://github.com/facebook/folly.git
-[submodule "3rd_party/abseil-cpp"]
-	path = 3rd_party/abseil-cpp
-	url = https://github.com/abseil/abseil-cpp.git
-[submodule "3rd_party/taskflow"]
-	path = 3rd_party/taskflow
+[submodule "3rd/taskflow"]
+	path = 3rd/taskflow
 	url = https://github.com/taskflow/taskflow.git
-[submodule "3rd_party/zpp"]
-	path = 3rd_party/zpp
+[submodule "zpp"]
+	path = zpp
 	url = https://github.com/ZRiemann/zpp.git
-[submodule "3rd_party/rapidjson"]
-	path = 3rd_party/rapidjson
+[submodule "3rd/rapidjson"]
+	path = 3rd/rapidjson
 	url = https://github.com/Tencent/rapidjson.git
-[submodule "3rd_party/nng"]
-	path = 3rd_party/nng
+[submodule "3rd/nng"]
+	path = 3rd/nng
 	url = https://github.com/nanomsg/nng.git
+
+[submodule "3rd/grpc"]
+	path = 3rd/grpc
+	url = https://github.com/grpc/grpc.git

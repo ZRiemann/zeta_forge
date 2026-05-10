@@ -26,7 +26,7 @@ class NngBuilder(CMakeProjectBuilder):
 
     @property
     def missing_source_hint(self) -> str:
-        return "Set ZETA_NNG_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd_party/nng"
+        return "Set ZETA_NNG_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd/nng"
 
     def conan_install_command(self) -> list[object]:
         raise NotImplementedError

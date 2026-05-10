@@ -13,19 +13,19 @@ from zeta_forge.process import run_command
 
 
 TARGET_SCRIPTS = {
+    "grpc": REPO_ROOT / "builder" / "grpc" / "zbuild.py",
     "hpx": REPO_ROOT / "builder" / "hpx" / "zbuild.py",
     "folly": REPO_ROOT / "builder" / "folly" / "zbuild.py",
-    "abseil-cpp": REPO_ROOT / "builder" / "abseil-cpp" / "zbuild.py",
     "nng": REPO_ROOT / "builder" / "nng" / "zbuild.py",
     "zpp": REPO_ROOT / "builder" / "zpp" / "zbuild.py",
 }
-TARGET_ORDER = ["hpx", "folly", "abseil-cpp", "nng", "zpp"]
+TARGET_ORDER = ["grpc", "hpx", "folly", "nng", "zpp"]
 TARGET_DEPENDENCIES = {
+    "grpc": (),
     "hpx": (),
-    "folly": (),
-    "abseil-cpp": (),
+    "folly": ("grpc",),
     "nng": (),
-    "zpp": ("hpx", "folly", "abseil-cpp", "nng"),
+    "zpp": ("grpc", "hpx", "folly", "nng"),
 }
 
 
@@ -70,6 +70,7 @@ def help_epilog() -> str:
         "Dependency-aware all order:\n"
         f"  {build_order}\n\n"
         "Examples:\n"
+        "  ./zbuild.py grpc --rebuild --install\n"
         "  ./zbuild.py hpx --rebuild --install\n"
         "  ./zbuild.py zpp --rebuild --no-tests\n"
         "  ./zbuild.py all --BUILD_TYPE=Debug --continue-on-error\n"

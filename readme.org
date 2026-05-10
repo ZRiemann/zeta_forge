@@ -47,6 +47,7 @@ Then prepare the =zeta_forge= workspace with:
 You can invoke builds from the repository root through the unified dispatcher:
 
 #+begin_src bash
+./zbuild.py grpc --rebuild --install
 ./zbuild.py hpx --rebuild --install
 ./zbuild.py zpp --rebuild --no-tests
 ./zbuild.py all --rebuild
@@ -54,19 +55,22 @@ You can invoke builds from the repository root through the unified dispatcher:
 
 =zbuild.py= uses the =z= from =zeta_forge= to represent the top-level workspace entry rather than a CMake-specific command.
 =zbuild.py= can be executed directly and routes commands to the corresponding workspace target entrypoints under =builder/=.
-When running =./zbuild.py all=, the dispatcher treats =hpx=, =folly=, =abseil-cpp=, and =nng= as independent targets, then builds =zpp= after those four are complete.
+When running =./zbuild.py all=, the dispatcher builds =grpc= first, treats =hpx= and =nng= as independent targets, builds =folly= after =grpc=, then builds =zpp= after =grpc=, =hpx=, =folly=, and =nng= are complete.
 
 * Source Layout
 
-Default source checkouts live under =3rd_party/=:
+Third-party source checkouts live under =3rd/=:
 
-- =3rd_party/hpx=
-- =3rd_party/folly=
-- =3rd_party/abseil-cpp=
-- =3rd_party/nng=
-- =3rd_party/taskflow=
-- =3rd_party/rapidjson=
-- =3rd_party/zpp=
+- =3rd/hpx=
+- =3rd/folly=
+- =3rd/grpc=
+- =3rd/nng=
+- =3rd/taskflow=
+- =3rd/rapidjson=
+
+=zpp= is a ZetaX subproject and lives at the repository root:
+
+- =zpp=
 
 The workspace target entrypoints in this repository use these submodules by default.
 The workspace orchestration entrypoints live under =builder/=.
@@ -76,17 +80,18 @@ The workspace orchestration entrypoints live under =builder/=.
 If you want to build against your own local checkout instead of the managed submodules, override the corresponding environment variable before running a workspace target entrypoint:
 
 #+begin_src bash
+export ZETA_GRPC_SRC_DIR=/path/to/grpc
 export ZETA_HPX_SRC_DIR=/path/to/hpx
 export ZETA_FOLLY_SRC_DIR=/path/to/folly
-export ZETA_ABSEIL_SRC_DIR=/path/to/abseil-cpp
 export ZETA_NNG_SRC_DIR=/path/to/nng
 export ZETA_TASKFLOW_SRC_DIR=/path/to/taskflow
 export ZETA_RAPIDJSON_SRC_DIR=/path/to/rapidjson
 export ZETA_ZPP_SRC_DIR=/path/to/zpp
+export ZETA_3RD_DIR=/path/to/zeta_forge/3rd
 export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 #+end_src
 
-If an override is not provided, the workspace target entrypoints default to the corresponding path under =3rd_party/=.
+If an override is not provided, third-party source paths default to the corresponding path under =3rd/=, while =ZETA_ZPP_SRC_DIR= defaults to =zpp=.
 
 By default, =ZETA_INSTALL_PREFIX= is set to =~/.local=.
 
@@ -95,15 +100,17 @@ By default, =ZETA_INSTALL_PREFIX= is set to =~/.local=.
 Examples:
 
 #+begin_src bash
+./builder/grpc/zbuild.py --rebuild --install
 ./builder/hpx/zbuild.py --rebuild --install
 ./builder/folly/zbuild.py --rebuild --install
-./builder/abseil-cpp/zbuild.py --rebuild --install
 ./builder/nng/zbuild.py --rebuild --install
 ./builder/zpp/zbuild.py --rebuild
 #+end_src
 
 * Current Notes
 
-- zpp is wired to use Taskflow and RapidJSON from =3rd_party/= by default.
+- gRPC is the workspace source for the core RPC dependency family: Abseil, Protobuf, zlib, TLS/BoringSSL, c-ares, RE2, upb, utf8_range, xxhash, and address_sorting.
+- gRPC test/tooling ecosystem dependencies such as benchmark, bloaty, googletest, googleapis, xDS, Envoy API, protoc-gen-validate, and OpenTelemetry C++ are not installed as default Zeta Forge development dependencies.
+- zpp is wired to use Taskflow and RapidJSON from =3rd/= by default.
 - RapidJSON is passed to zpp through =RAPIDJSON_ROOT=.
 - zpp currently still depends on the installed HPX package for HPX examples; if HPX was built without a discoverable Asio installation, configuring zpp HPX examples can fail until Asio is provided or HPX is rebuilt accordingly.

@@ -22,7 +22,7 @@ class FollyBuilder(CMakeProjectBuilder):
 
     @property
     def missing_source_hint(self) -> str:
-        return "Set ZETA_FOLLY_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd_party/folly"
+        return "Set ZETA_FOLLY_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd/folly"
 
     @property
     def user_toolchain(self) -> Path:
@@ -49,6 +49,7 @@ class FollyBuilder(CMakeProjectBuilder):
         ]
 
     def configure_command(self) -> list[object]:
+        install_prefix = self.repo_config.install_prefix
         return [
             "cmake",
             "-S",
@@ -60,8 +61,11 @@ class FollyBuilder(CMakeProjectBuilder):
             "-Wno-dev",
             f"-DCMAKE_BUILD_TYPE={self.args.build_type}",
             f"-DCMAKE_TOOLCHAIN_FILE={self.conan_toolchain_file}",
-            f"-DCMAKE_INSTALL_PREFIX={self.repo_config.install_prefix}",
+            f"-DCMAKE_PREFIX_PATH={install_prefix}",
+            f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
             f"-DCMAKE_CXX_STANDARD={self.repo_config.cxx_standard}",
+            f"-DOPENSSL_ROOT_DIR={install_prefix}",
+            f"-DZLIB_ROOT={install_prefix}",
             "-DBUILD_SHARED_LIBS=OFF",
             "-DBOOST_LINK_STATIC=ON",
             "-DBUILD_TESTS=OFF",
@@ -85,4 +89,3 @@ if __name__ == "__main__":
     except Exception as exc:
         print(exc, file=sys.stderr)
         raise SystemExit(1)
-

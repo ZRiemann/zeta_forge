@@ -45,7 +45,7 @@ class ZppBuilder(CMakeProjectBuilder):
 
 	@property
 	def missing_source_hint(self) -> str:
-		return "Set ZETA_ZPP_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd_party/zpp"
+		return "Set ZETA_ZPP_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive zpp"
 
 	@property
 	def folly_conan_generators_dir(self) -> Path:
@@ -60,12 +60,12 @@ class ZppBuilder(CMakeProjectBuilder):
 		if not self.taskflow_source_dir.is_dir():
 			raise RuntimeError(
 				f"Taskflow source directory not found: {self.taskflow_source_dir}\n"
-				"Set ZETA_TASKFLOW_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd_party/taskflow"
+				"Set ZETA_TASKFLOW_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd/taskflow"
 			)
 		if not (self.rapidjson_source_dir / "include" / "rapidjson").is_dir():
 			raise RuntimeError(
 				f"RapidJSON source directory not found or invalid: {self.rapidjson_source_dir}\n"
-				"Set ZETA_RAPIDJSON_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd_party/rapidjson"
+				"Set ZETA_RAPIDJSON_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd/rapidjson"
 			)
 		if self.typed_args.build_hpx_examples and not self.typed_args.build_examples:
 			raise RuntimeError("--with-hpx-examples requires examples to be enabled")

@@ -22,7 +22,7 @@ class HpxBuilder(CMakeProjectBuilder):
 
     @property
     def missing_source_hint(self) -> str:
-        return "Set ZETA_HPX_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd_party/hpx"
+        return "Set ZETA_HPX_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd/hpx"
 
     @property
     def user_toolchain(self) -> Path:

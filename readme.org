@@ -4,6 +4,20 @@ Zeta Forge is a superproject for unified source management, reproducible builds,
 
 中文 README: [[file:doc/readme_cn.org][doc/readme_cn.org]]
 
+* Project Purpose
+
+Zeta Forge has three explicit roles:
+
+1. It is the shared build toolchain framework for managed =3rd/*= source projects and external ZetaX projects such as =zpp=, including Conan/CMake/Ninja orchestration, source directory resolution, install prefix management, and reusable project build primitives.
+2. It coordinates versions across the workspace, including submodule revisions, third-party dependency versions, shared build defaults, and project-specific build recipes.
+3. It is a reusable toolchain framework for external systems. A project outside this repository can locate =zeta_forge= through =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout, reuse the common build library, and avoid maintaining a parallel dependency/toolchain stack.
+
+Architecture and integration documents:
+
+- Chinese architecture design: [[file:doc/architecture_cn.org][doc/architecture_cn.org]]
+- Chinese third-party usage guide: [[file:doc/third_party_usage_cn.org][doc/third_party_usage_cn.org]]
+- Release notes: [[file:CHANGELOG.org][CHANGELOG.org]]
+
 * Clone And Initialize
 
 Clone with submodules:
@@ -18,11 +32,11 @@ If the repository has already been cloned, initialize all submodules recursively
 git submodule update --init --recursive
 #+end_src
 
-This is required because some source repositories also contain nested submodules, for example zpp.
+This is required because some source repositories also contain nested submodules, for example gRPC.
 
 * Prepare Debian-Based Systems
 
-The recommended flow is split into two layers:
+For private ZetaX environments, the preparation flow can be split into two layers:
 
 1. =zsa= bootstraps the Debian/Ubuntu host environment.
 2. =zeta_forge= prepares repo-local toolchains and dependencies.
@@ -33,14 +47,13 @@ If =zsa= is checked out next to =zeta_forge=, you can bootstrap the host with:
 ../zsa/util/bootstrap_debian.sh --minimal
 #+end_src
 
-Then prepare the =zeta_forge= workspace with:
+Public users can prepare the same host packages manually, then prepare the =zeta_forge= workspace with:
 
 #+begin_src bash
 ./common/prepare_debian.sh
-./common/prepare_debian.sh --python-version 3.12
 #+end_src
 
-=./common/prepare_debian.sh= focuses on =zeta_forge=-local toolchain management: build dependencies, Conan 2, and submodule initialization. If Python is not available yet and a sibling =zsa= checkout exists, the wrapper delegates the host bootstrap step to =../zsa/util/bootstrap_debian.sh --minimal=.
+=./common/prepare_debian.sh= focuses on =zeta_forge=-local toolchain management: build dependencies, Conan 2, and submodule initialization. By default it follows the active ZetaX/uv Python environment prepared by =zsa=; pass =--python-version X.Y= only when a project needs an explicit Conan Python runtime. =zsa= is optional for public users. If Python is not available yet, the wrapper prints the minimal host packages that must be installed first; when a sibling =zsa= checkout exists, it also shows the optional =../zsa/util/bootstrap_debian.sh --minimal= helper.
 
 * Unified Build Entry
 
@@ -49,13 +62,12 @@ You can invoke builds from the repository root through the unified dispatcher:
 #+begin_src bash
 ./zbuild.py grpc --rebuild --install
 ./zbuild.py hpx --rebuild --install
-./zbuild.py zpp --rebuild --no-tests
 ./zbuild.py all --rebuild
 #+end_src
 
 =zbuild.py= uses the =z= from =zeta_forge= to represent the top-level workspace entry rather than a CMake-specific command.
 =zbuild.py= can be executed directly and routes commands to the corresponding workspace target entrypoints under =builder/=.
-When running =./zbuild.py all=, the dispatcher builds =grpc= first, treats =hpx= and =nng= as independent targets, builds =folly= after =grpc=, then builds =zpp= after =grpc=, =hpx=, =folly=, and =nng= are complete.
+When running =./zbuild.py all=, the dispatcher builds =grpc= first, treats =hpx= and =nng= as independent targets, then builds =folly= after =grpc=.
 
 * Source Layout
 
@@ -68,12 +80,20 @@ Third-party source checkouts live under =3rd/=:
 - =3rd/taskflow=
 - =3rd/rapidjson=
 
-=zpp= is a ZetaX subproject and lives at the repository root:
-
-- =zpp=
-
-The workspace target entrypoints in this repository use these submodules by default.
+External ZetaX projects such as =zpp= live next to =zeta_forge= under =ZETAX_ROOT= and call this repository as a reusable toolchain framework.
+The workspace target entrypoints in this repository use the managed =3rd/*= submodules by default.
 The workspace orchestration entrypoints live under =builder/=.
+
+* ZetaX Workspace Root
+
+=ZETAX_ROOT= is the only public top-level workspace variable, for example =~/git=.
+With the standard layout, =zeta_forge= lives at =$ZETAX_ROOT/zeta_forge= and external projects such as =zpp= live at =$ZETAX_ROOT/zpp=.
+=zsa= can export =ZETAX_ROOT= for private workflows, but public users may set it manually.
+
+When a project entrypoint needs the shared build library, it resolves =zeta_forge= in this order:
+
+1. =$ZETAX_ROOT/zeta_forge= when =ZETAX_ROOT= is set.
+2. nearby =zeta_forge= directories discovered from the entrypoint path.
 
 * Override Source Directories
 
@@ -86,12 +106,12 @@ export ZETA_FOLLY_SRC_DIR=/path/to/folly
 export ZETA_NNG_SRC_DIR=/path/to/nng
 export ZETA_TASKFLOW_SRC_DIR=/path/to/taskflow
 export ZETA_RAPIDJSON_SRC_DIR=/path/to/rapidjson
-export ZETA_ZPP_SRC_DIR=/path/to/zpp
+export ZETAX_ROOT=/path/to/zetax-workspace
 export ZETA_3RD_DIR=/path/to/zeta_forge/3rd
 export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 #+end_src
 
-If an override is not provided, third-party source paths default to the corresponding path under =3rd/=, while =ZETA_ZPP_SRC_DIR= defaults to =zpp=.
+If an override is not provided, third-party source paths default to the corresponding path under =3rd/=.
 
 By default, =ZETA_INSTALL_PREFIX= is set to =~/.local=.
 
@@ -104,13 +124,24 @@ Examples:
 ./builder/hpx/zbuild.py --rebuild --install
 ./builder/folly/zbuild.py --rebuild --install
 ./builder/nng/zbuild.py --rebuild --install
-./builder/zpp/zbuild.py --rebuild
 #+end_src
+
+* External zpp Entrypoint
+
+=zpp= is an independent ZetaX project under =$ZETAX_ROOT/zpp=. It owns its project-specific builder and Conan recipe, while the build lifecycle still runs through =zeta_forge.cmake_builder.CMakeProjectBuilder=.
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zpp"
+./zbuild.py --rebuild --no-tests
+#+end_src
+
+The entrypoint uses the current =zpp= checkout as =ZETA_ZPP_SRC_DIR= unless that variable is explicitly set.
+It reuses the shared build library from =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout, while zpp-specific build logic lives under =zpp/builder/=.
 
 * Current Notes
 
 - gRPC is the workspace source for the core RPC dependency family: Abseil, Protobuf, zlib, TLS/BoringSSL, c-ares, RE2, upb, utf8_range, xxhash, and address_sorting.
 - gRPC test/tooling ecosystem dependencies such as benchmark, bloaty, googletest, googleapis, xDS, Envoy API, protoc-gen-validate, and OpenTelemetry C++ are not installed as default Zeta Forge development dependencies.
-- zpp is wired to use Taskflow and RapidJSON from =3rd/= by default.
+- External zpp builds use Taskflow and RapidJSON from =3rd/= by default.
 - RapidJSON is passed to zpp through =RAPIDJSON_ROOT=.
 - zpp currently still depends on the installed HPX package for HPX examples; if HPX was built without a discoverable Asio installation, configuring zpp HPX examples can fail until Asio is provided or HPX is rebuilt accordingly.

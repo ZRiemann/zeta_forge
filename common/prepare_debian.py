@@ -5,8 +5,8 @@ import argparse
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT / "common"))
+FORGE_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(FORGE_ROOT / "common"))
 
 from zeta_forge.config import load_repo_config
 from zeta_forge.debian_prep import DebianPreparer
@@ -18,8 +18,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--python-version",
-        default="3.12",
-        help="Python version installed through uv for Conan tooling (default: %(default)s)",
+        default=None,
+        help="Optional Python version passed to uv for Conan tooling. By default, follow the active ZetaX/uv environment.",
     )
     return parser.parse_args()
 

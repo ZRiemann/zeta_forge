@@ -1,38 +1,26 @@
 #!/bin/bash
 set -euo pipefail
 
-script_dir="$(cd "$(dirname "$0")" && pwd)"
+script_path="${BASH_SOURCE[0]}"
+case "$script_path" in
+	*/*) script_dir="$(cd "${script_path%/*}" && pwd)" ;;
+	*) script_dir="$(pwd)" ;;
+esac
 python_entry="$script_dir/prepare_debian.py"
-bootstrap_script="${ZSA_BOOTSTRAP_SCRIPT:-}"
-
-if [[ -z "$bootstrap_script" ]]; then
-	candidate_bootstrap="$script_dir/../../zsa/util/bootstrap_debian.sh"
-	if [[ -f "$candidate_bootstrap" ]]; then
-		bootstrap_script="$candidate_bootstrap"
-	fi
-fi
-
-run_bootstrap() {
-	if [[ -z "$bootstrap_script" ]]; then
-		return 1
-	fi
-	echo "python3 not found; delegating host bootstrap to $bootstrap_script --minimal" >&2
-	bash "$bootstrap_script" --minimal
-}
 
 if command -v python3 >/dev/null 2>&1; then
 	exec python3 "$python_entry" "$@"
 fi
 
-if ! run_bootstrap; then
-	echo "python3 is unavailable and no zsa bootstrap script was found." >&2
-	echo "Run ../zsa/util/bootstrap_debian.sh --minimal first, or set ZSA_BOOTSTRAP_SCRIPT to the bootstrap_debian.sh path." >&2
-	exit 1
+candidate_bootstrap="${ZSA_BOOTSTRAP_SCRIPT:-$script_dir/../../zsa/util/bootstrap_debian.sh}"
+
+echo "python3 is unavailable; zeta_forge cannot run prepare_debian.py yet." >&2
+echo "Please prepare a minimal Debian/Ubuntu build environment first, including:" >&2
+echo "  python3 python3-dev curl git build-essential cmake ninja-build pkg-config" >&2
+
+if [[ -f "$candidate_bootstrap" ]]; then
+	echo "Optional: a sibling zsa bootstrap script was found; you may run:" >&2
+	echo "  $candidate_bootstrap --minimal" >&2
 fi
 
-if ! command -v python3 >/dev/null 2>&1; then
-	echo "python3 is still unavailable after running the zsa bootstrap script" >&2
-	exit 1
-fi
-
-exec python3 "$python_entry" "$@"
+exit 1

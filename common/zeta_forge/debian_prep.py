@@ -46,11 +46,11 @@ class DebianPreparer:
         "python3-dev",
     ]
 
-    def __init__(self, *, script_path: Path, repo_config: RepoConfig, python_version: str = "3.12") -> None:
+    def __init__(self, *, script_path: Path, repo_config: RepoConfig, python_version: str | None = None) -> None:
         self.script_path = script_path.resolve()
         self.repo_config = repo_config
         self.common_dir = self.script_path.parent
-        self.repo_root = repo_config.repo_root
+        self.forge_root = repo_config.forge_root
         self.sudo_prefix = ["sudo"] if shutil.which("sudo") else []
         self.python_version = python_version
 
@@ -121,24 +121,31 @@ class DebianPreparer:
         uv_cmd = Path.home() / ".local" / "bin" / "uv"
         conan_cmd = Path.home() / ".local" / "bin" / "conan"
 
-        run_command([uv_cmd, "python", "install", self.python_version], env=self.repo_config.env)
         run_command([uv_cmd, "tool", "uninstall", "conan"], env=self.repo_config.env, check=False)
-        run_command([uv_cmd, "tool", "install", "--python", self.python_version, "conan>=2,<3"], env=self.repo_config.env)
+        install_command = [uv_cmd, "tool", "install"]
+        if self.python_version:
+            run_command([uv_cmd, "python", "install", self.python_version], env=self.repo_config.env)
+            install_command.extend(["--python", self.python_version])
+        install_command.append("conan>=2,<3")
+        run_command(install_command, env=self.repo_config.env)
 
         if not conan_cmd.is_file():
             raise RuntimeError("Conan installation failed")
 
         version_result = run_command([conan_cmd, "--version"], env=self.repo_config.env, capture_output=True)
-        print(f"Using {version_result.stdout.strip()} with Python {self.python_version}")
+        if self.python_version:
+            print(f"Using {version_result.stdout.strip()} with Python {self.python_version}")
+        else:
+            print(f"Using {version_result.stdout.strip()} with the active ZetaX/uv Python environment")
 
         profile_check = run_command([conan_cmd, "profile", "path", "default"], env=self.repo_config.env, check=False)
         if profile_check.returncode != 0:
             run_command([conan_cmd, "profile", "detect", "--force"], env=self.repo_config.env, check=False)
 
     def update_submodules(self) -> None:
-        git_dir = self.repo_root / ".git"
-        if git_dir.exists() or run_command(["git", "-C", self.repo_root, "rev-parse", "--git-dir"], env=self.repo_config.env, check=False).returncode == 0:
-            run_command(["git", "-C", self.repo_root, "submodule", "update", "--init", "--recursive"], env=self.repo_config.env)
+        git_dir = self.forge_root / ".git"
+        if git_dir.exists() or run_command(["git", "-C", self.forge_root, "rev-parse", "--git-dir"], env=self.repo_config.env, check=False).returncode == 0:
+            run_command(["git", "-C", self.forge_root, "submodule", "update", "--init", "--recursive"], env=self.repo_config.env)
 
     def print_summary(self) -> None:
         print(
@@ -154,12 +161,11 @@ Installed toolchain layers:
 
 Suggested next steps:
 1. source \"$HOME/.profile\"
-2. cd \"{self.repo_root}\"
+2. cd \"{self.forge_root}\"
 3. ./builder/grpc/zbuild.py --rebuild --install
 4. ./builder/hpx/zbuild.py --rebuild --install
 5. ./builder/folly/zbuild.py --rebuild --install
 6. ./builder/nng/zbuild.py --rebuild --install
-7. ./builder/zpp/zbuild.py --rebuild
 """.rstrip()
         )
 

@@ -7,9 +7,6 @@
 [submodule "3rd/taskflow"]
 	path = 3rd/taskflow
 	url = https://github.com/taskflow/taskflow.git
-[submodule "zpp"]
-	path = zpp
-	url = https://github.com/ZRiemann/zpp.git
 [submodule "3rd/rapidjson"]
 	path = 3rd/rapidjson
 	url = https://github.com/Tencent/rapidjson.git

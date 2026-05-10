@@ -1,0 +1,104 @@
+* zeta_forge 通用工具链架构设计
+
+本文描述 =zeta_forge= 作为 ZetaX 通用 C++ 工具链框架的设计。当前版本见 [[file:../VERSION][../VERSION]]，更新记录见 [[file:../CHANGELOG.org][../CHANGELOG.org]]。
+
+* 设计目标
+
+zeta_forge 的目标不是成为业务源码仓库，而是成为稳定的工具链和版本协调层：
+
+1. 为 =3rd/*= 提供统一、可复现的编译入口，并为 =zpp= 等外部项目提供可复用的编译框架。
+2. 将第三方依赖版本、submodule revision、Conan 配方和构建参数集中管理。
+3. 允许外部项目通过轻量 =zbuild.py= 复用同一套工具链，减少重复维护成本。
+
+* 职责边界
+
+zeta_forge 负责：
+
+- 准备 Debian/Ubuntu 主机构建依赖、Python/uv/Conan 2 等工具。
+- 管理 =3rd/*= 的源码位置、默认版本和构建顺序。
+- 提供 =common/zeta_forge= Python 工具库，包括配置发现、进程执行、CMake 项目构建、workspace 调度和项目级构建实现。
+- 统一安装前缀、C++ 标准、Conan 依赖版本和 CMake 配置参数。
+
+zeta_forge 不负责：
+
+- 拥有外部项目的业务源码。
+- 持有 =zpp= 这类高频迭代项目的 submodule 指针。
+- 强制外部项目采用某个仓库布局。
+- 替代外部项目自己的发布、测试或部署系统。
+
+外部项目应只复用工具链框架，并在自己的仓库中维护项目级 Builder、Conan 配方和业务源码。
+
+* 目录分层
+
+- =zbuild.py=：仓库顶层统一调度入口，负责分发 =grpc=、=hpx=、=folly=、=nng=、=all= 和 =prepare-debian=。
+- =common/zeta_forge/=：通用 Python 工具链库，是外部项目复用的主要接口。
+- =builder/<project>/=：zeta_forge 内部项目构建工作区，保存项目入口、Conan 配方、CMake helper 和 build 输出。
+- =3rd/*=：第三方源码 submodule，默认作为 gRPC、HPX、Folly、NNG、Taskflow、RapidJSON 等源码输入。
+- =doc/=：设计、接入和中文说明文档。
+
+=zpp= 位于 =$ZETAX_ROOT/zpp=，不再是 =zeta_forge= submodule。它通过自己的 =builder/zpp.py= 注入项目特有构建逻辑，并复用 =common/zeta_forge= 的公共编译生命周期。
+
+* 根路径发现
+
+路径语义固定为：
+
+- =ZETAX_ROOT=：ZetaX 顶层工作区根目录，例如 =~/git=。
+- =ZETA_INSTALL_PREFIX=：构建安装前缀，默认 =~/.local=。
+- =ZETA_3RD_DIR=：第三方源码根目录，默认 =$ZETAX_ROOT/zeta_forge/3rd=。
+
+项目入口定位工具库的顺序为：
+
+1. 设置了 =ZETAX_ROOT= 时，使用 =$ZETAX_ROOT/zeta_forge=。
+2. 从入口脚本路径向上发现附近的 =zeta_forge= 目录。
+
+=ZETAX_ROOT= 是唯一公开的顶层工作区变量。=zsa= 可以自动导出它；没有 =zsa= 时，公共用户也可以手动设置它。项目脚本不需要额外引入 =zeta_forge= 专用根变量。
+
+* 构建数据流
+
+典型构建流程如下：
+
+1. 用户执行顶层或项目级 =zbuild.py=。
+2. 入口脚本把 =zeta_forge/common= 加入 Python import path。
+3. =load_repo_config= 发现 =zeta_forge= 仓库根，推导 =ZETAX_ROOT=，注入共享环境变量，并解析源码目录。
+4. 项目 Builder 校验源码、Conan 配方和必要依赖路径。
+5. 如有需要，执行 Conan install 生成 toolchain 和依赖包配置。
+6. 执行 CMake configure，写入 build stamp。
+7. 执行 CMake build；如指定 =--install=，执行 CMake install。
+
+顶层 =all= 调度保持依赖顺序：=grpc=、=hpx=、=nng=、=folly=，其中 =folly= 依赖 =grpc=。
+
+* 公共库模块
+
+=common/zeta_forge= 是工具链框架的核心：
+
+- =config.py=：发现 forge 根目录、注入环境变量、解析源码目录和安装前缀。
+- =process.py=：统一命令执行、日志输出和错误处理。
+- =cmake_builder.py=：封装 Conan/CMake/Ninja 构建流程、stamp 判断、rebuild 和 install。
+- =dispatcher.py=：顶层 target 列表、依赖排序、=all= 构建和 =prepare-debian= 分发。
+- =debian_prep.py=：准备 Debian/Ubuntu 系统依赖和 Conan 工具链。
+
+外部项目入口应尽量保持薄层，只负责定位工具库、设置当前项目源码默认值并调用项目仓库自己的 Builder。
+
+* 外部项目扩展方式
+
+外部系统接入时有两种推荐方式：
+
+1. 项目自带薄 =zbuild.py=，负责定位 =zeta_forge/common=。
+2. 项目级 Builder 放在项目仓库自己的 =builder/= 下，例如 =$ZETAX_ROOT/zpp/builder/zpp.py=。
+3. Builder 继承 =common/zeta_forge= 的 =CMakeProjectBuilder=，只注入项目特有参数、Conan 配方和 CMake 选项。
+
+选择标准：
+
+- 项目逻辑只属于外部系统时，放在外部项目仓库。
+- 只有真正通用的编译流程、根路径发现、命令执行和环境管理才沉淀到 =zeta_forge= 工具库。
+
+* 版本协调
+
+zeta_forge 的版本协调包括：
+
+- =.gitmodules= 中的 submodule 来源和 revision。
+- =builder/*/conanfile.py= 中的第三方依赖版本。
+- =common/zeta_forge/config.py= 中的共享默认值，例如 C++ 标准和基础库版本。
+- forge 内部项目 =zbuild.py= 或 Builder 中的 CMake 配置开关。
+
+每次修改公共工具链行为、依赖版本或外部接入约定时，都需要同步更新 [[file:../VERSION][VERSION]] 和 [[file:../CHANGELOG.org][CHANGELOG.org]]。

@@ -4,6 +4,20 @@ Zeta Forge 是一个用于统一源码管理、可复现构建和依赖集成的
 
 English README: [[file:../readme.org][../readme.org]]
 
+* 项目用途
+
+Zeta Forge 有三个明确用途：
+
+1. 作为托管 =3rd/*= 源码项目，以及 =zpp= 这类外部 ZetaX 项目的共享编译工具链框架，统一提供 Conan/CMake/Ninja 编排、源码路径解析、安装前缀和可复用项目构建原语。
+2. 协调工作区内各子项目版本，包括 submodule revision、第三方依赖版本、共享构建默认值和项目级构建配方。
+3. 作为外部系统可复用的通用工具链框架。仓库外项目可以通过 =$ZETAX_ROOT/zeta_forge= 或附近的兄弟目录定位 =zeta_forge=，复用公共构建库，避免每个项目重复维护一套依赖和工具链。
+
+架构与接入文档：
+
+- 架构设计：[[file:architecture_cn.org][architecture_cn.org]]
+- 第三方系统使用说明：[[file:third_party_usage_cn.org][third_party_usage_cn.org]]
+- 更新说明：[[file:../CHANGELOG.org][../CHANGELOG.org]]
+
 * 克隆与初始化
 
 建议在克隆时直接拉取全部 submodules：
@@ -18,11 +32,11 @@ git clone --recurse-submodules <repo-url>
 git submodule update --init --recursive
 #+end_src
 
-之所以要使用递归方式，是因为某些源码仓库自身也带有 submodules，例如 zpp。
+之所以要使用递归方式，是因为某些源码仓库自身也带有 submodules，例如 gRPC。
 
 * Debian 系系统准备
 
-推荐把环境准备拆成两层：
+在私有 ZetaX 环境中，环境准备可以拆成两层：
 
 1. =zsa= 负责 Debian/Ubuntu 宿主机环境 bootstrap。
 2. =zeta_forge= 负责仓库内部工具链和依赖准备。
@@ -33,14 +47,13 @@ git submodule update --init --recursive
 ../zsa/util/bootstrap_debian.sh --minimal
 #+end_src
 
-然后再执行 =zeta_forge= 仓库内准备脚本：
+公共用户也可以手动准备同样的宿主机依赖，然后再执行 =zeta_forge= 仓库内准备脚本：
 
 #+begin_src bash
 ./common/prepare_debian.sh
-./common/prepare_debian.sh --python-version 3.12
 #+end_src
 
-=./common/prepare_debian.sh= 专注于 =zeta_forge= 内部工具链管理：构建依赖、Conan 2 和 submodule 初始化。如果当前系统还没有 Python，且存在兄弟目录 =zsa=，这个 wrapper 会自动桥接到 =../zsa/util/bootstrap_debian.sh --minimal=。
+=./common/prepare_debian.sh= 专注于 =zeta_forge= 内部工具链管理：构建依赖、Conan 2 和 submodule 初始化。默认跟随 =zsa= 准备好的 ZetaX/uv Python 环境；只有项目确实需要固定 Conan Python runtime 时，才传入 =--python-version X.Y=。=zsa= 对公共用户不是必需前置条件。如果当前系统还没有 Python，这个 wrapper 会提示需要先安装的最小宿主机依赖；当存在兄弟目录 =zsa= 时，也会提示可选的 =../zsa/util/bootstrap_debian.sh --minimal= 辅助入口。
 
 * 顶层统一构建入口
 
@@ -49,13 +62,12 @@ git submodule update --init --recursive
 #+begin_src bash
 ./zbuild.py grpc --rebuild --install
 ./zbuild.py hpx --rebuild --install
-./zbuild.py zpp --rebuild --no-tests
 ./zbuild.py all --rebuild
 #+end_src
 
 =zbuild.py= 中的 =z= 取自 =zeta_forge=，用于表达仓库顶层统一入口，而不是局限于 CMake 的 =c=。
 =zbuild.py= 可以直接执行，并分发到 =builder/= 下对应项目的工作区目标入口。
-当执行 =./zbuild.py all= 时，调度器会先构建 =grpc=，将 =hpx= 和 =nng= 视为相互独立的目标，在 =grpc= 后构建 =folly=，最后在 =grpc=、=hpx=、=folly=、=nng= 完成后构建 =zpp=。
+当执行 =./zbuild.py all= 时，调度器会先构建 =grpc=，将 =hpx= 和 =nng= 视为相互独立的目标，然后在 =grpc= 后构建 =folly=。
 
 * 源码布局
 
@@ -68,12 +80,20 @@ git submodule update --init --recursive
 - =3rd/taskflow=
 - =3rd/rapidjson=
 
-=zpp= 属于 ZetaX 子项目，位于仓库顶层：
-
-- =zpp=
-
-本仓库中的工作区目标入口默认都使用这些 submodules 作为源码输入。
+外部 ZetaX 项目，例如 =zpp=，位于 =ZETAX_ROOT= 下与 =zeta_forge= 平级的位置，并把本仓库作为可复用工具链框架调用。
+本仓库中的工作区目标入口默认都使用托管的 =3rd/*= submodules 作为源码输入。
 工作区编排入口统一放在 =builder/= 目录下。
+
+* ZetaX 工作区根目录
+
+=ZETAX_ROOT= 是唯一公开的顶层工作区变量，例如 =~/git=。
+标准布局中，=zeta_forge= 位于 =$ZETAX_ROOT/zeta_forge=，=zpp= 等外部项目位于 =$ZETAX_ROOT/zpp=。
+=zsa= 可以在私有工作流中自动导出 =ZETAX_ROOT=，公共用户也可以手动设置。
+
+项目入口需要复用共享编译工具库时，按以下顺序定位 =zeta_forge=：
+
+1. 设置了 =ZETAX_ROOT= 时，使用 =$ZETAX_ROOT/zeta_forge=。
+2. 从当前入口路径向上发现附近的 =zeta_forge= 目录。
 
 * 覆盖源码目录
 
@@ -86,12 +106,12 @@ export ZETA_FOLLY_SRC_DIR=/path/to/folly
 export ZETA_NNG_SRC_DIR=/path/to/nng
 export ZETA_TASKFLOW_SRC_DIR=/path/to/taskflow
 export ZETA_RAPIDJSON_SRC_DIR=/path/to/rapidjson
-export ZETA_ZPP_SRC_DIR=/path/to/zpp
+export ZETAX_ROOT=/path/to/zetax-workspace
 export ZETA_3RD_DIR=/path/to/zeta_forge/3rd
 export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 #+end_src
 
-如果没有显式覆盖，第三方源码路径默认使用 =3rd/= 下对应的 submodule 路径，=ZETA_ZPP_SRC_DIR= 默认使用顶层 =zpp=。
+如果没有显式覆盖，第三方源码路径默认使用 =3rd/= 下对应的 submodule 路径。
 
 =ZETA_INSTALL_PREFIX= 默认值为 =~/.local=。
 
@@ -102,13 +122,24 @@ export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 ./builder/hpx/zbuild.py --rebuild --install
 ./builder/folly/zbuild.py --rebuild --install
 ./builder/nng/zbuild.py --rebuild --install
-./builder/zpp/zbuild.py --rebuild
 #+end_src
+
+* 外部 zpp 入口
+
+=zpp= 是位于 =$ZETAX_ROOT/zpp= 的独立 ZetaX 项目。它自己维护项目级 Builder 和 Conan 配方，但底层构建生命周期仍通过 =zeta_forge.cmake_builder.CMakeProjectBuilder= 执行。
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zpp"
+./zbuild.py --rebuild --no-tests
+#+end_src
+
+该入口默认把当前 =zpp= checkout 作为 =ZETA_ZPP_SRC_DIR=，除非用户显式设置了这个变量。
+它会通过 =$ZETAX_ROOT/zeta_forge= 或附近兄弟目录复用共享编译工具库，zpp 特有构建逻辑位于 =zpp/builder/=。
 
 * 当前说明
 
 - gRPC 是工作区内核心 RPC 依赖族的统一来源：Abseil、Protobuf、zlib、TLS/BoringSSL、c-ares、RE2、upb、utf8_range、xxhash 和 address_sorting。
 - gRPC 的测试/工具生态依赖，例如 benchmark、bloaty、googletest、googleapis、xDS、Envoy API、protoc-gen-validate 和 OpenTelemetry C++，默认不作为 Zeta Forge 开发依赖安装。
-- zpp 默认使用 =3rd/taskflow= 和 =3rd/rapidjson=。
+- 外部 zpp 构建默认使用 =3rd/taskflow= 和 =3rd/rapidjson=。
 - RapidJSON 通过 =RAPIDJSON_ROOT= 传递给 zpp。
 - zpp 的 HPX examples 仍依赖系统中已安装的 HPX；如果该 HPX 安装缺少可发现的 Asio，配置 HPX examples 时可能失败，此时需要补齐 Asio 或重新构建 HPX。

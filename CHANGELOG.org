@@ -1,0 +1,36 @@
+* Zeta Forge Changelog
+
+当前工具链版本记录在 [[file:VERSION][VERSION]]。
+
+* v0.1.0
+
+首次明确 zeta_forge 作为通用工具链框架的版本。
+
+** Added
+
+- 将 =zeta_forge= 的用途定义为：=3rd/*= 的共享编译工具链、=zpp= 等外部项目可复用的工具链框架、工作区版本协调层。
+- 建立统一的 =ZETAX_ROOT= 根路径语义：=ZETAX_ROOT= 表示 ZetaX 顶层工作区，标准布局中 =zeta_forge= 位于 =$ZETAX_ROOT/zeta_forge=，=zpp= 位于 =$ZETAX_ROOT/zpp=。
+- 增加外部项目接入能力，使独立 =zpp= 可以在自己的仓库中维护 =builder/zpp.py= 和 =builder/conanfile.py=，同时通过 =zeta_forge= 公共框架执行构建生命周期。
+- 增加架构设计文档和第三方系统使用说明。
+
+** Changed
+
+- 将工具链公共逻辑从顶层入口脚本抽象到 =common/zeta_forge= 库模块，便于子项目和外部项目复用。
+- 将 =zpp= 从 =zeta_forge= 内置 target/submodule 迁出；=zeta_forge= 不再更新 zpp submodule 指针或维护 zpp 项目级构建脚本。
+- 明确版本协调范围包括 submodule revision、Conan 依赖版本、共享构建默认值和项目级构建配方。
+
+** Version Update Rules
+
+修改以下内容时，需要同步更新 =VERSION= 和本文件：
+
+- 公共构建入口、CLI 参数或环境变量语义发生变化。
+- =common/zeta_forge= 中可被项目复用的公共接口发生变化。
+- Conan 依赖版本、默认 C++ 标准、安装前缀策略或构建默认值发生变化。
+- submodule revision 或 =3rd/*= 管理策略发生变化。
+- 新增面向外部项目的接入方式、兼容性约束或迁移要求。
+
+版本号采用 =vMAJOR.MINOR.PATCH=：
+
+- =MAJOR=：公共入口或工具链语义出现不兼容变化。
+- =MINOR=：新增兼容能力、项目类型或第三方接入方式。
+- =PATCH=：文档、错误处理、兼容性修正或不改变公共行为的小修复。

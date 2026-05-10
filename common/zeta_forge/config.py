@@ -21,29 +21,56 @@ THIRD_SOURCE_ENV_TO_SUBDIR = {
     "ZETA_RAPIDJSON_SRC_DIR": "rapidjson",
 }
 
-PROJECT_SOURCE_ENV_TO_SUBDIR = {
-    "ZETA_ZPP_SRC_DIR": "zpp",
-}
-
-
 def _expand_path(raw_path: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(raw_path))).resolve()
 
 
-def _discover_repo_root(start: Path) -> Path:
-    for candidate in [start, *start.parents]:
-        if (
-            (candidate / "common" / "zeta_forge" / "config.py").is_file()
-            and (candidate / "builder").is_dir()
-            and (candidate / "3rd").is_dir()
-        ):
+def is_forge_root(candidate: Path) -> bool:
+    return (
+        (candidate / "common" / "zeta_forge" / "config.py").is_file()
+        and (candidate / "builder").is_dir()
+        and (candidate / "3rd").is_dir()
+    )
+
+
+def _candidate_roots(start: Path) -> list[Path]:
+    candidates: list[Path] = []
+
+    zetax_root_raw = os.environ.get("ZETAX_ROOT")
+    if zetax_root_raw:
+        candidates.append(_expand_path(zetax_root_raw) / "zeta_forge")
+
+    search_roots = [start, *start.parents]
+    for search_root in search_roots:
+        candidates.append(search_root)
+        candidates.append(search_root / "zeta_forge")
+
+    deduped: list[Path] = []
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        deduped.append(resolved)
+    return deduped
+
+
+def discover_forge_root(start: Path) -> Path:
+    for candidate in _candidate_roots(start):
+        if is_forge_root(candidate):
             return candidate
-    raise RuntimeError(f"Unable to locate zeta_forge repo root from {start}")
+    raise RuntimeError(
+        "Unable to locate zeta_forge root. "
+        "Set ZETAX_ROOT=/path/to/workspace and ensure "
+        "$ZETAX_ROOT/zeta_forge exists, or run from a checkout near zeta_forge."
+    )
 
 
 @dataclass(frozen=True)
 class RepoConfig:
-    repo_root: Path
+    zetax_root: Path
+    forge_root: Path
     common_dir: Path
     builder_dir: Path
     third_dir: Path
@@ -56,15 +83,16 @@ class RepoConfig:
         return self.source_dirs[env_name]
 
 
-def load_repo_config(script_path: Path) -> RepoConfig:
-    repo_root = _discover_repo_root(script_path.resolve().parent)
-    common_dir = repo_root / "common"
-    builder_dir = repo_root / "builder"
+def load_repo_config(script_path: Path, *, project_source_defaults: dict[str, Path] | None = None) -> RepoConfig:
+    forge_root = discover_forge_root(script_path.resolve().parent)
+    zetax_root = forge_root.parent
+    common_dir = forge_root / "common"
+    builder_dir = forge_root / "builder"
 
     env = dict(os.environ)
-    env.setdefault("ZETA_ROOT_DIR", str(repo_root))
-    env.setdefault("ZETA_BUILDER_DIR", str(builder_dir))
-    third_dir_raw = env.setdefault("ZETA_3RD_DIR", str(repo_root / "3rd"))
+    env["ZETAX_ROOT"] = str(zetax_root)
+    env["ZETA_BUILDER_DIR"] = str(builder_dir)
+    third_dir_raw = env.setdefault("ZETA_3RD_DIR", str(forge_root / "3rd"))
     third_dir = _expand_path(third_dir_raw)
     env["ZETA_3RD_DIR"] = str(third_dir)
 
@@ -85,17 +113,18 @@ def load_repo_config(script_path: Path) -> RepoConfig:
         env[env_name] = str(source_path)
         source_dirs[env_name] = source_path
 
-    for env_name, subdir in PROJECT_SOURCE_ENV_TO_SUBDIR.items():
+    for env_name, default_path in (project_source_defaults or {}).items():
         raw_value = env.get(env_name)
         if raw_value:
             source_path = _expand_path(raw_value)
         else:
-            source_path = (repo_root / subdir).resolve()
+            source_path = default_path.resolve()
         env[env_name] = str(source_path)
         source_dirs[env_name] = source_path
 
     return RepoConfig(
-        repo_root=repo_root,
+        zetax_root=zetax_root,
+        forge_root=forge_root,
         common_dir=common_dir,
         builder_dir=builder_dir,
         third_dir=third_dir,

@@ -4,8 +4,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO_ROOT / "common"))
+FORGE_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(FORGE_ROOT / "common"))
 
 from zeta_forge.cmake_builder import CMakeProjectBuilder, CommonBuildArgs, common_build_argument_parser
 from zeta_forge.config import load_repo_config

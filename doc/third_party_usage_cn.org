@@ -36,6 +36,7 @@ cd "$ZETAX_ROOT/zeta_forge"
 - =ZETAX_ROOT=：ZetaX 顶层工作区根目录，例如 =~/git=。
 - =ZETA_INSTALL_PREFIX=：依赖安装前缀，默认 =~/.local=。
 - =ZETA_3RD_DIR=：第三方源码根目录，默认 =$ZETAX_ROOT/zeta_forge/3rd=。
+- =ZETA_CMAKE_UTIL_DIR=：公共 CMake helper 目录，默认 =$ZETAX_ROOT/zeta_forge/cmake_util=，通常由 =zeta_forge= Builder 注入给 CMake。
 - =ZETA_<NAME>_SRC_DIR=：覆盖某个源码目录，例如 =ZETA_GRPC_SRC_DIR=、=ZETA_TASKFLOW_SRC_DIR=。项目也可以定义自己的源码变量，例如 zpp 使用 =ZETA_ZPP_SRC_DIR=。
 
 外部项目不需要额外引入 forge 专用根变量；公共路径契约统一为 =$ZETAX_ROOT/zeta_forge=。
@@ -161,6 +162,7 @@ $ZETAX_ROOT/zpp/
 #+end_src
 
 =zbuild.py= 负责通过 =$ZETAX_ROOT/zeta_forge= 或附近兄弟目录定位 =zeta_forge= 公共库；=builder/zpp.py= 定义 =ZppBuilder=，继承 =CMakeProjectBuilder= 并注入 zpp 特有的 Conan 参数、CMake 选项和测试/示例开关。
+zpp 的 CMake helper 来自 =$ZETAX_ROOT/zeta_forge/cmake_util=，不再通过 zpp 仓库自己的 =cmake_util= submodule 提供。
 
 * 常见命令
 
@@ -198,6 +200,6 @@ export ZETA_TASKFLOW_SRC_DIR=$HOME/git/taskflow
 
 * 版本与更新
 
-外部系统依赖 =zeta_forge= 公共行为时，应记录所使用的 =zeta_forge= 版本。当前版本在 [[file:../VERSION][../VERSION]]，更新说明在 [[file:../CHANGELOG.org][../CHANGELOG.org]]。
+外部系统依赖 =zeta_forge= 公共行为时，应记录所使用的 =zeta_forge= 版本。当前版本在 [[file:../VERSION][../VERSION]]，发布历史在 [[file:../release_history.org][../release_history.org]]。
 
 当外部项目依赖公共 CLI、环境变量、Conan 配方或 Builder API 时，升级 =zeta_forge= 前应先阅读对应版本的更新说明。

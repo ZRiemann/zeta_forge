@@ -92,6 +92,7 @@ def load_repo_config(script_path: Path, *, project_source_defaults: dict[str, Pa
     env = dict(os.environ)
     env["ZETAX_ROOT"] = str(zetax_root)
     env["ZETA_BUILDER_DIR"] = str(builder_dir)
+    env["ZETA_CMAKE_UTIL_DIR"] = str(forge_root / "cmake_util")
     third_dir_raw = env.setdefault("ZETA_3RD_DIR", str(forge_root / "3rd"))
     third_dir = _expand_path(third_dir_raw)
     env["ZETA_3RD_DIR"] = str(third_dir)

@@ -1,0 +1,48 @@
+#+STARTUP: indent
+#+TITLE: Zeta Forge Release History
+
+* Release History
+
+** v0.2.0 - 2026-05-11
+*** 发布定位摘要
+- zeta_forge 从单一仓库构建入口升级为 ZetaX 公共 C++ 工具链框架。
+- 公共路径契约统一为 =$ZETAX_ROOT/zeta_forge=，不再公开推荐额外的 forge/zpp 专用根变量。
+- zpp 从 zeta_forge 内置 target/submodule 迁出，作为独立项目复用 zeta_forge 的 Python 构建框架和 CMake helper。
+- 遗留独立 =cmake_util= 项目停止作为更新点，最新内容由 =zeta_forge/cmake_util= 接管维护。
+
+*** 变更内容
+- 将工具链公共逻辑从顶层入口脚本抽象到 =common/zeta_forge= 库模块，提供根路径发现、环境注入、源码目录解析、CMake/Conan 构建生命周期和 dispatcher。
+- =./zbuild.py all= 继续调度 forge 管理的基础依赖，顺序为 =grpc -> hpx/nng -> folly=；=zpp= 不再是 forge 内置 target。
+- 新增 =cmake_util/=，保留公共 CMake helper、依赖查找脚本和 =add_run_target=，移除遗留 =cbuild*= 快捷入口。
+- =RepoConfig= 注入 =ZETAX_ROOT=、=ZETA_BUILDER_DIR=、=ZETA_3RD_DIR=、=ZETA_CMAKE_UTIL_DIR=、=ZETA_INSTALL_PREFIX= 等派生环境。
+- =common/prepare_debian.sh= 不再把私有 =zsa= 作为公共必需前置条件；缺少 =python3= 时提示公共用户需要先准备的基础 Debian/Ubuntu 构建环境。
+- 更新 README、架构设计文档和第三方系统接入说明，明确 zeta_forge 的三项职责：构建工具链、版本协调、外部系统复用框架。
+
+*** 兼容性与升级说明
+- 公共用户应使用 =ZETAX_ROOT=/path/to/workspace=，并保持 =$ZETAX_ROOT/zeta_forge= 的标准布局。
+- 旧的 =./zbuild.py zpp= 不再支持；zpp 应在 =$ZETAX_ROOT/zpp= 中使用自己的 =./zbuild.py=。
+- 外部项目可继续覆盖 =ZETA_<NAME>_SRC_DIR=、=ZETA_3RD_DIR=、=ZETA_INSTALL_PREFIX=，但不应依赖旧的 forge 专用根变量。
+- 项目级构建逻辑应留在项目仓库自己的 =builder/= 中，公共生命周期和 CMake helper 由 zeta_forge 提供。
+
+*** 验证
+- =python3 -m py_compile zbuild.py common/zeta_forge/*.py common/prepare_debian.py builder/*/zbuild.py= 通过。
+- =./zbuild.py list= 通过，目标列表不包含 =zpp=。
+- 独立 zpp 使用 =$ZETAX_ROOT/zeta_forge/cmake_util= 完成 =Debug --no-tests --no-examples --rebuild= 构建验证。
+
+*** 版本更新规则
+- 修改公共构建入口、CLI 参数或环境变量语义时，需要同步更新 =VERSION= 和本文件。
+- 修改 =common/zeta_forge= 中可被项目复用的公共接口时，需要记录兼容性影响。
+- 修改 Conan 依赖版本、默认 C++ 标准、安装前缀策略或构建默认值时，需要记录升级说明。
+- 修改 submodule revision、=3rd/*= 管理策略或 =cmake_util/= 公共 helper 行为时，需要记录变更内容。
+- 新增面向外部项目的接入方式、兼容性约束或迁移要求时，需要记录接入说明。
+
+** v0.1.0 - 2026-05-11
+*** 发布定位摘要
+- 首次明确 zeta_forge 作为通用工具链框架的版本基线。
+- 定义 zeta_forge 的用途：=3rd/*= 共享编译工具链、外部项目可复用的工具链框架、工作区版本协调层。
+- 该版本未作为独立 release 发布，后续结构调整并入 v0.2.0。
+
+*** 变更内容
+- 建立 =VERSION= 与版本记录文件。
+- 初步建立架构设计文档和第三方系统使用说明。
+- 明确版本协调范围包括 submodule revision、Conan 依赖版本、共享构建默认值和项目级构建配方。

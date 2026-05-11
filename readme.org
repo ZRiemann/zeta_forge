@@ -8,7 +8,7 @@ Zeta Forge is a superproject for unified source management, reproducible builds,
 
 Zeta Forge has three explicit roles:
 
-1. It is the shared build toolchain framework for managed =3rd/*= source projects and external ZetaX projects such as =zpp=, including Conan/CMake/Ninja orchestration, source directory resolution, install prefix management, and reusable project build primitives.
+1. It is the shared build toolchain framework for managed =3rd/*= source projects and external ZetaX projects such as =zpp=, including Conan/CMake/Ninja orchestration, source directory resolution, install prefix management, reusable project build primitives, and shared CMake helper modules.
 2. It coordinates versions across the workspace, including submodule revisions, third-party dependency versions, shared build defaults, and project-specific build recipes.
 3. It is a reusable toolchain framework for external systems. A project outside this repository can locate =zeta_forge= through =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout, reuse the common build library, and avoid maintaining a parallel dependency/toolchain stack.
 
@@ -16,7 +16,7 @@ Architecture and integration documents:
 
 - Chinese architecture design: [[file:doc/architecture_cn.org][doc/architecture_cn.org]]
 - Chinese third-party usage guide: [[file:doc/third_party_usage_cn.org][doc/third_party_usage_cn.org]]
-- Release notes: [[file:CHANGELOG.org][CHANGELOG.org]]
+- Release history: [[file:release_history.org][release_history.org]]
 
 * Clone And Initialize
 
@@ -83,6 +83,7 @@ Third-party source checkouts live under =3rd/=:
 External ZetaX projects such as =zpp= live next to =zeta_forge= under =ZETAX_ROOT= and call this repository as a reusable toolchain framework.
 The workspace target entrypoints in this repository use the managed =3rd/*= submodules by default.
 The workspace orchestration entrypoints live under =builder/=.
+Shared CMake helper modules live under =cmake_util/=. This directory is the maintained ZetaX copy of the legacy standalone =cmake_util= project.
 
 * ZetaX Workspace Root
 
@@ -137,6 +138,7 @@ cd "$ZETAX_ROOT/zpp"
 
 The entrypoint uses the current =zpp= checkout as =ZETA_ZPP_SRC_DIR= unless that variable is explicitly set.
 It reuses the shared build library from =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout, while zpp-specific build logic lives under =zpp/builder/=.
+It also consumes shared CMake helper modules from =$ZETAX_ROOT/zeta_forge/cmake_util= instead of carrying a =cmake_util= submodule.
 
 * Current Notes
 

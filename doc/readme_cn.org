@@ -8,7 +8,7 @@ English README: [[file:../readme.org][../readme.org]]
 
 Zeta Forge 有三个明确用途：
 
-1. 作为托管 =3rd/*= 源码项目，以及 =zpp= 这类外部 ZetaX 项目的共享编译工具链框架，统一提供 Conan/CMake/Ninja 编排、源码路径解析、安装前缀和可复用项目构建原语。
+1. 作为托管 =3rd/*= 源码项目，以及 =zpp= 这类外部 ZetaX 项目的共享编译工具链框架，统一提供 Conan/CMake/Ninja 编排、源码路径解析、安装前缀、可复用项目构建原语和公共 CMake helper 模块。
 2. 协调工作区内各子项目版本，包括 submodule revision、第三方依赖版本、共享构建默认值和项目级构建配方。
 3. 作为外部系统可复用的通用工具链框架。仓库外项目可以通过 =$ZETAX_ROOT/zeta_forge= 或附近的兄弟目录定位 =zeta_forge=，复用公共构建库，避免每个项目重复维护一套依赖和工具链。
 
@@ -16,7 +16,7 @@ Zeta Forge 有三个明确用途：
 
 - 架构设计：[[file:architecture_cn.org][architecture_cn.org]]
 - 第三方系统使用说明：[[file:third_party_usage_cn.org][third_party_usage_cn.org]]
-- 更新说明：[[file:../CHANGELOG.org][../CHANGELOG.org]]
+- 发布历史：[[file:../release_history.org][../release_history.org]]
 
 * 克隆与初始化
 
@@ -83,6 +83,7 @@ git submodule update --init --recursive
 外部 ZetaX 项目，例如 =zpp=，位于 =ZETAX_ROOT= 下与 =zeta_forge= 平级的位置，并把本仓库作为可复用工具链框架调用。
 本仓库中的工作区目标入口默认都使用托管的 =3rd/*= submodules 作为源码输入。
 工作区编排入口统一放在 =builder/= 目录下。
+公共 CMake helper 模块位于 =cmake_util/=。该目录是遗留独立 =cmake_util= 项目的 ZetaX 维护副本，后续更新在 =zeta_forge= 内进行。
 
 * ZetaX 工作区根目录
 
@@ -135,6 +136,7 @@ cd "$ZETAX_ROOT/zpp"
 
 该入口默认把当前 =zpp= checkout 作为 =ZETA_ZPP_SRC_DIR=，除非用户显式设置了这个变量。
 它会通过 =$ZETAX_ROOT/zeta_forge= 或附近兄弟目录复用共享编译工具库，zpp 特有构建逻辑位于 =zpp/builder/=。
+它也会通过 =$ZETAX_ROOT/zeta_forge/cmake_util= 复用公共 CMake helper 模块，不再携带 =cmake_util= submodule。
 
 * 当前说明
 

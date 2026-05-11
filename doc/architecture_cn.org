@@ -1,6 +1,6 @@
 * zeta_forge 通用工具链架构设计
 
-本文描述 =zeta_forge= 作为 ZetaX 通用 C++ 工具链框架的设计。当前版本见 [[file:../VERSION][../VERSION]]，更新记录见 [[file:../CHANGELOG.org][../CHANGELOG.org]]。
+本文描述 =zeta_forge= 作为 ZetaX 通用 C++ 工具链框架的设计。当前版本见 [[file:../VERSION][../VERSION]]，发布历史见 [[file:../release_history.org][../release_history.org]]。
 
 * 设计目标
 
@@ -17,6 +17,7 @@ zeta_forge 负责：
 - 准备 Debian/Ubuntu 主机构建依赖、Python/uv/Conan 2 等工具。
 - 管理 =3rd/*= 的源码位置、默认版本和构建顺序。
 - 提供 =common/zeta_forge= Python 工具库，包括配置发现、进程执行、CMake 项目构建、workspace 调度和项目级构建实现。
+- 维护 =cmake_util/= 公共 CMake helper 模块，承接遗留独立 =cmake_util= 项目的后续演进。
 - 统一安装前缀、C++ 标准、Conan 依赖版本和 CMake 配置参数。
 
 zeta_forge 不负责：
@@ -32,11 +33,12 @@ zeta_forge 不负责：
 
 - =zbuild.py=：仓库顶层统一调度入口，负责分发 =grpc=、=hpx=、=folly=、=nng=、=all= 和 =prepare-debian=。
 - =common/zeta_forge/=：通用 Python 工具链库，是外部项目复用的主要接口。
+- =cmake_util/=：公共 CMake helper 模块，包括编译选项、依赖查找和 =add_run_target= 等辅助函数。该目录接管遗留独立 =cmake_util= 项目的最新内容，后续在 =zeta_forge= 内维护。
 - =builder/<project>/=：zeta_forge 内部项目构建工作区，保存项目入口、Conan 配方、CMake helper 和 build 输出。
 - =3rd/*=：第三方源码 submodule，默认作为 gRPC、HPX、Folly、NNG、Taskflow、RapidJSON 等源码输入。
 - =doc/=：设计、接入和中文说明文档。
 
-=zpp= 位于 =$ZETAX_ROOT/zpp=，不再是 =zeta_forge= submodule。它通过自己的 =builder/zpp.py= 注入项目特有构建逻辑，并复用 =common/zeta_forge= 的公共编译生命周期。
+=zpp= 位于 =$ZETAX_ROOT/zpp=，不再是 =zeta_forge= submodule，也不再携带 =cmake_util= submodule。它通过自己的 =builder/zpp.py= 注入项目特有构建逻辑，并复用 =common/zeta_forge= 的公共编译生命周期和 =cmake_util/= 中的 CMake helper。
 
 * 根路径发现
 
@@ -79,6 +81,8 @@ zeta_forge 不负责：
 
 外部项目入口应尽量保持薄层，只负责定位工具库、设置当前项目源码默认值并调用项目仓库自己的 Builder。
 
+=cmake_util/= 是 CMake 层公共资产，项目 Builder 可以通过 =-DZETA_CMAKE_UTIL_DIR=$ZETAX_ROOT/zeta_forge/cmake_util= 注入给外部项目。项目自身不应再复制这些 helper 或以 submodule 方式持有旧仓库。
+
 * 外部项目扩展方式
 
 外部系统接入时有两种推荐方式：
@@ -101,4 +105,4 @@ zeta_forge 的版本协调包括：
 - =common/zeta_forge/config.py= 中的共享默认值，例如 C++ 标准和基础库版本。
 - forge 内部项目 =zbuild.py= 或 Builder 中的 CMake 配置开关。
 
-每次修改公共工具链行为、依赖版本或外部接入约定时，都需要同步更新 [[file:../VERSION][VERSION]] 和 [[file:../CHANGELOG.org][CHANGELOG.org]]。
+每次修改公共工具链行为、依赖版本或外部接入约定时，都需要同步更新 [[file:../VERSION][VERSION]] 和 [[file:../release_history.org][release_history.org]]。

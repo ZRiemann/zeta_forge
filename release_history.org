@@ -3,6 +3,20 @@
 
 * Release History
 
+** v0.3.0 - 2026-05-13
+*** 发布定位摘要
+- 为外部 ZetaX 子项目新增 =add_run_target= 运行入口的公共 Python 复用接口。
+- 按公共接口新增版本发布，zeta_forge 从 =v0.2.0= 升级到 =v0.3.0=。
+
+*** 变更内容
+- 新增 =common/zeta_forge/run_targets.py=，支持扫描项目 =CMakeLists.txt= 中的 =add_run_target(...)= 调用，解析运行入口名称和预置参数，输出对应 CMake 运行命令，并可直接执行已编译可执行文件。
+- =zeta_forge.run_targets= 提供列出运行入口、查找指定入口和在已有 build tree 上直接执行已编译可执行文件的公共函数，便于 zpp 等子项目复用。
+- =cmake_util/add_run_target.cmake= 的 CMake 行为保持不变；Python 接口只读取项目源码中的调用信息，不承担 configure 或全量构建。
+
+*** 兼容性与升级说明
+- 外部项目可以继续只使用 CMake 层 =add_run_target=；需要统一 CLI 时，可在项目自己的 =zbuild.py= 中接入 =zeta_forge.run_targets=。
+- 执行运行入口前仍需要项目已有对应 =BUILD_TYPE= 的 CMake build tree 和已编译可执行文件。
+
 ** v0.2.0 - 2026-05-11
 *** 发布定位摘要
 - zeta_forge 从单一仓库构建入口升级为 ZetaX 公共 C++ 工具链框架。

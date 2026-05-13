@@ -83,6 +83,8 @@ zeta_forge 不负责：
 
 =cmake_util/= 是 CMake 层公共资产，项目 Builder 可以通过 =-DZETA_CMAKE_UTIL_DIR=$ZETAX_ROOT/zeta_forge/cmake_util= 注入给外部项目。项目自身不应再复制这些 helper 或以 submodule 方式持有旧仓库。
 
+=common/zeta_forge/run_targets.py= 提供 =add_run_target(...)= 的 Python 复用接口。外部项目可以用它扫描自身 =CMakeLists.txt= 中预置的运行入口，列出入口名称和对应 =cmake --build ... --target run_<name>= 命令，也可以在已有 build tree 上直接执行已编译的可执行文件及其预置参数。该接口不负责 CMake configure 或自动构建，项目级 =zbuild.py= 应先完成自己的 build tree 准备。
+
 * 外部项目扩展方式
 
 外部系统接入时有两种推荐方式：

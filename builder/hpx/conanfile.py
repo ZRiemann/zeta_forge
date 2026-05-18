@@ -4,7 +4,7 @@ from conan import ConanFile
 from conan.tools.cmake import cmake_layout
 
 
-BOOST_VERSION = os.getenv("ZETA_BOOST_VERSION", "1.90.0")
+BOOST_VERSION = os.getenv("ZETA_BOOST_VERSION", "1.91.0")
 JEMALLOC_VERSION = os.getenv("ZETA_JEMALLOC_VERSION", "5.3.0")
 
 

@@ -143,8 +143,8 @@ class YourProjectBuilder(CMakeProjectBuilder):
 外部项目有三种依赖管理方式：
 
 1. 直接依赖 =ZETA_INSTALL_PREFIX= 中已安装的 gRPC、HPX、Folly、NNG 等库。
-2. 在项目自己的 =builder/conanfile.py= 中声明项目私有依赖，同时通过 =CMAKE_PREFIX_PATH= 引入 forge 安装前缀。
-3. 如果某个依赖组合会被多个项目共享，优先抽象为 zeta_forge 公共库能力；项目目标本身仍留在项目仓库。
+2. 项目确有私有依赖时，才在项目自己的 =builder/conanfile.py= 中声明；ZetaX 公共 Conan 依赖不得在外部项目重复声明。
+3. 如果某个依赖组合会被多个项目共享，优先抽象到 =zeta_forge deps= 或其他 forge 公共库能力；项目目标本身仍留在项目仓库。
 
 优先选择第一种或第二种；只有共享价值明确的公共流程才放回 =zeta_forge=。
 
@@ -158,10 +158,10 @@ $ZETAX_ROOT/zpp/
   builder/
     __init__.py
     zpp.py
-    conanfile.py
 #+end_src
 
-=zbuild.py= 负责通过 =$ZETAX_ROOT/zeta_forge= 或附近兄弟目录定位 =zeta_forge= 公共库；=builder/zpp.py= 定义 =ZppBuilder=，继承 =CMakeProjectBuilder= 并注入 zpp 特有的 Conan 参数、CMake 选项和测试/示例开关。
+=zbuild.py= 负责通过 =$ZETAX_ROOT/zeta_forge= 或附近兄弟目录定位 =zeta_forge= 公共库；=builder/zpp.py= 定义 =ZppBuilder=，继承 =CMakeProjectBuilder= 并注入 zpp 特有的 CMake 选项和测试/示例开关。
+共享 Conan 依赖版本和 package config 由 =zeta_forge deps= 统一提供，zpp 不维护自己的 Conan 配方。
 zpp 的 CMake helper 来自 =$ZETAX_ROOT/zeta_forge/cmake_util=，不再通过 zpp 仓库自己的 =cmake_util= submodule 提供。
 
 * 常见命令

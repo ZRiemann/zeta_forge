@@ -81,7 +81,7 @@ zeta_forge 不负责：
 
 外部项目入口应尽量保持薄层，只负责定位工具库、设置当前项目源码默认值并调用项目仓库自己的 Builder。
 
-=cmake_util/= 是 CMake 层公共资产，项目 Builder 可以通过 =-DZETA_CMAKE_UTIL_DIR=$ZETAX_ROOT/zeta_forge/cmake_util= 注入给外部项目。项目自身不应再复制这些 helper 或以 submodule 方式持有旧仓库。
+=cmake_util/= 是 CMake 层公共资产，项目 Builder 可以通过 =-DZETA_CMAKE_UTIL_DIR=$ZETAX_ROOT/zeta_forge/cmake_util= 注入给外部项目。项目自身不应再复制这些 helper 或以 submodule 方式持有旧仓库。=common.cmake= 不再初始化 CPM 或下载第三方依赖；现代项目应通过 =zeta_forge deps= 准备的 package config 与显式 =CMAKE_PREFIX_PATH= 消费依赖。=cmake_util/find_package= 下的 CPM fallback 模块仅作为历史兼容保留，不属于现代公共入口。
 
 =common/zeta_forge/run_targets.py= 提供 =add_run_target(...)= 的 Python 复用接口。外部项目可以用它扫描自身 =CMakeLists.txt= 中预置的运行入口，列出入口名称和对应 =cmake --build ... --target run_<name>= 命令，也可以在已有 build tree 上直接执行已编译的可执行文件及其预置参数。该接口不负责 CMake configure 或自动构建，项目级 =zbuild.py= 应先完成自己的 build tree 准备。
 
@@ -103,7 +103,7 @@ zeta_forge 不负责：
 zeta_forge 的版本协调包括：
 
 - =.gitmodules= 中的 submodule 来源和 revision。
-- =builder/*/conanfile.py= 中的第三方依赖版本。
+- =builder/deps/conanfile.py= 和 forge 内部 Conan 配方中的第三方依赖版本；外部项目不维护共享依赖 Conan 图。
 - =common/zeta_forge/config.py= 中的共享默认值，例如 C++ 标准和基础库版本。
 - forge 内部项目 =zbuild.py= 或 Builder 中的 CMake 配置开关。
 

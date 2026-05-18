@@ -121,17 +121,27 @@ By default, =ZETA_INSTALL_PREFIX= is set to =~/.local=.
 Examples:
 
 #+begin_src bash
+./builder/deps/zbuild.py --BUILD_TYPE=Debug --install
 ./builder/grpc/zbuild.py --rebuild --install
 ./builder/hpx/zbuild.py --rebuild --install
 ./builder/folly/zbuild.py --rebuild --install
 ./builder/nng/zbuild.py --rebuild --install
 #+end_src
 
+=deps= is the single ZetaX Conan entrypoint for common C++ package configs
+consumed by external projects such as =zpp= and =zeta_trader=. It installs
+Conan-generated package files under
+=${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=. External projects
+should consume that installed environment and should not run their own Conan
+dependency graph for shared packages such as =spdlog=, =fmt=, or =GTest=.
+
 * External zpp Entrypoint
 
-=zpp= is an independent ZetaX project under =$ZETAX_ROOT/zpp=. It owns its project-specific builder and Conan recipe, while the build lifecycle still runs through =zeta_forge.cmake_builder.CMakeProjectBuilder=.
+=zpp= is an independent ZetaX project under =$ZETAX_ROOT/zpp=. It owns only project-specific build logic, while shared Conan dependency versions and package configs are owned by =zeta_forge deps=.
 
 #+begin_src bash
+cd "$ZETAX_ROOT/zeta_forge"
+./zbuild.py deps --BUILD_TYPE=Debug --install
 cd "$ZETAX_ROOT/zpp"
 ./zbuild.py --rebuild --no-tests
 #+end_src
@@ -139,6 +149,7 @@ cd "$ZETAX_ROOT/zpp"
 The entrypoint uses the current =zpp= checkout as =ZETA_ZPP_SRC_DIR= unless that variable is explicitly set.
 It reuses the shared build library from =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout, while zpp-specific build logic lives under =zpp/builder/=.
 It also consumes shared CMake helper modules from =$ZETAX_ROOT/zeta_forge/cmake_util= instead of carrying a =cmake_util= submodule.
+The shared Conan dependency versions, including =spdlog= and =fmt=, are owned by =zeta_forge deps=.
 
 * Current Notes
 

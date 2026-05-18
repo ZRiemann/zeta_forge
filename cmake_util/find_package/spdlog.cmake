@@ -1,4 +1,11 @@
+message(WARNING "Legacy CPM fallback module: spdlog.cmake is kept for old projects only. Modern ZetaX projects should use zeta_forge managed package configs.")
+
 # 2) 如果没找到，尝试使用用户指定的 spdlog_ROOT（纯头文件路径）
+set(_ZETA_SPDLOG_VERSION "1.17.0")
+if(DEFINED ENV{ZETA_SPDLOG_VERSION})
+  set(_ZETA_SPDLOG_VERSION "$ENV{ZETA_SPDLOG_VERSION}")
+endif()
+
 if (DEFINED SPDLOG_ROOT)
   message(STATUS "Using spdlog from SPDLOG_ROOT: ${SPDLOG_ROOT}")
   if (NOT TARGET spdlog::spdlog)
@@ -23,23 +30,18 @@ endif()
 if(spdlog_FOUND)
     message(STATUS "spdlog found: ${spdlog_DIR}")
 else()
-    if(ZPP_USE_CONAN)
-      message(FATAL_ERROR "spdlog was not found in Conan mode")
-    endif()
-
     message(STATUS "spdlog not found, will download it")
 
     CPMAddPackage(
         NAME spdlog
-        URL https://github.com/gabime/spdlog/archive/refs/tags/v1.15.3.zip
-        URL_HASH SHA256=b74274c32c8be5dba70b7006c1d41b7d3e5ff0dff8390c8b6390c1189424e094
+        URL "https://github.com/gabime/spdlog/archive/refs/tags/v${_ZETA_SPDLOG_VERSION}.zip"
         DOWNLOAD_ONLY YES
     )
     #[[
     CPMAddPackage(
         NAME spdlog
         GITHUB_REPOSITORY gabime/spdlog
-        GIT_TAG v1.15.3
+        GIT_TAG "v${_ZETA_SPDLOG_VERSION}"
         GIT_SHALLOW TRUE
         GIT_PROGRESS TRUE
         DOWNLOAD_ONLY YES  # 仅下载，不构建（因为它是仅头文件库）

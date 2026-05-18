@@ -3,6 +3,28 @@
 
 * Release History
 
+** v0.4.0 - 2026-05-18
+*** 发布定位摘要
+- 新增 =deps= 目标，统一管理外部 ZetaX 项目消费的 Conan 依赖环境。
+- 按公共依赖管理能力发布，zeta_forge 从 =v0.3.0= 升级到 =v0.4.0=。
+
+*** 变更内容
+- =common/zeta_forge/config.py= 新增 =ZETA_SPDLOG_VERSION=，与 =ZETA_FMT_VERSION= 等公共版本默认值同源管理；升级 =ZETA_BOOST_VERSION= 从 =1.90.0= 至 =1.91.0=（ConanCenter 已收录）。
+- =builder/deps= 集中声明 =spdlog=、=fmt=、=GTest= 等公共 Conan 依赖，新增 =boost/{BOOST_VERSION}= 依赖（默认 =1.91.0=，由 =ZETA_BOOST_VERSION= 控制）与 =openssl/{OPENSSL_VERSION}=，并将 CMake package config 安装到 =${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=。
+- =builder/deps= 新增 =boost/*:shared=False= 与 =openssl/*:shared=False= 选项，保证 folly-config.cmake 所需的 Boost context/filesystem/program_options/regex/thread 组件均被编译为静态库。
+- =builder/deps/zbuild.py= 新增 =install_boost_findboost_compat()= 方法，在 Conan 安装后对 =BoostConfig.cmake= 进行兼容性补丁，为 CMake 3.31+ 的 FindBoost 模块自动设置 =Boost_<COMPONENT>_FOUND= 变量。
+- =builder/folly/conanfile.py= 与 =builder/hpx/conanfile.py= 的 =ZETA_BOOST_VERSION= 默认值同步至 =1.91.0=。
+- =builder/deps= 同时从 =ZETA_RAPIDJSON_SRC_DIR=（默认 =zeta_forge/3rd/rapidjson=）生成 =RapidJSONConfig.cmake=，以 header-only package 形式统一提供 =rapidjson::rapidjson=，不通过 Conan 管理 RapidJSON。
+- =./zbuild.py list/all= 纳入 =deps=，=all= 会优先准备公共依赖环境。
+- =cmake_util/find_package/spdlog.cmake= 保留为非 Conan 备用路径，fallback 版本改由 =ZETA_SPDLOG_VERSION= 控制。
+- =cmake_util/common.cmake= 移除 =ZPP_USE_CONAN= 与 CPM bootstrap 逻辑，不再设置 =CPM_SOURCE_CACHE=、下载 =CPM.cmake= 或生成项目根目录下的 =cpm_cache*=。
+- =cmake_util/find_package= 中的 CPM fallback 模块仅作为历史兼容模块保留，并标记为不属于现代 ZetaX 公共入口。
+
+*** 兼容性与升级说明
+- =zpp=、=zeta_trader= 等外部项目不应再维护自己的 Conan 依赖图；应先安装 =zeta_forge deps=，再通过 =find_package= 消费安装环境。
+- 找不到 =spdlog/fmt/GTest/RapidJSON/Boost/OpenSSL= package config 时，应重新运行 =./zbuild.py deps --BUILD_TYPE=<type> --install=。
+- 外部项目不应再通过 =ZPP_USE_CONAN= 或 CPM fallback 切换依赖来源；如果项目需要 Conan，应在项目 Builder 中显式接入 Conan 流程。
+
 ** v0.3.0 - 2026-05-13
 *** 发布定位摘要
 - 为外部 ZetaX 子项目新增 =add_run_target= 运行入口的公共 Python 复用接口。

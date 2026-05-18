@@ -127,16 +127,19 @@ export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 
 * 外部 zpp 入口
 
-=zpp= 是位于 =$ZETAX_ROOT/zpp= 的独立 ZetaX 项目。它自己维护项目级 Builder 和 Conan 配方，但底层构建生命周期仍通过 =zeta_forge.cmake_builder.CMakeProjectBuilder= 执行。
+=zpp= 是位于 =$ZETAX_ROOT/zpp= 的独立 ZetaX 项目。它只维护项目级构建逻辑，共享 Conan 依赖版本和 package config 由 =zeta_forge deps= 统一提供。
 
 #+begin_src bash
+cd "$ZETAX_ROOT/zeta_forge"
+./zbuild.py deps --BUILD_TYPE=Debug --install
 cd "$ZETAX_ROOT/zpp"
-./zbuild.py --rebuild --no-tests
+./zbuild.py --BUILD_TYPE=Debug --rebuild --no-tests
 #+end_src
 
 该入口默认把当前 =zpp= checkout 作为 =ZETA_ZPP_SRC_DIR=，除非用户显式设置了这个变量。
 它会通过 =$ZETAX_ROOT/zeta_forge= 或附近兄弟目录复用共享编译工具库，zpp 特有构建逻辑位于 =zpp/builder/=。
 它也会通过 =$ZETAX_ROOT/zeta_forge/cmake_util= 复用公共 CMake helper 模块，不再携带 =cmake_util= submodule。
+共享依赖的 Conan 解析只在 =zeta_forge deps= 中执行。
 
 * 当前说明
 

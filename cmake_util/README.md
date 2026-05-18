@@ -9,6 +9,11 @@ Legacy `cbuild` launcher scripts are intentionally not maintained here.
 Projects should use their `zbuild.py` entrypoints and consume these files as
 CMake helper modules.
 
+`common.cmake` does not manage third-party fallback downloads. Modern ZetaX
+projects should consume package configs prepared by `zeta_forge deps` through
+an explicit `CMAKE_PREFIX_PATH`. Files under `find_package/` are legacy
+compatibility modules and are not included by the modern shared entrypoint.
+
 ## add_run_target helper
 
 `add_run_target(exe_target [ARGS <args>...])` creates a CMake custom target

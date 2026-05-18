@@ -1,3 +1,5 @@
+message(WARNING "Legacy CPM fallback module: taskflow.cmake is kept for old projects only. Modern ZetaX projects should use zeta_forge managed package configs.")
+
 # 2) 如果没找到，尝试使用用户指定的 TASKFLOW_ROOT（纯头文件路径）
 if (DEFINED TASKFLOW_ROOT)
   message(STATUS "Using Taskflow from TASKFLOW_ROOT: ${TASKFLOW_ROOT}")
@@ -13,10 +15,6 @@ endif()
 find_package(Taskflow QUIET CONFIG)
 
 if(NOT TARGET Taskflow::Taskflow)
-  if(ZPP_USE_CONAN)
-    message(FATAL_ERROR "Taskflow was not found in Conan mode")
-  endif()
-
     message(STATUS "Taskflow not found, will download it")
     # 添加 Taskflow
     CPMAddPackage(

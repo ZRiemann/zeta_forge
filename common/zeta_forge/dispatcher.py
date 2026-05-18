@@ -8,8 +8,9 @@ from .config import RepoConfig, load_repo_config
 from .process import run_command
 
 
-TARGET_ORDER = ["grpc", "hpx", "folly", "nng"]
+TARGET_ORDER = ["deps", "grpc", "hpx", "folly", "nng"]
 TARGET_DEPENDENCIES = {
+    "deps": (),
     "grpc": (),
     "hpx": (),
     "folly": ("grpc",),
@@ -62,6 +63,7 @@ def help_epilog() -> str:
         "Dependency-aware all order:\n"
         f"  {build_order}\n\n"
         "Examples:\n"
+        "  ./zbuild.py deps --BUILD_TYPE=Debug --install\n"
         "  ./zbuild.py grpc --rebuild --install\n"
         "  ./zbuild.py hpx --rebuild --install\n"
         "  ./zbuild.py all --BUILD_TYPE=Debug --continue-on-error\n"

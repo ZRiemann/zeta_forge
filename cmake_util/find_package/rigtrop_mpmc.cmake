@@ -1,3 +1,5 @@
+message(WARNING "Legacy CPM fallback module: rigtrop_mpmc.cmake is kept for old projects only. Modern ZetaX projects should use zeta_forge managed package configs.")
+
 # 2) 如果没找到，尝试使用用户指定的 RAPIDJSON_ROOT（纯头文件路径）
 if (DEFINED RAPIDJSON_ROOT)
   message(STATUS "Using RapidJSON from RAPIDJSON_ROOT: ${RAPIDJSON_ROOT}")

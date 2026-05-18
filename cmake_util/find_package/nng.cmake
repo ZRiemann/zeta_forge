@@ -1,3 +1,5 @@
+message(WARNING "Legacy CPM fallback module: nng.cmake is kept for old projects only. Modern ZetaX projects should use zeta_forge managed package configs.")
+
 find_package(nng QUIET CONFIG)
 if(NOT TARGET nng::nng)
     find_package(NNG QUIET)
@@ -36,10 +38,6 @@ else()
 endif()
 ]]
 if(NOT TARGET nng::nng)
-    if(ZPP_USE_CONAN)
-        message(FATAL_ERROR "nng was not found. Install it first with: cd $ENV{ZETAX_ROOT}/zeta_forge && ./zbuild.py nng --install")
-    endif()
-
     message(STATUS "NNG not found, will download and build it")
     CPMAddPackage(
         NAME nng

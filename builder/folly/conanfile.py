@@ -6,6 +6,7 @@ from conan.tools.cmake import cmake_layout
 
 BOOST_VERSION = os.getenv("ZETA_BOOST_VERSION", "1.91.0")
 FMT_VERSION = os.getenv("ZETA_FMT_VERSION", "12.1.0")
+OPENSSL_VERSION = os.getenv("ZETA_OPENSSL_VERSION", "3.6.2")
 
 
 class FollyBuildConan(ConanFile):
@@ -26,6 +27,7 @@ class FollyBuildConan(ConanFile):
         "zstd/1.5.7",
         "snappy/1.2.1",
         "libsodium/1.0.20",
+        f"openssl/{OPENSSL_VERSION}",
     )
 
     default_options = {
@@ -45,6 +47,7 @@ class FollyBuildConan(ConanFile):
         "zstd/*:shared": False,
         "snappy/*:shared": False,
         "libsodium/*:shared": False,
+        "openssl/*:shared": False,
     }
 
     def layout(self):

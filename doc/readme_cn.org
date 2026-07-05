@@ -68,6 +68,7 @@ git submodule update --init --recursive
 =zbuild.py= 中的 =z= 取自 =zeta_forge=，用于表达仓库顶层统一入口，而不是局限于 CMake 的 =c=。
 =zbuild.py= 可以直接执行，并分发到 =builder/= 下对应项目的工作区目标入口。
 当执行 =./zbuild.py all= 时，调度器会先构建 =grpc=，将 =hpx= 和 =nng= 视为相互独立的目标，然后在 =grpc= 后构建 =folly=。
+托管的第三方构建入口默认关闭上游 examples 和 tests，使 =all= 及单独目标构建聚焦于可安装库。gRPC 代码生成 plugins 保持开启，HPX 保留 =hpxdep= 和 =inspect= 工具，Folly 保留上游安装清单要求的 =libfolly_test_util.a= 支持库。
 
 * 源码布局
 
@@ -144,6 +145,7 @@ cd "$ZETAX_ROOT/zpp"
 * 当前说明
 
 - gRPC 是工作区内核心 RPC 依赖族的统一来源：Abseil、Protobuf、zlib、TLS/BoringSSL、c-ares、RE2、upb、utf8_range、xxhash 和 address_sorting。
+- HPX 默认关闭 examples、tests 及性能测试目标；保留 =hpxdep=、=inspect= 工具，并继续安装 =hpx_stat_viewer.py=。
 - gRPC 的测试/工具生态依赖，例如 benchmark、bloaty、googletest、googleapis、xDS、Envoy API、protoc-gen-validate 和 OpenTelemetry C++，默认不作为 Zeta Forge 开发依赖安装。
 - 外部 zpp 构建默认使用 =3rd/taskflow= 和 =3rd/rapidjson=。
 - RapidJSON 通过 =RAPIDJSON_ROOT= 传递给 zpp。

@@ -151,6 +151,23 @@ class CMakeProjectBuilder:
     def ensure_build_directory(self) -> None:
         self.build_dir.mkdir(parents=True, exist_ok=True)
 
+    def refresh_compile_commands_entrypoint(self) -> None:
+        source = self.build_dir / "compile_commands.json"
+        if not source.is_file():
+            return
+
+        entrypoint = self.build_root / "compile_commands.json"
+        if entrypoint.is_dir():
+            raise RuntimeError(f"compile_commands entrypoint is a directory: {entrypoint}")
+        if entrypoint.exists() or entrypoint.is_symlink():
+            entrypoint.unlink()
+
+        relative_source = source.relative_to(entrypoint.parent)
+        try:
+            entrypoint.symlink_to(relative_source)
+        except OSError:
+            shutil.copy2(source, entrypoint)
+
     def run(self) -> None:
         self.validate()
         moved_build_dir = self.detect_moved_build_dir()
@@ -174,6 +191,8 @@ class CMakeProjectBuilder:
         if self.should_configure():
             run_command(self.configure_command(), cwd=self.script_dir, env=self.repo_config.env)
             self.configure_stamp.touch()
+
+        self.refresh_compile_commands_entrypoint()
 
         run_command(["cmake", "--build", self.build_dir, "--parallel", str(cpu_count())], env=self.repo_config.env)
 

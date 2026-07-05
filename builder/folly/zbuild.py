@@ -64,7 +64,6 @@ class FollyBuilder(CMakeProjectBuilder):
             f"-DCMAKE_PREFIX_PATH={install_prefix}",
             f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
             f"-DCMAKE_CXX_STANDARD={self.repo_config.cxx_standard}",
-            f"-DOPENSSL_ROOT_DIR={install_prefix}",
             f"-DZLIB_ROOT={install_prefix}",
             "-DBUILD_SHARED_LIBS=OFF",
             "-DBOOST_LINK_STATIC=ON",

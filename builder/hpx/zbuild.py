@@ -31,6 +31,10 @@ class HpxBuilder(CMakeProjectBuilder):
     def conan_input_files(self) -> list[Path]:
         return [self.script_dir / "conanfile.py", self.user_toolchain]
 
+    def configure_dependencies(self) -> list[Path]:
+        compat_dir = self.script_dir / "cmake" / "conan_compat" / "packages"
+        return [*super().configure_dependencies(), *sorted(compat_dir.glob("*.cmake"))]
+
     def conan_install_command(self) -> list[object]:
         enabled_blocks = 'tools.cmake.cmaketoolchain:enabled_blocks=["user_toolchain", "generic_system", "compilers", "android_system", "apple_system", "fpic", "arch_flags", "linker_scripts", "rpath_link_flags", "libcxx", "vs_runtime", "vs_debugger_environment", "parallel", "extra_flags", "cmake_flags_init", "extra_variables", "try_compile", "find_paths", "pkg_config", "rpath", "shared", "output_dirs", "variables", "preprocessor"]'
         return [
@@ -70,8 +74,12 @@ class HpxBuilder(CMakeProjectBuilder):
             "-DHPX_WITH_FETCH_BOOST=OFF",
             "-DHPX_WITH_FETCH_HWLOC=OFF",
             "-DHPX_WITH_PKGCONFIG=OFF",
+            "-DBUILD_TESTING=OFF",
             "-DBUILD_SHARED_LIBS=OFF",
             "-DHPX_WITH_STATIC_LINKING=ON",
+            "-DHPX_WITH_TESTS=OFF",
+            "-DHPX_WITH_EXAMPLES=OFF",
+            "-DHPX_WITH_TOOLS=ON",
             f"-DHPX_WITH_CXX_STANDARD={self.repo_config.cxx_standard}",
         ]
 

@@ -68,6 +68,7 @@ You can invoke builds from the repository root through the unified dispatcher:
 =zbuild.py= uses the =z= from =zeta_forge= to represent the top-level workspace entry rather than a CMake-specific command.
 =zbuild.py= can be executed directly and routes commands to the corresponding workspace target entrypoints under =builder/=.
 When running =./zbuild.py all=, the dispatcher builds =grpc= first, treats =hpx= and =nng= as independent targets, then builds =folly= after =grpc=.
+The managed third-party entrypoints disable upstream examples and tests by default so that =all= and individual target builds focus on installable libraries. gRPC code-generation plugins remain enabled, HPX builds its =hpxdep= and =inspect= tools, and Folly retains its upstream-installed =libfolly_test_util.a= support library.
 
 * Source Layout
 
@@ -154,6 +155,7 @@ The shared Conan dependency versions, including =spdlog= and =fmt=, are owned by
 * Current Notes
 
 - gRPC is the workspace source for the core RPC dependency family: Abseil, Protobuf, zlib, TLS/BoringSSL, c-ares, RE2, upb, utf8_range, xxhash, and address_sorting.
+- HPX examples and tests, including performance-test targets, are disabled by default; the =hpxdep= and =inspect= tools remain enabled and =hpx_stat_viewer.py= remains installable.
 - gRPC test/tooling ecosystem dependencies such as benchmark, bloaty, googletest, googleapis, xDS, Envoy API, protoc-gen-validate, and OpenTelemetry C++ are not installed as default Zeta Forge development dependencies.
 - External zpp builds use Taskflow and RapidJSON from =3rd/= by default.
 - RapidJSON is passed to zpp through =RAPIDJSON_ROOT=.

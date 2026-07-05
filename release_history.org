@@ -3,6 +3,24 @@
 
 * Release History
 
+** v0.5.0 - 2026-07-05
+*** 发布定位摘要
+- 更新核心第三方源码版本，并收紧 Folly 与 HPX 的可安装库构建路径。
+- 改进公共 CMake Builder 的编译数据库入口，zeta_forge 从 =v0.4.0= 升级到 =v0.5.0=。
+
+*** 变更内容
+- 更新 =3rd/folly=、=3rd/grpc=、=3rd/hpx=、=3rd/nng= 与 =3rd/taskflow= 的源码版本。
+- =builder/folly= 显式使用 =ZETA_OPENSSL_VERSION= 对应的 Conan OpenSSL 静态库，不再将混装有 gRPC BoringSSL 兼容文件的 =ZETA_INSTALL_PREFIX= 强制设为 =OPENSSL_ROOT_DIR=，避免 Folly 配置阶段的 OpenSSL 版本检测失败。
+- 第三方 Builder 默认关闭上游 examples 和 tests；HPX 显式设置 =BUILD_TESTING=OFF=、=HPX_WITH_TESTS=OFF=、=HPX_WITH_EXAMPLES=OFF=，同时保持 =HPX_WITH_TOOLS=ON= 以构建 =hpxdep=、=inspect= 并安装 =hpx_stat_viewer.py=。
+- HPX 新增 Conan Boost package config 兼容层，补齐 =Boost_<COMPONENT>_FOUND= 变量，使 =inspect= 能正确发现静态 =Boost.Regex=；兼容配置文件同时纳入 configure stamp 依赖。
+- =CMakeProjectBuilder= 在配置后刷新构建根目录的 =compile_commands.json= 入口：优先创建相对符号链接，不支持符号链接时回退为复制文件。
+- 更新中英文 README，说明托管第三方构建默认关闭 examples/tests，以及 HPX 保留的工具和安装内容。
+
+*** 兼容性与升级说明
+- 依赖旧第三方源码行为的本地补丁需要基于本版本记录的 submodule revision 重新检查。
+- 编辑器和静态分析工具可统一读取目标构建根目录下的 =compile_commands.json=；各构建类型的原始文件仍保留在对应构建目录中。
+- HPX 与 Folly 的默认入口聚焦安装所需目标；需要上游 examples 或 tests 时，应在独立验证流程中显式启用。
+
 ** v0.4.0 - 2026-05-18
 *** 发布定位摘要
 - 新增 =deps= 目标，统一管理外部 ZetaX 项目消费的 Conan 依赖环境。

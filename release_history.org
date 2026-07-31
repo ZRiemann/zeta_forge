@@ -3,6 +3,20 @@
 
 * Release History
 
+** v0.6.0 - 2026-07-31
+*** 发布定位摘要
+- 为共享 Conan 依赖环境增加 SQLite3 支持。
+- 按公共依赖能力升级，zeta_forge 从 =v0.5.0= 升级到 =v0.6.0=。
+
+*** 变更内容
+- =common/zeta_forge/config.py= 新增 =ZETA_SQLITE_VERSION=，默认值为 =3.53.3=。
+- =builder/deps/conanfile.py= 新增 =sqlite3/{SQLITE_VERSION}= 依赖，并设置 =sqlite3/*:shared=False=，默认生成静态 SQLite3 package config。
+- 更新中英文 README，明确 =zeta_forge deps= 统一管理 =SQLite3= 等共享 Conan 依赖版本。
+
+*** 兼容性与升级说明
+- 需要 SQLite3 的外部项目应先运行 =./zbuild.py deps --BUILD_TYPE=<type> --install=，再通过安装前缀下的 =zeta_deps/<BUILD_TYPE>= package config 消费 =SQLite3=。
+- 如需临时切换 SQLite3 版本，可在运行 =deps= 目标前设置 =ZETA_SQLITE_VERSION=。
+
 ** v0.5.0 - 2026-07-05
 *** 发布定位摘要
 - 更新核心第三方源码版本，并收紧 Folly 与 HPX 的可安装库构建路径。

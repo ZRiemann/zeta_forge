@@ -73,6 +73,8 @@ class HpxBuilder(CMakeProjectBuilder):
             "-DHPX_WITH_FETCH_ASIO=OFF",
             "-DHPX_WITH_FETCH_BOOST=OFF",
             "-DHPX_WITH_FETCH_HWLOC=OFF",
+            "-DHPX_WITH_FETCH_STDEXEC=ON",
+            "-DHPX_WITH_STDEXEC_TAG=05e3f5ec59655fee2536fc3116e5ffb4927ae955",
             "-DHPX_WITH_PKGCONFIG=OFF",
             "-DBUILD_TESTING=OFF",
             "-DBUILD_SHARED_LIBS=OFF",

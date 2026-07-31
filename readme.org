@@ -122,6 +122,7 @@ By default, =ZETA_INSTALL_PREFIX= is set to =~/.local=.
 Examples:
 
 #+begin_src bash
+./zbuild.py conan --BUILD_TYPE=Debug --install
 ./builder/deps/zbuild.py --BUILD_TYPE=Debug --install
 ./builder/grpc/zbuild.py --rebuild --install
 ./builder/hpx/zbuild.py --rebuild --install
@@ -130,7 +131,9 @@ Examples:
 #+end_src
 
 =deps= is the single ZetaX Conan entrypoint for common C++ package configs
-consumed by external projects such as =zpp= and =zeta_trader=. It installs
+consumed by external projects such as =zpp= and =zeta_trader=. The top-level
+=conan= command is an alias for =deps= when only the Conan-managed dependency
+environment is needed. It installs
 Conan-generated package files under
 =${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=. External projects
 should consume that installed environment and should not run their own Conan
@@ -142,7 +145,7 @@ dependency graph for shared packages such as =spdlog=, =fmt=, =GTest=, or =SQLit
 
 #+begin_src bash
 cd "$ZETAX_ROOT/zeta_forge"
-./zbuild.py deps --BUILD_TYPE=Debug --install
+./zbuild.py conan --BUILD_TYPE=Debug --install
 cd "$ZETAX_ROOT/zpp"
 ./zbuild.py --rebuild --no-tests
 #+end_src
@@ -156,7 +159,8 @@ The shared Conan dependency versions, including =spdlog=, =fmt=, and =SQLite3=, 
 
 - gRPC is the workspace source for the core RPC dependency family: Abseil, Protobuf, zlib, TLS/BoringSSL, c-ares, RE2, upb, utf8_range, xxhash, and address_sorting.
 - HPX examples and tests, including performance-test targets, are disabled by default; the =hpxdep= and =inspect= tools remain enabled and =hpx_stat_viewer.py= remains installable.
+- HPX always fetches stdexec at commit =05e3f5ec59655fee2536fc3116e5ffb4927ae955= through =HPX_WITH_FETCH_STDEXEC=ON=; this keeps the installed execution API aligned with the managed =3rd/hpx= source revision.
 - gRPC test/tooling ecosystem dependencies such as benchmark, bloaty, googletest, googleapis, xDS, Envoy API, protoc-gen-validate, and OpenTelemetry C++ are not installed as default Zeta Forge development dependencies.
 - External zpp builds use Taskflow and RapidJSON from =3rd/= by default.
 - RapidJSON is passed to zpp through =RAPIDJSON_ROOT=.
-- zpp currently still depends on the installed HPX package for HPX examples; if HPX was built without a discoverable Asio installation, configuring zpp HPX examples can fail until Asio is provided or HPX is rebuilt accordingly.
+- zpp's optional HPX module consumes the installed HPX package together with the forge Asio/Hwloc compatibility configs and rejects an installation whose =HPX_GIT_COMMIT= differs from the current =3rd/hpx= source.

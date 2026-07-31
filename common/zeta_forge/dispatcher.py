@@ -16,6 +16,9 @@ TARGET_DEPENDENCIES = {
     "folly": ("grpc",),
     "nng": (),
 }
+TARGET_ALIASES = {
+    "conan": "deps",
+}
 
 
 def target_scripts(forge_root: Path) -> dict[str, Path]:
@@ -31,6 +34,7 @@ def format_target_lines() -> str:
         else:
             lines.append(f"  {target} (independent)")
     lines.append("  all")
+    lines.append("  conan (alias for: deps)")
     lines.append("  prepare-debian")
     lines.append("  list")
     return "\n".join(lines)
@@ -63,6 +67,7 @@ def help_epilog() -> str:
         "Dependency-aware all order:\n"
         f"  {build_order}\n\n"
         "Examples:\n"
+        "  ./zbuild.py conan --BUILD_TYPE=Debug --install\n"
         "  ./zbuild.py deps --BUILD_TYPE=Debug --install\n"
         "  ./zbuild.py grpc --rebuild --install\n"
         "  ./zbuild.py hpx --rebuild --install\n"
@@ -98,6 +103,7 @@ def normalize_forward_args(args: list[str]) -> list[str]:
 
 
 def run_single(target: str, forwarded_args: list[str], repo_config: RepoConfig) -> int:
+    target = TARGET_ALIASES.get(target, target)
     script = target_scripts(repo_config.forge_root)[target]
     run_command([sys.executable, script, *normalize_forward_args(forwarded_args)], cwd=repo_config.forge_root)
     return 0
@@ -139,7 +145,7 @@ def main(script_path: Path) -> int:
     if namespace.command in {None, "-h", "--help"}:
         parser.print_help()
         return 0
-    if namespace.command in scripts:
+    if namespace.command in scripts or namespace.command in TARGET_ALIASES:
         return run_single(namespace.command, namespace.args, repo_config)
     if namespace.command == "all":
         all_namespace = build_all_parser().parse_args(normalize_forward_args(namespace.args))

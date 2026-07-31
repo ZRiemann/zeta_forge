@@ -120,6 +120,7 @@ export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 * 工作区目标入口示例
 
 #+begin_src bash
+./zbuild.py conan --BUILD_TYPE=Debug --install
 ./builder/deps/zbuild.py --BUILD_TYPE=Debug --install
 ./builder/grpc/zbuild.py --rebuild --install
 ./builder/hpx/zbuild.py --rebuild --install
@@ -128,7 +129,7 @@ export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 #+end_src
 
 =deps= 是 =zpp=、=zeta_trader= 等外部项目消费公共 C++ package config 的统一 Conan 入口。
-它会把 Conan 生成的 package 文件安装到
+=conan= 顶层命令是 =deps= 的别名，用于只准备 Conan 管理的依赖环境。它会把 Conan 生成的 package 文件安装到
 =${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=。外部项目应消费该安装环境，
 不要为 =spdlog=、=fmt=、=GTest=、=SQLite3= 等共享依赖重复维护自己的 Conan 依赖图。
 
@@ -138,7 +139,7 @@ export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 
 #+begin_src bash
 cd "$ZETAX_ROOT/zeta_forge"
-./zbuild.py deps --BUILD_TYPE=Debug --install
+./zbuild.py conan --BUILD_TYPE=Debug --install
 cd "$ZETAX_ROOT/zpp"
 ./zbuild.py --BUILD_TYPE=Debug --rebuild --no-tests
 #+end_src
@@ -152,7 +153,8 @@ cd "$ZETAX_ROOT/zpp"
 
 - gRPC 是工作区内核心 RPC 依赖族的统一来源：Abseil、Protobuf、zlib、TLS/BoringSSL、c-ares、RE2、upb、utf8_range、xxhash 和 address_sorting。
 - HPX 默认关闭 examples、tests 及性能测试目标；保留 =hpxdep=、=inspect= 工具，并继续安装 =hpx_stat_viewer.py=。
+- HPX 通过 =HPX_WITH_FETCH_STDEXEC=ON= 固定获取 commit =05e3f5ec59655fee2536fc3116e5ffb4927ae955= 的 stdexec，使安装后的 execution API 与托管的 =3rd/hpx= 源码修订保持一致。
 - gRPC 的测试/工具生态依赖，例如 benchmark、bloaty、googletest、googleapis、xDS、Envoy API、protoc-gen-validate 和 OpenTelemetry C++，默认不作为 Zeta Forge 开发依赖安装。
 - 外部 zpp 构建默认使用 =3rd/taskflow= 和 =3rd/rapidjson=。
 - RapidJSON 通过 =RAPIDJSON_ROOT= 传递给 zpp。
-- zpp 的 HPX examples 仍依赖系统中已安装的 HPX；如果该 HPX 安装缺少可发现的 Asio，配置 HPX examples 时可能失败，此时需要补齐 Asio 或重新构建 HPX。
+- zpp 可选 HPX 模块会同时消费已安装 HPX 与 forge 的 Asio/Hwloc 兼容配置，并拒绝 =HPX_GIT_COMMIT= 与当前 =3rd/hpx= 源码不一致的安装。

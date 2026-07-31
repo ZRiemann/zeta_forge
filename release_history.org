@@ -3,6 +3,22 @@
 
 * Release History
 
+** v0.6.1 - 2026-07-31
+*** 发布定位摘要
+- 统一仓库 C/C++ 格式化规则，并固定 HPX 使用的 stdexec 源码版本。
+- 补充 zpp 可选 HPX 模块的依赖兼容约束，zeta_forge 从 =v0.6.0= 升级到 =v0.6.1=。
+
+*** 变更内容
+- 新增根目录 =.clang-format=，并通过 =.clang-format-ignore= 排除 =3rd/**= 第三方源码。
+- Git 忽略规则新增本地 =.vorg.db= 与 =.vscode/= 工作区文件。
+- HPX Builder 启用 =HPX_WITH_FETCH_STDEXEC=，并将 =HPX_WITH_STDEXEC_TAG= 固定为 commit =05e3f5ec59655fee2536fc3116e5ffb4927ae955=。
+- 更新中英文 README，说明 HPX stdexec 的固定版本，以及 zpp 可选 HPX 模块对已安装 HPX、forge Asio/Hwloc 兼容配置和 =HPX_GIT_COMMIT= 一致性的要求。
+
+*** 兼容性与升级说明
+- 构建 HPX 时需要能够获取固定 commit 的 stdexec 源码；离线构建环境应提前准备对应源码缓存。
+- zpp 可选 HPX 模块要求已安装 HPX 的 =HPX_GIT_COMMIT= 与当前 =3rd/hpx= 源码一致，不匹配的安装需要重新构建。
+- 仓库格式化不处理 =3rd/**=，避免改写托管的第三方源码。
+
 ** v0.6.0 - 2026-07-31
 *** 发布定位摘要
 - 为共享 Conan 依赖环境增加 SQLite3 支持。

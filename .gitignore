@@ -22,3 +22,5 @@ CMakeUserPresets.json
 **/*.pyc
 **/*.pyo
 **/build/
+**/.vorg.db
+.vscode/

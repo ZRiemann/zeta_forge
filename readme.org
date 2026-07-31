@@ -134,7 +134,7 @@ consumed by external projects such as =zpp= and =zeta_trader=. It installs
 Conan-generated package files under
 =${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=. External projects
 should consume that installed environment and should not run their own Conan
-dependency graph for shared packages such as =spdlog=, =fmt=, or =GTest=.
+dependency graph for shared packages such as =spdlog=, =fmt=, =GTest=, or =SQLite3=.
 
 * External zpp Entrypoint
 
@@ -150,7 +150,7 @@ cd "$ZETAX_ROOT/zpp"
 The entrypoint uses the current =zpp= checkout as =ZETA_ZPP_SRC_DIR= unless that variable is explicitly set.
 It reuses the shared build library from =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout, while zpp-specific build logic lives under =zpp/builder/=.
 It also consumes shared CMake helper modules from =$ZETAX_ROOT/zeta_forge/cmake_util= instead of carrying a =cmake_util= submodule.
-The shared Conan dependency versions, including =spdlog= and =fmt=, are owned by =zeta_forge deps=.
+The shared Conan dependency versions, including =spdlog=, =fmt=, and =SQLite3=, are owned by =zeta_forge deps=.
 
 * Current Notes
 

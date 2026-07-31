@@ -8,6 +8,7 @@ FMT_VERSION = os.getenv("ZETA_FMT_VERSION", "12.1.0")
 SPDLOG_VERSION = os.getenv("ZETA_SPDLOG_VERSION", "1.17.0")
 BOOST_VERSION = os.getenv("ZETA_BOOST_VERSION", "1.91.0")
 OPENSSL_VERSION = os.getenv("ZETA_OPENSSL_VERSION", "3.6.2")
+SQLITE_VERSION = os.getenv("ZETA_SQLITE_VERSION", "3.53.3")
 
 
 class ZetaDepsConan(ConanFile):
@@ -19,6 +20,7 @@ class ZetaDepsConan(ConanFile):
         f"fmt/{FMT_VERSION}",
         f"spdlog/{SPDLOG_VERSION}",
         "gtest/1.17.0",
+        f"sqlite3/{SQLITE_VERSION}",
         # --- boost (required by folly and hpx) ---
         f"boost/{BOOST_VERSION}",
         # --- folly transitive deps ---
@@ -44,6 +46,7 @@ class ZetaDepsConan(ConanFile):
         "spdlog/*:header_only": True,
         "gtest/*:build_gmock": False,
         "gtest/*:no_main": False,
+        "sqlite3/*:shared": False,
         "boost/*:header_only": False,
         "boost/*:shared": False,
         "double-conversion/*:shared": False,

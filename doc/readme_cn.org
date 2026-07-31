@@ -120,11 +120,17 @@ export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 * 工作区目标入口示例
 
 #+begin_src bash
+./builder/deps/zbuild.py --BUILD_TYPE=Debug --install
 ./builder/grpc/zbuild.py --rebuild --install
 ./builder/hpx/zbuild.py --rebuild --install
 ./builder/folly/zbuild.py --rebuild --install
 ./builder/nng/zbuild.py --rebuild --install
 #+end_src
+
+=deps= 是 =zpp=、=zeta_trader= 等外部项目消费公共 C++ package config 的统一 Conan 入口。
+它会把 Conan 生成的 package 文件安装到
+=${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=。外部项目应消费该安装环境，
+不要为 =spdlog=、=fmt=、=GTest=、=SQLite3= 等共享依赖重复维护自己的 Conan 依赖图。
 
 * 外部 zpp 入口
 
@@ -140,7 +146,7 @@ cd "$ZETAX_ROOT/zpp"
 该入口默认把当前 =zpp= checkout 作为 =ZETA_ZPP_SRC_DIR=，除非用户显式设置了这个变量。
 它会通过 =$ZETAX_ROOT/zeta_forge= 或附近兄弟目录复用共享编译工具库，zpp 特有构建逻辑位于 =zpp/builder/=。
 它也会通过 =$ZETAX_ROOT/zeta_forge/cmake_util= 复用公共 CMake helper 模块，不再携带 =cmake_util= submodule。
-共享依赖的 Conan 解析只在 =zeta_forge deps= 中执行。
+共享依赖的 Conan 解析只在 =zeta_forge deps= 中执行，其中包括 =spdlog=、=fmt= 和 =SQLite3= 等公共依赖版本。
 
 * 当前说明
 

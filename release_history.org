@@ -3,6 +3,23 @@
 
 * Release History
 
+** v0.7.0 - 2026-09-08
+*** 发布定位摘要
+- 将 zeta_forge 从 C++ 工具链框架升级为 C++/Rust 多语言工程治理层。
+- 新增 Rust toolchain、crate 依赖基线、workspace 检查和统一 Cargo 执行能力。
+
+*** 变更内容
+- 新增 =rust/baseline.toml=，统一管理 Rust 1.97.1、rustfmt、Clippy，以及 SDK、NNG 和 Dioxus 使用的直接 crate 声明。
+- 新增 =zeta_forge.rust_workspace= 公共模块，要求业务项目使用 =zeta-rust.toml=、单一 workspace lockfile 和 workspace 依赖继承。
+- 顶层 =./zbuild.py rust doctor/metadata/check/test --project-root <path>= 支持检查和执行外部 Rust 项目。
+- NNG Rust binding 强制复用 forge 安装的 native NNG，禁止 Cargo vendored build。
+- 更新中英文 README、架构文档并新增 Rust 工程治理说明，移除 zeta_forge 仅管理 C++ 项目的定位。
+
+*** 兼容性与升级说明
+- Rust 项目必须显式采用当前 forge 基线；旧的项目本地工具链和独立依赖治理入口不再受支持。
+- =rust check= 包含 rustfmt、Cargo check 和 Clippy；=rust test= 使用 committed lockfile 运行整个 workspace。
+- Rust 工具链通过 rustup 精确选择，不使用用户全局默认 Cargo 版本。
+
 ** v0.6.1 - 2026-07-31
 *** 发布定位摘要
 - 统一仓库 C/C++ 格式化规则，并固定 HPX 使用的 stdexec 源码版本。

@@ -1,0 +1,65 @@
+#+STARTUP: indent
+#+TITLE: Zeta Forge Rust 工程治理
+
+* 目标
+
+=zeta_forge= 是 ZetaX Rust 工具链、第三方 crate 版本和工程检查规则的唯一来源。
+业务仓库拥有自己的 Rust 源码、workspace 成员、功能组合和 =Cargo.lock=，但不再独立选择
+工具链或第三方直接依赖版本。
+
+该模式保留 Cargo 的原生工作方式：Cargo 继续解析 crate 和维护 lockfile；forge 负责统一
+约束、环境和执行入口。Conan 只管理 C/C++ package，不管理纯 Rust crate。
+
+* 公共基线
+
+公共基线位于 =rust/baseline.toml=，包含：
+
+- Rust channel、profile、rustfmt 和 Clippy component；
+- 第三方直接依赖的版本、来源、Git revision 和基础 feature；
+- 按能力划分的依赖组。
+- Cargo 安装工具的可执行文件与版本；当前 Dioxus CLI 固定为 0.7.10。
+
+业务项目通过仓库根目录 =zeta-rust.toml= 选择当前基线和依赖组。例如：
+
+#+begin_src toml
+schema = 1
+baseline = "2026.09"
+manifest = "rust/Cargo.toml"
+toolchain = "rust/rust-toolchain.toml"
+dependency-groups = ["foundation", "async-runtime", "native-nng", "dioxus-desktop"]
+native-dependencies = ["nng"]
+#+end_src
+
+项目 workspace 必须在 =[workspace.metadata.zeta-forge]= 中记录同一基线。所有成员 crate
+通过 =workspace = true= 使用第三方直接依赖；业务仓库内的 crate 之间使用 =path= 依赖。
+workspace 必须提交一个 =Cargo.lock=。
+
+* 命令
+
+从 forge 根目录检查外部项目：
+
+#+begin_src bash
+./zbuild.py rust doctor --project-root ../zeta_trader
+./zbuild.py rust metadata --project-root ../zeta_trader
+./zbuild.py rust check --project-root ../zeta_trader
+./zbuild.py rust test --project-root ../zeta_trader
+#+end_src
+
+=doctor= 检查工程配置、精确 Rust toolchain/component 与原生依赖环境；=metadata= 使用 =--locked --offline= 验证已解析
+依赖图；=check= 依次执行 rustfmt、Cargo check 和 Clippy；=test= 运行整个 workspace 测试。
+所有 Cargo 命令通过基线指定的 rustup toolchain 执行，不依赖用户全局默认版本。
+
+项目自己的 =zbuild.py= 可以复用 =zeta_forge.rust_workspace.RustWorkspaceManager=，组合
+业务所需的资源生成、运行参数和验收流程。公共模块不感知业务 crate 或应用名称。
+
+* 原生依赖
+
+Rust binding 复用 forge 管理的原生库。当前 =nng= profile 要求安装前缀中存在 NNG header
+和静态库，并向 Cargo child process 设置 =NNG_NO_VENDOR=1=、=NNG_DIR= 和 =NNG_STATIC=1=。
+缺失时给出 forge 的安装命令，不自动安装、不回退到 Cargo vendored build。
+
+* 升级规则
+
+升级工具链或受管 crate 时，先修改 forge 基线并验证公共测试，再同步业务 workspace 的
+=Cargo.toml=、=rust-toolchain.toml= 和 =Cargo.lock=。基线标识必须同时更新，使未完成的
+跨仓库升级在检查阶段直接失败。日常 check/test 不修改项目文件或 lockfile。

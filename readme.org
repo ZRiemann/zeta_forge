@@ -1,6 +1,6 @@
 * Zeta Forge
 
-Zeta Forge is a superproject for unified source management, reproducible builds, and dependency integration across modern C++ libraries and applications.
+Zeta Forge is the ZetaX engineering-management layer for unified source management, reproducible builds, dependency governance, and reusable project tooling across C++ and Rust repositories.
 
 中文 README: [[file:doc/readme_cn.org][doc/readme_cn.org]]
 
@@ -8,14 +8,15 @@ Zeta Forge is a superproject for unified source management, reproducible builds,
 
 Zeta Forge has three explicit roles:
 
-1. It is the shared build toolchain framework for managed =3rd/*= source projects and external ZetaX projects such as =zpp=, including Conan/CMake/Ninja orchestration, source directory resolution, install prefix management, reusable project build primitives, and shared CMake helper modules.
-2. It coordinates versions across the workspace, including submodule revisions, third-party dependency versions, shared build defaults, and project-specific build recipes.
-3. It is a reusable toolchain framework for external systems. A project outside this repository can locate =zeta_forge= through =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout, reuse the common build library, and avoid maintaining a parallel dependency/toolchain stack.
+1. It provides shared project tooling: Conan/CMake/Ninja orchestration for native projects and Cargo workspace governance for Rust projects.
+2. It coordinates versions across ZetaX, including submodule revisions, C++ package versions, Rust toolchains, managed crate declarations, and shared build defaults.
+3. It provides reusable project-management APIs. External repositories locate =zeta_forge= through =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout and keep only business-specific orchestration locally.
 
 Architecture and integration documents:
 
 - Chinese architecture design: [[file:doc/architecture_cn.org][doc/architecture_cn.org]]
 - Chinese third-party usage guide: [[file:doc/third_party_usage_cn.org][doc/third_party_usage_cn.org]]
+- Chinese Rust workspace guide: [[file:doc/rust_workspace_cn.org][doc/rust_workspace_cn.org]]
 - Release history: [[file:release_history.org][release_history.org]]
 
 * Clone And Initialize
@@ -63,6 +64,7 @@ You can invoke builds from the repository root through the unified dispatcher:
 ./zbuild.py grpc --rebuild --install
 ./zbuild.py hpx --rebuild --install
 ./zbuild.py all --rebuild
+./zbuild.py rust doctor --project-root ../zeta_trader
 #+end_src
 
 =zbuild.py= uses the =z= from =zeta_forge= to represent the top-level workspace entry rather than a CMake-specific command.
@@ -85,6 +87,31 @@ External ZetaX projects such as =zpp= live next to =zeta_forge= under =ZETAX_ROO
 The workspace target entrypoints in this repository use the managed =3rd/*= submodules by default.
 The workspace orchestration entrypoints live under =builder/=.
 Shared CMake helper modules live under =cmake_util/=. This directory is the maintained ZetaX copy of the legacy standalone =cmake_util= project.
+Rust governance lives under =rust/= and =common/zeta_forge/rust_workspace.py=. External Rust projects keep their source and lockfile while adopting the forge baseline through =zeta-rust.toml=.
+
+* Rust Project Management
+
+The current Rust baseline is defined by =rust/baseline.toml=. It owns the Rust
+toolchain, required components, approved direct crate declarations, Git
+revisions, and dependency groups. A managed project records its workspace,
+toolchain file, dependency groups, and native-library requirements in
+=zeta-rust.toml=.
+Forge also pins Cargo-installed tools such as Dioxus CLI; project commands
+validate the executable version only when that capability is requested.
+
+#+begin_src bash
+./zbuild.py rust doctor --project-root ../zeta_trader
+./zbuild.py rust metadata --project-root ../zeta_trader
+./zbuild.py rust check --project-root ../zeta_trader
+./zbuild.py rust test --project-root ../zeta_trader
+#+end_src
+
+Projects own their workspace members, application features, source code, and
+=Cargo.lock=. Member crates inherit third-party dependencies from the workspace;
+the workspace declaration must match the forge baseline. Cargo remains the
+Rust package resolver, while Conan remains responsible for native C/C++
+packages. Forge passes managed native installations such as NNG to Rust
+bindings without enabling a second vendored build.
 
 * ZetaX Workspace Root
 

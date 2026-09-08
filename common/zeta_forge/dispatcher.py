@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .config import RepoConfig, load_repo_config
 from .process import run_command
+from .rust_workspace import run_rust_cli
 
 
 TARGET_ORDER = ["deps", "grpc", "hpx", "folly", "nng"]
@@ -34,6 +35,7 @@ def format_target_lines() -> str:
         else:
             lines.append(f"  {target} (independent)")
     lines.append("  all")
+    lines.append("  rust (manage an external forge-governed Rust workspace)")
     lines.append("  conan (alias for: deps)")
     lines.append("  prepare-debian")
     lines.append("  list")
@@ -71,6 +73,7 @@ def help_epilog() -> str:
         "  ./zbuild.py deps --BUILD_TYPE=Debug --install\n"
         "  ./zbuild.py grpc --rebuild --install\n"
         "  ./zbuild.py hpx --rebuild --install\n"
+        "  ./zbuild.py rust doctor --project-root ../zeta_trader\n"
         "  ./zbuild.py all --BUILD_TYPE=Debug --continue-on-error\n"
         "  ./zbuild.py prepare-debian"
     )
@@ -152,6 +155,8 @@ def main(script_path: Path) -> int:
         return run_all(all_namespace, repo_config)
     if namespace.command == "prepare-debian":
         return run_prepare(namespace.args, repo_config)
+    if namespace.command == "rust":
+        return run_rust_cli(normalize_forward_args(namespace.args), repo_config)
     if namespace.command == "list":
         print(format_target_lines())
         return 0

@@ -1,6 +1,6 @@
 * Zeta Forge
 
-Zeta Forge 是一个用于统一源码管理、可复现构建和依赖集成的 C++ 超级工程。
+Zeta Forge 是 ZetaX 的工程治理层，面向 C++ 与 Rust 项目统一管理源码、可复现构建、依赖版本和公共工程工具。
 
 English README: [[file:../readme.org][../readme.org]]
 
@@ -8,14 +8,15 @@ English README: [[file:../readme.org][../readme.org]]
 
 Zeta Forge 有三个明确用途：
 
-1. 作为托管 =3rd/*= 源码项目，以及 =zpp= 这类外部 ZetaX 项目的共享编译工具链框架，统一提供 Conan/CMake/Ninja 编排、源码路径解析、安装前缀、可复用项目构建原语和公共 CMake helper 模块。
-2. 协调工作区内各子项目版本，包括 submodule revision、第三方依赖版本、共享构建默认值和项目级构建配方。
-3. 作为外部系统可复用的通用工具链框架。仓库外项目可以通过 =$ZETAX_ROOT/zeta_forge= 或附近的兄弟目录定位 =zeta_forge=，复用公共构建库，避免每个项目重复维护一套依赖和工具链。
+1. 提供公共工程工具：为 native 项目提供 Conan/CMake/Ninja 编排，为 Rust 项目提供 Cargo workspace 治理。
+2. 协调 ZetaX 各项目版本，包括 submodule revision、C++ package、Rust toolchain、受管 crate 声明和共享构建默认值。
+3. 为外部仓库提供可复用的项目管理 API。业务仓库只保留自身编排，并通过 =$ZETAX_ROOT/zeta_forge= 或附近兄弟目录复用公共能力。
 
 架构与接入文档：
 
 - 架构设计：[[file:architecture_cn.org][architecture_cn.org]]
 - 第三方系统使用说明：[[file:third_party_usage_cn.org][third_party_usage_cn.org]]
+- Rust 工程治理：[[file:rust_workspace_cn.org][rust_workspace_cn.org]]
 - 发布历史：[[file:../release_history.org][../release_history.org]]
 
 * 克隆与初始化
@@ -63,6 +64,7 @@ git submodule update --init --recursive
 ./zbuild.py grpc --rebuild --install
 ./zbuild.py hpx --rebuild --install
 ./zbuild.py all --rebuild
+./zbuild.py rust doctor --project-root ../zeta_trader
 #+end_src
 
 =zbuild.py= 中的 =z= 取自 =zeta_forge=，用于表达仓库顶层统一入口，而不是局限于 CMake 的 =c=。
@@ -85,6 +87,20 @@ git submodule update --init --recursive
 本仓库中的工作区目标入口默认都使用托管的 =3rd/*= submodules 作为源码输入。
 工作区编排入口统一放在 =builder/= 目录下。
 公共 CMake helper 模块位于 =cmake_util/=。该目录是遗留独立 =cmake_util= 项目的 ZetaX 维护副本，后续更新在 =zeta_forge= 内进行。
+Rust 治理配置位于 =rust/=，公共实现位于 =common/zeta_forge/rust_workspace.py=。外部 Rust 项目保留源码和 lockfile，通过 =zeta-rust.toml= 采用 forge 基线。
+
+* Rust 项目管理
+
+=rust/baseline.toml= 是 Rust toolchain、component、第三方直接 crate 声明、Git revision、Cargo 安装工具和依赖组的统一来源。业务仓库通过 =zeta-rust.toml= 声明 workspace、toolchain 文件、依赖组和原生库需求。
+
+#+begin_src bash
+./zbuild.py rust doctor --project-root ../zeta_trader
+./zbuild.py rust metadata --project-root ../zeta_trader
+./zbuild.py rust check --project-root ../zeta_trader
+./zbuild.py rust test --project-root ../zeta_trader
+#+end_src
+
+业务仓库拥有 workspace 成员、应用 feature、源码和 =Cargo.lock=。成员 crate 必须从 workspace 继承第三方依赖，workspace 声明必须与 forge 基线一致。Cargo 继续负责 Rust package 解析，Conan 继续负责 native C/C++ package；NNG 等原生库由 forge 安装并传递给 Rust binding，禁止重复 vendored build。
 
 * ZetaX 工作区根目录
 

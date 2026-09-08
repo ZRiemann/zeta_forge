@@ -1,6 +1,6 @@
-* zeta_forge 通用工具链架构设计
+* zeta_forge 多语言工程治理架构设计
 
-本文描述 =zeta_forge= 作为 ZetaX 通用 C++ 工具链框架的设计。当前版本见 [[file:../VERSION][../VERSION]]，发布历史见 [[file:../release_history.org][../release_history.org]]。
+本文描述 =zeta_forge= 作为 ZetaX C++/Rust 工程治理与公共工具链框架的设计。当前版本见 [[file:../VERSION][../VERSION]]，发布历史见 [[file:../release_history.org][../release_history.org]]。
 
 * 设计目标
 
@@ -9,6 +9,7 @@ zeta_forge 的目标不是成为业务源码仓库，而是成为稳定的工具
 1. 为 =3rd/*= 提供统一、可复现的编译入口，并为 =zpp= 等外部项目提供可复用的编译框架。
 2. 将第三方依赖版本、submodule revision、Conan 配方和构建参数集中管理。
 3. 允许外部项目通过轻量 =zbuild.py= 复用同一套工具链，减少重复维护成本。
+4. 为 Rust 项目统一工具链、直接依赖基线、Cargo 执行和原生库接入规则。
 
 * 职责边界
 
@@ -19,6 +20,7 @@ zeta_forge 负责：
 - 提供 =common/zeta_forge= Python 工具库，包括配置发现、进程执行、CMake 项目构建、workspace 调度和项目级构建实现。
 - 维护 =cmake_util/= 公共 CMake helper 模块，承接遗留独立 =cmake_util= 项目的后续演进。
 - 统一安装前缀、C++ 标准、Conan 依赖版本和 CMake 配置参数。
+- 统一 Rust toolchain、受管 crate 声明、workspace 检查和 Cargo 生命周期。
 
 zeta_forge 不负责：
 
@@ -34,6 +36,7 @@ zeta_forge 不负责：
 - =zbuild.py=：仓库顶层统一调度入口，负责分发 =grpc=、=hpx=、=folly=、=nng=、=all= 和 =prepare-debian=。
 - =common/zeta_forge/=：通用 Python 工具链库，是外部项目复用的主要接口。
 - =cmake_util/=：公共 CMake helper 模块，包括编译选项、依赖查找和 =add_run_target= 等辅助函数。该目录接管遗留独立 =cmake_util= 项目的最新内容，后续在 =zeta_forge= 内维护。
+- =rust/=：Rust 工具链、依赖版本与来源基线。
 - =builder/<project>/=：zeta_forge 内部项目构建工作区，保存项目入口、Conan 配方、CMake helper 和 build 输出。
 - =3rd/*=：第三方源码 submodule，默认作为 gRPC、HPX、Folly、NNG、Taskflow、RapidJSON 等源码输入。
 - =doc/=：设计、接入和中文说明文档。
@@ -78,6 +81,7 @@ zeta_forge 不负责：
 - =cmake_builder.py=：封装 Conan/CMake/Ninja 构建流程、stamp 判断、rebuild 和 install。
 - =dispatcher.py=：顶层 target 列表、依赖排序、=all= 构建和 =prepare-debian= 分发。
 - =debian_prep.py=：准备 Debian/Ubuntu 系统依赖和 Conan 工具链。
+- =rust_workspace.py=：加载 Rust 基线和项目描述，检查 workspace，并通过固定 toolchain 执行 Cargo。
 
 外部项目入口应尽量保持薄层，只负责定位工具库、设置当前项目源码默认值并调用项目仓库自己的 Builder。
 

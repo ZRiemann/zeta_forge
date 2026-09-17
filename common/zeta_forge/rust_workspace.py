@@ -9,6 +9,7 @@ import tomllib
 from typing import Mapping, Sequence
 
 from .config import RepoConfig
+from .conan_openssl import read_openssl_manifest
 from .process import run_command
 
 
@@ -29,6 +30,7 @@ class RustProject:
     root: Path
     manifest: Path
     toolchain: Path
+    default_profile: str
     dependency_groups: tuple[str, ...]
     native_dependencies: tuple[str, ...]
     baseline: RustBaseline
@@ -62,6 +64,14 @@ def _string_list(value: object, name: str, path: Path) -> tuple[str, ...]:
     if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
         raise RuntimeError(f"Expected {name} to be a string array in {path}")
     return tuple(value)
+
+
+def _profile_name(value: object, name: str, path: Path) -> str:
+    if not isinstance(value, str) or not value:
+        raise RuntimeError(f"Expected {name} to be a non-empty profile name in {path}")
+    if any(not (character.isalnum() or character in "-_") for character in value):
+        raise RuntimeError(f"Unsupported characters in {name} profile {value!r}: {path}")
+    return value
 
 
 def _project_path(project_root: Path, value: object, name: str, config_path: Path) -> Path:
@@ -118,6 +128,9 @@ def load_rust_project(project_root: Path, forge_root: Path) -> RustProject:
         root=root,
         manifest=_project_path(root, document.get("manifest"), "manifest", config_path),
         toolchain=_project_path(root, document.get("toolchain"), "toolchain", config_path),
+        default_profile=_profile_name(
+            document.get("default-profile"), "default-profile", config_path
+        ),
         dependency_groups=_string_list(document.get("dependency-groups"), "dependency-groups", config_path),
         native_dependencies=_string_list(document.get("native-dependencies", []), "native-dependencies", config_path),
         baseline=baseline,
@@ -220,6 +233,38 @@ def validate_rust_project(project: RustProject) -> None:
 def _native_environment(project: RustProject, repo_config: RepoConfig) -> dict[str, str]:
     environment = repo_config.env.copy()
     for dependency in project.native_dependencies:
+        if dependency == "openssl-conan":
+            package_dir = read_openssl_manifest(repo_config.install_prefix)
+            expected = {
+                "OPENSSL_DIR": str(package_dir),
+                "OPENSSL_LIB_DIR": str(package_dir / "lib"),
+                "OPENSSL_INCLUDE_DIR": str(package_dir / "include"),
+                "OPENSSL_STATIC": "1",
+                "OPENSSL_NO_VENDOR": "1",
+            }
+            for name, value in expected.items():
+                current = environment.get(name)
+                if current is not None and current != value:
+                    raise RuntimeError(
+                        f"{name} conflicts with forge Conan OpenSSL: {current!r} != {value!r}"
+                    )
+            for name in environment:
+                if name == "OPENSSL_LIBS" or (
+                    name.endswith(
+                        (
+                            "_OPENSSL_DIR",
+                            "_OPENSSL_LIB_DIR",
+                            "_OPENSSL_INCLUDE_DIR",
+                            "_OPENSSL_STATIC",
+                            "_OPENSSL_NO_VENDOR",
+                            "_OPENSSL_LIBS",
+                        )
+                    )
+                    and name not in expected
+                ):
+                    raise RuntimeError(f"{name} overrides forge Conan OpenSSL; unset it")
+            environment.update(expected)
+            continue
         if dependency != "nng":
             raise RuntimeError(f"Unsupported native Rust dependency: {dependency}")
         prefix = repo_config.install_prefix
@@ -241,6 +286,10 @@ class RustWorkspaceManager:
 
     def validate(self) -> None:
         validate_rust_project(self.project)
+
+    def resolve_profile(self, profile: str | None = None) -> str:
+        selected = self.project.default_profile if profile is None else profile
+        return _profile_name(selected, "selected", self.project.manifest)
 
     def doctor(self) -> int:
         self.validate()
@@ -338,8 +387,9 @@ class RustWorkspaceManager:
             print(completed.stderr.rstrip(), file=sys.stderr)
         return completed.returncode
 
-    def check(self) -> int:
+    def check(self, profile: str | None = None) -> int:
         self.validate()
+        selected_profile = self.resolve_profile(profile)
         format_result = run_command(
             self.cargo_command("fmt", "--all", "--", "--check"),
             cwd=self.project.workspace_dir,
@@ -349,8 +399,25 @@ class RustWorkspaceManager:
             return format_result.returncode
         environment = _native_environment(self.project, self.repo_config)
         for arguments in (
-            ("check", "--workspace", "--all-targets", "--locked"),
-            ("clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"),
+            (
+                "check",
+                "--workspace",
+                "--all-targets",
+                "--locked",
+                "--profile",
+                selected_profile,
+            ),
+            (
+                "clippy",
+                "--workspace",
+                "--all-targets",
+                "--locked",
+                "--profile",
+                selected_profile,
+                "--",
+                "-D",
+                "warnings",
+            ),
         ):
             completed = run_command(
                 self.cargo_command(*arguments),
@@ -362,10 +429,65 @@ class RustWorkspaceManager:
                 return completed.returncode
         return 0
 
-    def test(self) -> int:
+    def build(self, profile: str | None = None) -> int:
         self.validate()
+        selected_profile = self.resolve_profile(profile)
         completed = run_command(
-            self.cargo_command("test", "--workspace", "--all-targets", "--locked"),
+            self.cargo_command(
+                "build",
+                "--workspace",
+                "--locked",
+                "--profile",
+                selected_profile,
+            ),
+            cwd=self.project.workspace_dir,
+            env=_native_environment(self.project, self.repo_config),
+            check=False,
+        )
+        return completed.returncode
+
+    def rebuild(self, profile: str | None = None) -> int:
+        self.validate()
+        selected_profile = self.resolve_profile(profile)
+        clean_result = run_command(
+            self.cargo_command(
+                "clean",
+                "--workspace",
+                "--profile",
+                selected_profile,
+            ),
+            cwd=self.project.workspace_dir,
+            env=self.repo_config.env,
+            check=False,
+        )
+        if clean_result.returncode != 0:
+            return clean_result.returncode
+        completed = run_command(
+            self.cargo_command(
+                "build",
+                "--workspace",
+                "--locked",
+                "--profile",
+                selected_profile,
+            ),
+            cwd=self.project.workspace_dir,
+            env=_native_environment(self.project, self.repo_config),
+            check=False,
+        )
+        return completed.returncode
+
+    def test(self, profile: str | None = None) -> int:
+        self.validate()
+        selected_profile = self.resolve_profile(profile)
+        completed = run_command(
+            self.cargo_command(
+                "test",
+                "--workspace",
+                "--all-targets",
+                "--locked",
+                "--profile",
+                selected_profile,
+            ),
             cwd=self.project.workspace_dir,
             env=_native_environment(self.project, self.repo_config),
             check=False,
@@ -376,12 +498,22 @@ class RustWorkspaceManager:
         self,
         package: str,
         *,
+        profile: str | None = None,
         cargo_arguments: Sequence[str] = (),
         program_arguments: Sequence[str] = (),
         environment: Mapping[str, str] | None = None,
     ) -> int:
         self.validate()
-        command = self.cargo_command("run", "--locked", "-p", package, *cargo_arguments)
+        selected_profile = self.resolve_profile(profile)
+        command = self.cargo_command(
+            "run",
+            "--locked",
+            "-p",
+            package,
+            "--profile",
+            selected_profile,
+            *cargo_arguments,
+        )
         if program_arguments:
             command.extend(("--", *program_arguments))
         run_environment = _native_environment(self.project, self.repo_config)
@@ -396,8 +528,18 @@ def build_rust_parser() -> argparse.ArgumentParser:
         prog="./zbuild.py rust",
         description="Validate or build a forge-managed Rust project.",
     )
-    parser.add_argument("command", choices=("doctor", "metadata", "check", "test"))
+    parser.add_argument(
+        "command",
+        choices=("doctor", "metadata", "check", "build", "rebuild", "test"),
+    )
     parser.add_argument("--project-root", required=True, type=Path)
+    parser.add_argument(
+        "--profile",
+        help=(
+            "Cargo build profile for check/build/rebuild/test; defaults to "
+            "default-profile in the project's zeta-rust.toml."
+        ),
+    )
     return parser
 
 
@@ -405,16 +547,25 @@ def run_rust_cli(argv: Sequence[str], repo_config: RepoConfig) -> int:
     namespace = build_rust_parser().parse_args(argv)
     project = load_rust_project(namespace.project_root, repo_config.forge_root)
     manager = RustWorkspaceManager(project, repo_config)
+    if namespace.profile is not None and namespace.command in {"doctor", "metadata"}:
+        raise RuntimeError(f"--profile does not apply to rust {namespace.command}")
     if namespace.command == "doctor":
         return manager.doctor()
     if namespace.command == "metadata":
         status = manager.metadata()
     elif namespace.command == "check":
-        status = manager.check()
+        status = manager.check(namespace.profile)
+    elif namespace.command == "build":
+        status = manager.build(namespace.profile)
+    elif namespace.command == "rebuild":
+        status = manager.rebuild(namespace.profile)
     else:
-        status = manager.test()
+        status = manager.test(namespace.profile)
+    profile_detail = ""
+    if namespace.command in {"check", "build", "rebuild", "test"}:
+        profile_detail = f" profile={manager.resolve_profile(namespace.profile)}"
     print(
-        f"ZETA_RUST_DONE status={status} baseline={project.baseline.identifier} "
+        f"ZETA_RUST_DONE status={status}{profile_detail} baseline={project.baseline.identifier} "
         f"manifest={project.manifest}"
     )
     return status

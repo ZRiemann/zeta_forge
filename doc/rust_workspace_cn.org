@@ -26,8 +26,9 @@ schema = 1
 baseline = "2026.09"
 manifest = "rust/Cargo.toml"
 toolchain = "rust/rust-toolchain.toml"
+default-profile = "release"
 dependency-groups = ["foundation", "async-runtime", "native-nng", "dioxus-desktop"]
-native-dependencies = ["nng"]
+native-dependencies = ["nng", "openssl-conan"]
 #+end_src
 
 项目 workspace 必须在 =[workspace.metadata.zeta-forge]= 中记录同一基线。所有成员 crate
@@ -41,12 +42,17 @@ workspace 必须提交一个 =Cargo.lock=。
 #+begin_src bash
 ./zbuild.py rust doctor --project-root ../zeta_trader
 ./zbuild.py rust metadata --project-root ../zeta_trader
-./zbuild.py rust check --project-root ../zeta_trader
-./zbuild.py rust test --project-root ../zeta_trader
+./zbuild.py rust check --project-root ../zeta_trader --profile release
+./zbuild.py rust build --project-root ../zeta_trader --profile release
+./zbuild.py rust rebuild --project-root ../zeta_trader --profile release
+./zbuild.py rust test --project-root ../zeta_trader --profile release
 #+end_src
 
 =doctor= 检查工程配置、精确 Rust toolchain/component 与原生依赖环境；=metadata= 使用 =--locked --offline= 验证已解析
-依赖图；=check= 依次执行 rustfmt、Cargo check 和 Clippy；=test= 运行整个 workspace 测试。
+依赖图；=check= 依次执行 rustfmt、Cargo check 和 Clippy；=build= 生成 workspace
+产物；=rebuild= 只清理指定 profile 的 workspace member 后重新 build；=test= 运行整个
+workspace 测试。所有编译命令接受 =--profile NAME=，省略时使用项目
+=zeta-rust.toml= 中的 =default-profile=。
 所有 Cargo 命令通过基线指定的 rustup toolchain 执行，不依赖用户全局默认版本。
 
 项目自己的 =zbuild.py= 可以复用 =zeta_forge.rust_workspace.RustWorkspaceManager=，组合
@@ -57,6 +63,11 @@ workspace 必须提交一个 =Cargo.lock=。
 Rust binding 复用 forge 管理的原生库。当前 =nng= profile 要求安装前缀中存在 NNG header
 和静态库，并向 Cargo child process 设置 =NNG_NO_VENDOR=1=、=NNG_DIR= 和 =NNG_STATIC=1=。
 缺失时给出 forge 的安装命令，不自动安装、不回退到 Cargo vendored build。
+
+=openssl-conan= profile 从 =./zbuild.py deps --BUILD_TYPE=Release --install= 生成的清单读取
+Conan OpenSSL 版本及包目录；Rust 的 =dev= 和 =release= 均使用这套 Release 静态库。
+构建器为 Cargo 设置同源的 =OPENSSL_DIR=、=OPENSSL_LIB_DIR=、=OPENSSL_INCLUDE_DIR=、
+=OPENSSL_STATIC=1= 和 =OPENSSL_NO_VENDOR=1=，拒绝冲突的环境覆盖。gRPC 的 BoringSSL 安装不受影响。
 
 * 升级规则
 

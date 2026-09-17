@@ -91,14 +91,21 @@ Rust 治理配置位于 =rust/=，公共实现位于 =common/zeta_forge/rust_wor
 
 * Rust 项目管理
 
-=rust/baseline.toml= 是 Rust toolchain、component、第三方直接 crate 声明、Git revision、Cargo 安装工具和依赖组的统一来源。业务仓库通过 =zeta-rust.toml= 声明 workspace、toolchain 文件、依赖组和原生库需求。
+=rust/baseline.toml= 是 Rust toolchain、component、第三方直接 crate 声明、Git revision、Cargo 安装工具和依赖组的统一来源。业务仓库通过 =zeta-rust.toml= 声明 workspace、toolchain 文件、默认 build profile、依赖组和原生库需求。
 
 #+begin_src bash
 ./zbuild.py rust doctor --project-root ../zeta_trader
 ./zbuild.py rust metadata --project-root ../zeta_trader
-./zbuild.py rust check --project-root ../zeta_trader
-./zbuild.py rust test --project-root ../zeta_trader
+./zbuild.py rust check --project-root ../zeta_trader --profile release
+./zbuild.py rust build --project-root ../zeta_trader --profile release
+./zbuild.py rust rebuild --project-root ../zeta_trader --profile release
+./zbuild.py rust test --project-root ../zeta_trader --profile release
 #+end_src
+
+=check= 执行 format、Cargo check 与 Clippy gate，不生成最终应用产物；=build= 生成
+workspace 产物；=rebuild= 只清理指定 profile 的 workspace member 后重新构建，不清除 Cargo
+下载源码缓存。编译命令省略 =--profile= 时使用项目 =zeta-rust.toml= 的
+=default-profile=。
 
 业务仓库拥有 workspace 成员、应用 feature、源码和 =Cargo.lock=。成员 crate 必须从 workspace 继承第三方依赖，workspace 声明必须与 forge 基线一致。Cargo 继续负责 Rust package 解析，Conan 继续负责 native C/C++ package；NNG 等原生库由 forge 安装并传递给 Rust binding，禁止重复 vendored build。
 

@@ -95,16 +95,25 @@ The current Rust baseline is defined by =rust/baseline.toml=. It owns the Rust
 toolchain, required components, approved direct crate declarations, Git
 revisions, and dependency groups. A managed project records its workspace,
 toolchain file, dependency groups, and native-library requirements in
-=zeta-rust.toml=.
+=zeta-rust.toml=. The project also declares its default Cargo build profile;
+individual compilation commands may override it explicitly.
 Forge also pins Cargo-installed tools such as Dioxus CLI; project commands
 validate the executable version only when that capability is requested.
 
 #+begin_src bash
 ./zbuild.py rust doctor --project-root ../zeta_trader
 ./zbuild.py rust metadata --project-root ../zeta_trader
-./zbuild.py rust check --project-root ../zeta_trader
-./zbuild.py rust test --project-root ../zeta_trader
+./zbuild.py rust check --project-root ../zeta_trader --profile release
+./zbuild.py rust build --project-root ../zeta_trader --profile release
+./zbuild.py rust rebuild --project-root ../zeta_trader --profile release
+./zbuild.py rust test --project-root ../zeta_trader --profile release
 #+end_src
+
+=check= performs format, Cargo check, and Clippy gates without producing final
+application artifacts. =build= produces workspace artifacts. =rebuild= cleans
+only the selected profile's workspace-member artifacts before building again;
+it does not clear Cargo's downloaded source cache. Compilation commands default
+to =default-profile= from the project's =zeta-rust.toml=.
 
 Projects own their workspace members, application features, source code, and
 =Cargo.lock=. Member crates inherit third-party dependencies from the workspace;

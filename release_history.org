@@ -3,6 +3,12 @@
 
 * Release History
 
+** v0.8.0 - Unreleased
+*** 变更内容
+- 从 Conan OpenSSL 生成并验证原生依赖清单，为 Rust workspace 提供静态库路径，并拒绝冲突的环境变量覆盖。
+- 为 =zeta-rust.toml= 增加 =default-profile=，并让 Rust check、build、rebuild、test 与 run 统一使用显式 Cargo profile。
+- 增加 forge-managed Rust =build/rebuild=；rebuild 只清理指定 profile 的 workspace member，不清空整个 target tree 或 Cargo 下载缓存。
+
 ** v0.7.0 - 2026-09-08
 *** 发布定位摘要
 - 将 zeta_forge 从 C++ 工具链框架升级为 C++/Rust 多语言工程治理层。

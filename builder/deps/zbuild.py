@@ -10,6 +10,7 @@ sys.path.insert(0, str(FORGE_ROOT / "common"))
 
 from zeta_forge.cmake_builder import CommonBuildArgs, common_build_argument_parser
 from zeta_forge.config import RepoConfig, load_repo_config
+from zeta_forge.conan_openssl import package_from_generators, write_openssl_manifest
 from zeta_forge.process import run_command
 
 
@@ -66,6 +67,10 @@ class DepsBuilder:
                 "Run zeta_forge deps before installing the dependency environment."
             )
 
+        openssl_version, openssl_package = package_from_generators(
+            self.generators_dir, self.args.build_type
+        )
+
         if self.install_dir.exists():
             shutil.rmtree(self.install_dir)
         self.install_dir.mkdir(parents=True, exist_ok=True)
@@ -76,6 +81,7 @@ class DepsBuilder:
 
         self.install_rapidjson_config()
         self.install_boost_findboost_compat()
+        write_openssl_manifest(self.install_dir, openssl_version, openssl_package)
 
         print(f"Installed zeta deps CMake package files to: {self.install_dir}")
 

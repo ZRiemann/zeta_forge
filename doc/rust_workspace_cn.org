@@ -12,18 +12,19 @@
 
 * 公共基线
 
-公共基线位于 =rust/baseline.toml=，包含：
+不可变公共基线位于 =rust/baselines/<rust-version>-r<revision>.toml=。文件名、内部 ID、
+Rust 精确版本和修订号必须一致；forge 不提供隐式 current baseline 或旧 ID 回退。每个基线包含：
 
 - Rust channel、profile、rustfmt 和 Clippy component；
 - 第三方直接依赖的版本、来源、Git revision 和基础 feature；
 - 按能力划分的依赖组。
 - Cargo 安装工具的可执行文件与版本；当前 Dioxus CLI 固定为 0.7.10。
 
-业务项目通过仓库根目录 =zeta-rust.toml= 选择当前基线和依赖组。例如：
+业务项目通过仓库根目录 =zeta-rust.toml= 精确选择基线和依赖组。例如：
 
 #+begin_src toml
 schema = 1
-baseline = "2026.09"
+baseline = "1.97.1-r1"
 manifest = "rust/Cargo.toml"
 toolchain = "rust/rust-toolchain.toml"
 default-profile = "release"
@@ -34,6 +35,15 @@ native-dependencies = ["nng", "openssl-conan"]
 项目 workspace 必须在 =[workspace.metadata.zeta-forge]= 中记录同一基线。所有成员 crate
 通过 =workspace = true= 使用第三方直接依赖；业务仓库内的 crate 之间使用 =path= 依赖。
 workspace 必须提交一个 =Cargo.lock=。
+
+Cargo 安装工具按 baseline 隔离在
+=${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust/<baseline-id>/bin=，不会回退到全局 =PATH=。
+当前基线的 Dioxus CLI 安装命令为：
+
+#+begin_src bash
+cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked \
+  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust/1.97.1-r1"
+#+end_src
 
 * 命令
 
@@ -76,6 +86,8 @@ Conan OpenSSL 版本及包目录；Rust 的 =dev= 和 =release= 均使用这套 
 
 * 升级规则
 
-升级工具链或受管 crate 时，先修改 forge 基线并验证公共测试，再同步业务 workspace 的
-=Cargo.toml=、=rust-toolchain.toml= 和 =Cargo.lock=。基线标识必须同时更新，使未完成的
-跨仓库升级在检查阶段直接失败。日常 check/test 不修改项目文件或 lockfile。
+升级工具链或受管 crate 时，新增一个 =<rust-version>-r<revision>= 基线并验证公共测试，
+不原地修改已经发布的基线。同一 Rust 版本的依赖修订递增 =rN=；Rust 版本变化时从 =r1=
+开始。随后在业务仓库中同步 =zeta-rust.toml=、workspace metadata、=Cargo.toml=、
+=rust-toolchain.toml= 和 =Cargo.lock=。未迁移的项目继续选择其原基线；不存在的旧 ID 会在
+检查阶段明确失败。日常 check/test 不修改项目文件或 lockfile。

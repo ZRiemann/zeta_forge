@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from datetime import date
+import os
 from pathlib import Path
+import re
 import shutil
 import sys
 import tomllib
@@ -14,11 +17,18 @@ from .process import run_command
 
 
 PROJECT_CONFIG_NAME = "zeta-rust.toml"
+BASELINE_ID_PATTERN = re.compile(
+    r"^(?P<rust_version>(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))"
+    r"-r(?P<revision>[1-9][0-9]*)$"
+)
 
 
 @dataclass(frozen=True)
 class RustBaseline:
     identifier: str
+    rust_version: str
+    revision: int
+    released: date
     toolchain: Mapping[str, object]
     dependencies: Mapping[str, object]
     groups: Mapping[str, tuple[str, ...]]
@@ -86,13 +96,65 @@ def _project_path(project_root: Path, value: object, name: str, config_path: Pat
     return path
 
 
-def load_baseline(forge_root: Path) -> RustBaseline:
-    path = forge_root / "rust" / "baseline.toml"
+def _available_baseline_ids(forge_root: Path) -> tuple[str, ...]:
+    baseline_dir = forge_root / "rust" / "baselines"
+    if not baseline_dir.is_dir():
+        return ()
+    return tuple(
+        sorted(
+            path.stem
+            for path in baseline_dir.glob("*.toml")
+            if BASELINE_ID_PATTERN.fullmatch(path.stem)
+        )
+    )
+
+
+def _unknown_baseline_error(forge_root: Path, identifier: object) -> RuntimeError:
+    available = ", ".join(_available_baseline_ids(forge_root)) or "none"
+    return RuntimeError(
+        f"Unknown Rust baseline {identifier!r}; expected <rust-semver>-r<revision>; "
+        f"available: {available}"
+    )
+
+
+def load_baseline(forge_root: Path, identifier: str) -> RustBaseline:
+    if not isinstance(identifier, str):
+        raise _unknown_baseline_error(forge_root, identifier)
+    match = BASELINE_ID_PATTERN.fullmatch(identifier)
+    if match is None:
+        raise _unknown_baseline_error(forge_root, identifier)
+
+    path = forge_root / "rust" / "baselines" / f"{identifier}.toml"
+    if not path.is_file():
+        raise _unknown_baseline_error(forge_root, identifier)
     document = _read_toml(path)
     baseline = _table(document, "baseline", path)
-    identifier = baseline.get("id")
-    if baseline.get("schema") != 1 or not isinstance(identifier, str):
+    if baseline.get("schema") != 1:
         raise RuntimeError(f"Unsupported Rust baseline schema in {path}")
+    if baseline.get("id") != identifier:
+        raise RuntimeError(f"Rust baseline id does not match its filename: {path}")
+
+    rust_version = baseline.get("rust-version")
+    expected_rust_version = match.group("rust_version")
+    if rust_version != expected_rust_version:
+        raise RuntimeError(f"Rust baseline version does not match its identifier: {path}")
+
+    revision = baseline.get("revision")
+    expected_revision = int(match.group("revision"))
+    if type(revision) is not int or revision != expected_revision:
+        raise RuntimeError(f"Rust baseline revision does not match its identifier: {path}")
+
+    released_raw = baseline.get("released")
+    if not isinstance(released_raw, str):
+        raise RuntimeError(f"Rust baseline release date must use YYYY-MM-DD in {path}")
+    try:
+        released = date.fromisoformat(released_raw)
+    except ValueError as error:
+        raise RuntimeError(f"Invalid Rust baseline release date in {path}: {released_raw!r}") from error
+
+    toolchain = _table(document, "toolchain", path)
+    if toolchain.get("channel") != rust_version:
+        raise RuntimeError(f"Rust baseline toolchain channel does not match its version: {path}")
 
     raw_groups = _table(document, "groups", path)
     groups = {
@@ -121,7 +183,10 @@ def load_baseline(forge_root: Path) -> RustBaseline:
         )
     return RustBaseline(
         identifier=identifier,
-        toolchain=_table(document, "toolchain", path),
+        rust_version=rust_version,
+        revision=revision,
+        released=released,
+        toolchain=toolchain,
         dependencies=_table(document, "dependencies", path),
         groups=groups,
         group_requirements=group_requirements,
@@ -139,12 +204,10 @@ def load_rust_project(project_root: Path, forge_root: Path) -> RustProject:
     if document.get("schema") != 1:
         raise RuntimeError(f"Unsupported Rust project schema in {config_path}")
 
-    baseline = load_baseline(forge_root)
-    if document.get("baseline") != baseline.identifier:
-        raise RuntimeError(
-            f"Rust baseline mismatch in {config_path}: expected {baseline.identifier}, "
-            f"got {document.get('baseline')!r}"
-        )
+    baseline_identifier = document.get("baseline")
+    if not isinstance(baseline_identifier, str):
+        raise RuntimeError(f"Expected baseline to be a string in {config_path}")
+    baseline = load_baseline(forge_root, baseline_identifier)
 
     return RustProject(
         root=root,
@@ -362,6 +425,16 @@ class RustWorkspaceManager:
             raise RuntimeError(f"Unable to query Rust baseline tool {program}: {detail}")
         return (completed.stdout or completed.stderr).strip()
 
+    @property
+    def cargo_tool_root(self) -> Path:
+        return (
+            self.repo_config.install_prefix
+            / "share"
+            / "zeta_forge"
+            / "rust"
+            / self.project.baseline.identifier
+        )
+
     def require_cargo_tool(self, name: str) -> str:
         specification = self.project.baseline.cargo_tools.get(name)
         if specification is None:
@@ -370,13 +443,17 @@ class RustWorkspaceManager:
         expected_version = specification.get("version")
         if not isinstance(executable_name, str) or not isinstance(expected_version, str):
             raise RuntimeError(f"Invalid forge Cargo tool definition: {name}")
-        executable = shutil.which(executable_name)
+        tool_root = self.cargo_tool_root
+        executable = tool_root / "bin" / executable_name
         install = (
             f"cargo +{self.project.baseline.toolchain['channel']} install {name} "
-            f"--version {expected_version} --locked"
+            f"--version {expected_version} --locked --root {tool_root}"
         )
-        if executable is None:
-            raise RuntimeError(f"Forge-managed Cargo tool {name} is missing; install it with: {install}")
+        if not executable.is_file() or not os.access(executable, os.X_OK):
+            raise RuntimeError(
+                f"Forge-managed Cargo tool {name} is missing or not executable at {executable}; "
+                f"install it with: {install}"
+            )
         completed = run_command(
             [executable, "--version"],
             cwd=self.project.workspace_dir,
@@ -390,7 +467,7 @@ class RustWorkspaceManager:
                 f"Forge-managed Cargo tool {name} must be version {expected_version}; "
                 f"got {version_output or 'unavailable'}. Install it with: {install}"
             )
-        return executable
+        return str(executable)
 
     def require_rust_target(self, target: str) -> None:
         rustup = shutil.which("rustup")

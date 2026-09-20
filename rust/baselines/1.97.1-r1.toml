@@ -1,6 +1,9 @@
 [baseline]
 schema = 1
-id = "2026.09"
+id = "1.97.1-r1"
+rust-version = "1.97.1"
+revision = 1
+released = "2026-09-20"
 
 [toolchain]
 channel = "1.97.1"

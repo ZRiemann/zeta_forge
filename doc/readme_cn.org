@@ -91,7 +91,7 @@ Rust 治理配置位于 =rust/=，公共实现位于 =common/zeta_forge/rust_wor
 
 * Rust 项目管理
 
-=rust/baseline.toml= 是 Rust toolchain、component、第三方直接 crate 声明、Git revision、Cargo 安装工具和依赖组的统一来源。业务仓库通过 =zeta-rust.toml= 声明 workspace、toolchain 文件、默认 build profile、依赖组和原生库需求。
+=rust/baselines/<rust-version>-r<revision>.toml= 是不可变的 Rust toolchain、component、第三方直接 crate 声明、Git revision、Cargo 安装工具和依赖组来源。业务仓库通过 =zeta-rust.toml= 精确选择一个 baseline，并声明 workspace、toolchain 文件、默认 build profile、依赖组和原生库需求；forge 不提供隐式 current baseline 或旧 ID 回退。
 
 #+begin_src bash
 ./zbuild.py rust doctor --project-root ../zeta_trader

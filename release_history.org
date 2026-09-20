@@ -3,7 +3,22 @@
 
 * Release History
 
-** v0.8.0 - Unreleased
+** v0.9.0 - 2026-09-20
+*** 发布定位摘要
+- 将 Rust 治理从单一活动基线升级为可并存、不可变的精确版本基线。
+- 按 baseline 隔离 Cargo 安装工具，避免不同 Rust/Dioxus 工具版本相互覆盖。
+
+*** 变更内容
+- 以 =rust/baselines/1.97.1-r1.toml= 替换单一 =rust/baseline.toml=，并校验文件名、内部 ID、Rust 版本、修订号、发布日期和 toolchain channel 一致。
+- 业务项目按 =zeta-rust.toml= 中的精确 ID 选择基线；未知 ID 会列出可用基线，不提供隐式 current 或 =2026.09= 兼容别名。
+- Cargo 工具严格从 =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust/<baseline-id>/bin= 解析；缺失、不可执行或版本不匹配时给出隔离安装命令，不回退全局 =PATH=。
+- 扩展 Rust workspace 测试，覆盖多基线选择、元数据不一致、旧 ID 拒绝及 Cargo 工具隔离。
+
+*** 兼容性与升级说明
+- =zeta_trader= 和 =zeta_practice= 需在各自后续版本中把 baseline ID 迁移到 =1.97.1-r1=，本版本不修改下游仓库。
+- 使用 Dioxus 能力前，需要按 doctor 提示把固定版本 CLI 安装到所选 baseline 的专属目录。
+
+** v0.8.0 - 2026-09-17
 *** 变更内容
 - 从 Conan OpenSSL 生成并验证原生依赖清单，为 Rust workspace 提供静态库路径，并拒绝冲突的环境变量覆盖。
 - 为 =zeta-rust.toml= 增加 =default-profile=，并让 Rust check、build、rebuild、test 与 run 统一使用显式 Cargo profile。

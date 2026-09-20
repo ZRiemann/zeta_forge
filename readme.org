@@ -91,14 +91,25 @@ Rust governance lives under =rust/= and =common/zeta_forge/rust_workspace.py=. E
 
 * Rust Project Management
 
-The current Rust baseline is defined by =rust/baseline.toml=. It owns the Rust
-toolchain, required components, approved direct crate declarations, Git
-revisions, and dependency groups. A managed project records its workspace,
-toolchain file, dependency groups, and native-library requirements in
-=zeta-rust.toml=. The project also declares its default Cargo build profile;
-individual compilation commands may override it explicitly.
-Forge also pins Cargo-installed tools such as Dioxus CLI; project commands
-validate the executable version only when that capability is requested.
+Immutable Rust baselines live under =rust/baselines/<rust-version>-r<revision>.toml=.
+Each baseline owns one exact Rust toolchain, required components, approved
+direct crate declarations, Git revisions, dependency groups, and Cargo tools.
+A managed project selects one exact baseline in =zeta-rust.toml= and records
+its workspace, toolchain file, dependency groups, native-library requirements,
+and default Cargo build profile. Individual compilation commands may override
+the profile explicitly. There is no implicit current baseline or legacy ID
+fallback; the initial versioned baseline is =1.97.1-r1=.
+
+Cargo-installed tools such as Dioxus CLI are isolated under
+=${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust/<baseline-id>=. Project commands
+ignore executables with the same name on the global =PATH= and validate the
+baseline-specific executable only when its capability is requested. For the
+initial baseline, install Dioxus CLI with:
+
+#+begin_src bash
+cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked \
+  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust/1.97.1-r1"
+#+end_src
 
 #+begin_src bash
 ./zbuild.py rust doctor --project-root ../zeta_trader

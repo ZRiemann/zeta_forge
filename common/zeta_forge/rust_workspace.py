@@ -22,6 +22,7 @@ class RustBaseline:
     toolchain: Mapping[str, object]
     dependencies: Mapping[str, object]
     groups: Mapping[str, tuple[str, ...]]
+    group_requirements: Mapping[str, Mapping[str, tuple[str, ...]]]
     cargo_tools: Mapping[str, Mapping[str, object]]
 
 
@@ -98,11 +99,32 @@ def load_baseline(forge_root: Path) -> RustBaseline:
         name: _string_list(dependencies, f"groups.{name}", path)
         for name, dependencies in raw_groups.items()
     }
+    raw_group_requirements = _table(document, "group-requirements", path)
+    group_requirements = {
+        name: {
+            requirement: _string_list(
+                values,
+                f"group-requirements.{name}.{requirement}",
+                path,
+            )
+            for requirement, values in _mapping(
+                requirements, f"group-requirements.{name}", path
+            ).items()
+        }
+        for name, requirements in raw_group_requirements.items()
+    }
+    unknown_requirement_groups = set(group_requirements) - set(groups)
+    if unknown_requirement_groups:
+        names = ", ".join(sorted(unknown_requirement_groups))
+        raise RuntimeError(
+            f"Rust requirements reference unknown dependency groups in {path}: {names}"
+        )
     return RustBaseline(
         identifier=identifier,
         toolchain=_table(document, "toolchain", path),
         dependencies=_table(document, "dependencies", path),
         groups=groups,
+        group_requirements=group_requirements,
         cargo_tools={
             name: _mapping(tool, f"cargo-tools.{name}", path)
             for name, tool in _table(document, "cargo-tools", path).items()
@@ -304,6 +326,16 @@ class RustWorkspaceManager:
                 detail = (completed.stderr or completed.stdout).strip()
                 channel = self.project.baseline.toolchain["channel"]
                 raise RuntimeError(f"Rust baseline tool {program} is unavailable for {channel}: {detail}")
+        required_cargo_tools: set[str] = set()
+        required_rust_targets: set[str] = set()
+        for group in self.project.dependency_groups:
+            requirements = self.project.baseline.group_requirements.get(group, {})
+            required_cargo_tools.update(requirements.get("cargo-tools", ()))
+            required_rust_targets.update(requirements.get("rust-targets", ()))
+        for cargo_tool in sorted(required_cargo_tools):
+            self.require_cargo_tool(cargo_tool)
+        for rust_target in sorted(required_rust_targets):
+            self.require_rust_target(rust_target)
         _native_environment(self.project, self.repo_config)
         print(
             f"ZETA_RUST_DONE status=0 baseline={self.project.baseline.identifier} "
@@ -359,6 +391,28 @@ class RustWorkspaceManager:
                 f"got {version_output or 'unavailable'}. Install it with: {install}"
             )
         return executable
+
+    def require_rust_target(self, target: str) -> None:
+        rustup = shutil.which("rustup")
+        if rustup is None:
+            raise RuntimeError("Required Rust toolchain manager not found on PATH: rustup")
+        channel = self.project.baseline.toolchain["channel"]
+        completed = run_command(
+            [rustup, "target", "list", "--toolchain", channel, "--installed"],
+            cwd=self.project.workspace_dir,
+            check=False,
+            capture_output=True,
+        )
+        installed = (
+            set((completed.stdout or "").splitlines())
+            if completed.returncode == 0
+            else set()
+        )
+        if target not in installed:
+            raise RuntimeError(
+                f"Rust target {target} is required for baseline {self.project.baseline.identifier}; "
+                f"install it with: rustup target add {target} --toolchain {channel}"
+            )
 
     def cargo_command(self, *arguments: str) -> list[object]:
         cargo_arguments = list(arguments)

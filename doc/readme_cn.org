@@ -109,6 +109,12 @@ workspace 产物；=rebuild= 只清理指定 profile 的 workspace member 后重
 
 业务仓库拥有 workspace 成员、应用 feature、源码和 =Cargo.lock=。成员 crate 必须从 workspace 继承第三方依赖，workspace 声明必须与 forge 基线一致。Cargo 继续负责 Rust package 解析，Conan 继续负责 native C/C++ package；NNG 等原生库由 forge 安装并传递给 Rust binding，禁止重复 vendored build。
 
+=dioxus-web-fullstack= 依赖组允许 Web/Fullstack 应用使用基线中统一管理的 Dioxus。
+业务项目仍然拥有 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 和
+=dioxus/router= 等平台 feature 组合；这些 feature 不形成另一套依赖版本。
+Forge =rust doctor= 还会检查固定版本的 Dioxus CLI；Web 项目同时检查基线工具链的
+=wasm32-unknown-unknown= target。
+
 * ZetaX 工作区根目录
 
 =ZETAX_ROOT= 是唯一公开的顶层工作区变量，例如 =~/git=。

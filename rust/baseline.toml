@@ -12,6 +12,14 @@ foundation = ["thiserror"]
 async-runtime = ["tokio"]
 native-nng = ["anng"]
 dioxus-desktop = ["dioxus", "futures-timer", "serde", "serde_json"]
+dioxus-web-fullstack = ["dioxus"]
+
+[group-requirements.dioxus-desktop]
+cargo-tools = ["dioxus-cli"]
+
+[group-requirements.dioxus-web-fullstack]
+cargo-tools = ["dioxus-cli"]
+rust-targets = ["wasm32-unknown-unknown"]
 
 [cargo-tools.dioxus-cli]
 executable = "dx"

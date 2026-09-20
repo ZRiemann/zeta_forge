@@ -63,6 +63,14 @@ class RustWorkspaceTests(unittest.TestCase):
             validate_rust_project(project)
             self.assertEqual(project.default_profile, "release")
             self.assertEqual(project.baseline.cargo_tools["dioxus-cli"]["version"], "0.7.10")
+            self.assertEqual(project.baseline.groups["dioxus-web-fullstack"], ("dioxus",))
+            self.assertEqual(
+                project.baseline.group_requirements["dioxus-web-fullstack"],
+                {
+                    "cargo-tools": ("dioxus-cli",),
+                    "rust-targets": ("wasm32-unknown-unknown",),
+                },
+            )
 
     def create_manager(self, root: Path) -> RustWorkspaceManager:
         project = load_rust_project(root, FORGE_ROOT)

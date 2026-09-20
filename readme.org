@@ -122,6 +122,13 @@ Rust package resolver, while Conan remains responsible for native C/C++
 packages. Forge passes managed native installations such as NNG to Rust
 bindings without enabling a second vendored build.
 
+The =dioxus-web-fullstack= group approves the managed Dioxus dependency for
+Web/Fullstack applications. Projects continue to own their platform feature
+composition, such as =dioxus/web=, =dioxus/server=, =dioxus/fullstack=, and
+=dioxus/router=; those features do not establish a separate dependency version.
+Forge =rust doctor= also verifies the pinned Dioxus CLI and, for Web projects,
+the baseline toolchain's =wasm32-unknown-unknown= target.
+
 * ZetaX Workspace Root
 
 =ZETAX_ROOT= is the only public top-level workspace variable, for example =~/git=.

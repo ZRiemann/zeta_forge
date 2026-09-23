@@ -33,7 +33,7 @@ zeta_forge 不负责：
 
 * 目录分层
 
-- =zbuild.py=：仓库顶层统一调度入口，负责分发 =grpc=、=hpx=、=folly=、=nng=、=all= 和 =prepare-debian=。
+- =zbuild.py=：薄入口，调用公共动作 CLI 和项目定义，宿主机准备使用独立入口。
 - =common/zeta_forge/=：通用 Python 工具链库，是外部项目复用的主要接口。
 - =cmake_util/=：公共 CMake helper 模块，包括编译选项、依赖查找和 =add_run_target= 等辅助函数。该目录接管遗留独立 =cmake_util= 项目的最新内容，后续在 =zeta_forge= 内维护。
 - =rust/=：Rust 工具链、依赖版本与来源基线。
@@ -54,7 +54,7 @@ zeta_forge 不负责：
 项目入口定位工具库的顺序为：
 
 1. 设置了 =ZETAX_ROOT= 时，使用 =$ZETAX_ROOT/zeta_forge=。
-2. 从入口脚本路径向上发现附近的 =zeta_forge= 目录。
+2. 使用入口所在项目的兄弟 =zeta_forge= 目录。
 
 =ZETAX_ROOT= 是唯一公开的顶层工作区变量。=zsa= 可以自动导出它；没有 =zsa= 时，公共用户也可以手动设置它。项目脚本不需要额外引入 =zeta_forge= 专用根变量。
 
@@ -68,9 +68,9 @@ zeta_forge 不负责：
 4. 项目 Builder 校验源码、Conan 配方和必要依赖路径。
 5. 如有需要，执行 Conan install 生成 toolchain 和依赖包配置。
 6. 执行 CMake configure，写入 build stamp。
-7. 执行 CMake build；如指定 =--install=，执行 CMake install。
+7. 执行 CMake build；执行 =install= 动作时，执行 CMake install。
 
-顶层 =all= 调度保持依赖顺序：=grpc=、=hpx=、=nng=、=folly=，其中 =folly= 依赖 =grpc=。
+默认顺序为 =deps grpc hpx folly nng=；folly 的 gRPC 依赖使用工程内 staging。
 
 * 公共库模块
 
@@ -79,7 +79,8 @@ zeta_forge 不负责：
 - =config.py=：发现 forge 根目录、注入环境变量、解析源码目录和安装前缀。
 - =process.py=：统一命令执行、日志输出和错误处理。
 - =cmake_builder.py=：封装 Conan/CMake/Ninja 构建流程、stamp 判断、rebuild 和 install。
-- =dispatcher.py=：顶层 target 列表、依赖排序、=all= 构建和 =prepare-debian= 分发。
+- =build_cli.py=：公共动作、选择、profile、预检与退出码契约。
+- =cmake_engine.py/rust_engine.py/gradle_engine.py=：原生技术栈适配器；不复制原生依赖图。
 - =debian_prep.py=：准备 Debian/Ubuntu 系统依赖和 Conan 工具链。
 - =rust_workspace.py=：加载 Rust 基线和项目描述，检查 workspace，并通过固定 toolchain 执行 Cargo。
 
@@ -109,6 +110,10 @@ zeta_forge 的版本协调包括：
 - =.gitmodules= 中的 submodule 来源和 revision。
 - =builder/deps/conanfile.py= 和 forge 内部 Conan 配方中的第三方依赖版本；外部项目不维护共享依赖 Conan 图。
 - =common/zeta_forge/config.py= 中的共享默认值，例如 C++ 标准和基础库版本。
-- forge 内部项目 =zbuild.py= 或 Builder 中的 CMake 配置开关。
+- forge 项目定义或 Builder 中的 CMake 配置开关。
 
 每次修改公共工具链行为、依赖版本或外部接入约定时，都需要同步更新 [[file:../VERSION][VERSION]] 和 [[file:../release_history.org][release_history.org]]。
+
+* 当前构建契约
+
+详见 [[file:../BUILD.org][BUILD.org]]；工程粒度清理、安装范围、只读操作和测试范围以该契约为准。

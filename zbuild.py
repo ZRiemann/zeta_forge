@@ -7,13 +7,9 @@ from pathlib import Path
 FORGE_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(FORGE_ROOT / "common"))
 
-from zeta_forge.dispatcher import main as dispatcher_main
-
+from zeta_forge.build_cli import cli
+from builder.project import project
 
 
 if __name__ == "__main__":
-    try:
-        raise SystemExit(dispatcher_main(Path(__file__)))
-    except Exception as exc:
-        print(exc, file=sys.stderr)
-        raise SystemExit(1)
+    raise SystemExit(cli(project(Path(__file__))))

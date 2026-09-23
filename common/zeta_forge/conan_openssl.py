@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import re
-
+from pathlib import Path
 
 MANIFEST_NAME = "openssl-native.json"
 
@@ -39,9 +38,7 @@ def package_from_generators(generators_dir: Path, build_type: str) -> tuple[str,
             f"Expected one Conan OpenSSL {build_type} data file under {generators_dir}; "
             f"found {len(candidates)}"
         )
-    package_dir = Path(
-        _cmake_value(candidates[0], f"openssl_PACKAGE_FOLDER_{build_type.upper()}")
-    )
+    package_dir = Path(_cmake_value(candidates[0], f"openssl_PACKAGE_FOLDER_{build_type.upper()}"))
     version = _cmake_value(generators_dir / "OpenSSLConfigVersion.cmake", "PACKAGE_VERSION")
     if not package_dir.is_absolute():
         raise RuntimeError(f"Conan OpenSSL package path must be absolute: {package_dir}")
@@ -52,9 +49,7 @@ def package_from_generators(generators_dir: Path, build_type: str) -> tuple[str,
 def write_openssl_manifest(install_dir: Path, version: str, package_dir: Path) -> None:
     manifest = install_dir / MANIFEST_NAME
     manifest.write_text(
-        json.dumps(
-            {"schema": 1, "version": version, "package_dir": str(package_dir)}, indent=2
-        )
+        json.dumps({"schema": 1, "version": version, "package_dir": str(package_dir)}, indent=2)
         + "\n",
         encoding="utf-8",
     )
@@ -62,7 +57,7 @@ def write_openssl_manifest(install_dir: Path, version: str, package_dir: Path) -
 
 def read_openssl_manifest(install_prefix: Path) -> Path:
     manifest = install_prefix / "lib" / "cmake" / "zeta_deps" / "Release" / MANIFEST_NAME
-    hint = "Run zeta_forge/zbuild.py deps --BUILD_TYPE=Release --install"
+    hint = "Run zeta_forge/zbuild.py install deps --profile release"
     if not manifest.is_file():
         raise RuntimeError(f"Forge Conan OpenSSL manifest is missing: {manifest}. {hint}")
     try:

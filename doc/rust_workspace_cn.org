@@ -27,7 +27,6 @@ schema = 1
 baseline = "1.97.1-r1"
 manifest = "rust/Cargo.toml"
 toolchain = "rust/rust-toolchain.toml"
-default-profile = "release"
 dependency-groups = ["foundation", "async-runtime", "native-nng", "dioxus-desktop"]
 native-dependencies = ["nng", "openssl-conan"]
 #+end_src
@@ -47,30 +46,29 @@ cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked \
 
 * 命令
 
-从 forge 根目录检查外部项目：
+在所属项目使用其薄入口；从 Forge 目录也应调用项目自己的入口：
 
 #+begin_src bash
-./zbuild.py rust doctor --project-root ../zeta_trader
-./zbuild.py rust metadata --project-root ../zeta_trader
-./zbuild.py rust check --project-root ../zeta_trader --profile release
-./zbuild.py rust build --project-root ../zeta_trader --profile release
-./zbuild.py rust rebuild --project-root ../zeta_trader --profile release
-./zbuild.py rust test --project-root ../zeta_trader --profile release
+../zeta_trader/zbuild.py doctor zeta_owl
+../zeta_trader/zbuild.py metadata zeta_owl
+../zeta_trader/zbuild.py check zeta_owl --profile release
+../zeta_trader/zbuild.py build zeta_owl --profile release
+../zeta_trader/zbuild.py rebuild zeta_owl --profile release
+../zeta_trader/zbuild.py test zeta_owl --profile release
 #+end_src
 
-=doctor= 检查工程配置、精确 Rust toolchain/component 与原生依赖环境；=metadata= 使用 =--locked --offline= 验证已解析
-依赖图；=check= 依次执行 rustfmt、Cargo check 和 Clippy；=build= 生成 workspace
-产物；=rebuild= 只清理指定 profile 的 workspace member 后重新 build；=test= 运行整个
-workspace 测试。所有编译命令接受 =--profile NAME=，省略时使用项目
-=zeta-rust.toml= 中的 =default-profile=。
+=doctor= 只读检查工具链和依赖；=metadata= 输出声明的工程、依赖和产物路径，不修改锁文件。
+=check= 检查整个 workspace 的格式，并检查所选包及声明的共用测试包；=test= 使用宿主机
+正确性测试。=build= 生成所选成果及资源，=rebuild= 清理所属工程的所选 profile 后重建。
+公共 CLI 默认 release；=--profile debug= 映射 Cargo dev。清理不会删除另一 profile 或依赖缓存。
 所有 Cargo 命令通过基线指定的 rustup toolchain 执行，不依赖用户全局默认版本。
 
 Web/Fullstack 项目选择 =dioxus-web-fullstack= 依赖组，并在自己的 application feature
 中组合 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 和 =dioxus/router=。
-=rust doctor= 会按依赖组检查 Dioxus CLI 和 Web target，避免工具链基础检查通过但应用
+=doctor= 会按依赖组检查 Dioxus CLI 和 Web target，避免工具链基础检查通过但应用
 仍无法构建或启动。
 
-项目自己的 =zbuild.py= 可以复用 =zeta_forge.rust_workspace.RustWorkspaceManager=，组合
+项目自己的 =zbuild.py= 可以复用 =zeta_forge.rust_engine.RustEngine=，组合
 业务所需的资源生成、运行参数和验收流程。公共模块不感知业务 crate 或应用名称。
 
 * 原生依赖
@@ -79,7 +77,8 @@ Rust binding 复用 forge 管理的原生库。当前 =nng= profile 要求安装
 和静态库，并向 Cargo child process 设置 =NNG_NO_VENDOR=1=、=NNG_DIR= 和 =NNG_STATIC=1=。
 缺失时给出 forge 的安装命令，不自动安装、不回退到 Cargo vendored build。
 
-=openssl-conan= profile 从 =./zbuild.py deps --BUILD_TYPE=Release --install= 生成的清单读取
+=openssl-conan= profile 从先执行 =./zbuild.py build deps --profile release=，再执行
+=./zbuild.py install deps --profile release= 所发布的清单读取
 Conan OpenSSL 版本及包目录；Rust 的 =dev= 和 =release= 均使用这套 Release 静态库。
 构建器为 Cargo 设置同源的 =OPENSSL_DIR=、=OPENSSL_LIB_DIR=、=OPENSSL_INCLUDE_DIR=、
 =OPENSSL_STATIC=1= 和 =OPENSSL_NO_VENDOR=1=，拒绝冲突的环境覆盖。gRPC 的 BoringSSL 安装不受影响。
@@ -91,3 +90,8 @@ Conan OpenSSL 版本及包目录；Rust 的 =dev= 和 =release= 均使用这套 
 开始。随后在业务仓库中同步 =zeta-rust.toml=、workspace metadata、=Cargo.toml=、
 =rust-toolchain.toml= 和 =Cargo.lock=。未迁移的项目继续选择其原基线；不存在的旧 ID 会在
 检查阶段明确失败。日常 check/test 不修改项目文件或 lockfile。
+
+* Cat 基线
+
+=1.97.1-r2= 是 Cat 现有 Cargo.lock 的直接依赖与 feature 快照，使用同一 Rust 1.97.1。
+它不升级 Cat 业务依赖，也不替换 trader/practice 使用的 =1.97.1-r1=。修订不可原地改写。

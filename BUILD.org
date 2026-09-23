@@ -1,0 +1,41 @@
+#+TITLE: ZetaX build contract
+
+* Unified build contract
+
+=./zbuild.py <command> [deliverable ...] [--profile release|debug]= defaults to release
+and =deps grpc hpx folly nng= in that order. Select names explicitly for a narrower
+delivery. =list= shows supported actions; =metadata= describes native engineering units
+and outputs; =--dry-run= previews without requiring tools, signing material or services.
+Old flag-only, stack-first and alias syntax is invalid.
+
+=build= builds and materializes dependency packages in project-local
+=build/staging/<profile>/<target>/=. It records success only after staging completes
+and never publishes into =ZETA_INSTALL_PREFIX=. Folly's required gRPC packages are
+staged before configuring Folly. =install= requires explicit target names and a
+successful build of the same profile; it publishes only those targets without
+rebuilding or rerunning Conan. Build prerequisites not explicitly selected for
+installation remain staged only. CMake and pkg-config metadata are adjusted to
+the publication prefix. =clean/rebuild= affect the named native
+build directories and target staging for one profile, not installations or shared
+Conan/Cargo caches. =rebuild= then rebuilds selected outputs and required dependencies.
+
+Forge =check= configures and compiles selected libraries. =test= defaults to
+=build-tools= and runs Python tooling tests, not upstream third-party test suites.
+Unsupported upstream tests, runtime and fetch capabilities are errors. Host preparation
+remains =common/prepare_debian.sh=; it is not a build action. No global Conan profile
+is overwritten by build. Provision the selected Conan profile separately.
+
+#+begin_src sh
+./zbuild.py list
+./zbuild.py build nng --profile debug
+./zbuild.py rebuild nng --dry-run
+./zbuild.py build deps nng
+./zbuild.py install deps nng
+./zbuild.py test
+#+end_src
+
+Public contracts: =common/zeta_forge/build_cli.py=; native adapters:
+=cmake_engine.py=, =rust_engine.py=, =gradle_engine.py=; project definitions:
+=builder/project.py= and =builder/<target>/project.py=. Applications keep their own
+thin entry and project definition. There is no subsystem registry or alternate
+native dependency graph. The root =zbuild.py= is the only executable Forge build entry.

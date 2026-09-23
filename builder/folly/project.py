@@ -1,14 +1,8 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-FORGE_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(FORGE_ROOT / "common"))
-
-from zeta_forge.cmake_builder import CMakeProjectBuilder, CommonBuildArgs, common_build_argument_parser
-from zeta_forge.config import load_repo_config
+from zeta_forge.cmake_builder import CMakeProjectBuilder
 
 
 class FollyBuilder(CMakeProjectBuilder):
@@ -45,7 +39,7 @@ class FollyBuilder(CMakeProjectBuilder):
             "-c",
             "tools.cmake.cmaketoolchain:generator=Ninja",
             "-c",
-            f"tools.cmake.cmaketoolchain:user_toolchain=[\"{self.user_toolchain}\"]",
+            f'tools.cmake.cmaketoolchain:user_toolchain=["{self.user_toolchain}"]',
         ]
 
     def configure_command(self) -> list[object]:
@@ -61,30 +55,13 @@ class FollyBuilder(CMakeProjectBuilder):
             "-Wno-dev",
             f"-DCMAKE_BUILD_TYPE={self.args.build_type}",
             f"-DCMAKE_TOOLCHAIN_FILE={self.conan_toolchain_file}",
-            f"-DCMAKE_PREFIX_PATH={install_prefix}",
+            f"-DCMAKE_PREFIX_PATH={install_prefix};{self.repo_config.env.get('ZETA_GRPC_STAGE', install_prefix)}",
             f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
             f"-DCMAKE_CXX_STANDARD={self.repo_config.cxx_standard}",
-            f"-DZLIB_ROOT={install_prefix}",
+            f"-DZLIB_ROOT={self.repo_config.env.get('ZETA_GRPC_STAGE', install_prefix)}",
             "-DBUILD_SHARED_LIBS=OFF",
             "-DBOOST_LINK_STATIC=ON",
             "-DBUILD_TESTS=OFF",
             "-DBUILD_BENCHMARKS=OFF",
             "-DPYTHON_EXTENSIONS=OFF",
         ]
-
-
-def main() -> int:
-    parser = common_build_argument_parser("Build Folly")
-    namespace = parser.parse_args()
-    args = CommonBuildArgs(build_type=namespace.build_type, install=namespace.install, rebuild=namespace.rebuild)
-    repo_config = load_repo_config(Path(__file__))
-    FollyBuilder(script_path=Path(__file__), repo_config=repo_config, args=args).run()
-    return 0
-
-
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:
-        print(exc, file=sys.stderr)
-        raise SystemExit(1)

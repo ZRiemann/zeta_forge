@@ -21,7 +21,7 @@ named `run_<exe_target>` that executes the built executable in the current
 binary directory.
 
 Projects that use the shared `zeta_forge` Python framework can expose these
-entries through their own `zbuild.py` commands. The common parser is maintained
+entries through their own `zbuild.py` commands. The shared action-first CLI is maintained
 in `zeta_forge.run_targets` and reads project `CMakeLists.txt` files to list
 the configured run entry name and matching CMake command.
 

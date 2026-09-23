@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import argparse
-import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
-
-from .process import run_command, shell_join
 
 
 @dataclass(frozen=True)
@@ -134,7 +130,9 @@ def _replace_known_variables(value: str, variables: dict[str, Path]) -> str:
     return resolved
 
 
-def _parse_run_target(cmake_file: Path, source_dir: Path, build_dir: Path, body: str) -> RunTarget | None:
+def _parse_run_target(
+    cmake_file: Path, source_dir: Path, build_dir: Path, body: str
+) -> RunTarget | None:
     tokens = _tokenize_cmake_words(body)
     if not tokens:
         return None
@@ -180,7 +178,20 @@ def discover_run_targets(source_dir: Path, build_dir: Path) -> list[RunTarget]:
     targets: list[RunTarget] = []
 
     for cmake_file in sorted(source_dir.rglob("CMakeLists.txt")):
-        if any(part in {"build", "build_debug", ".git"} for part in cmake_file.relative_to(source_dir).parts[:-1]):
+        if any(
+            part
+            in {
+                "build",
+                "build_debug",
+                ".git",
+                "3rd",
+                "third_party",
+                "external",
+                "vendor",
+                "target",
+            }
+            for part in cmake_file.relative_to(source_dir).parts[:-1]
+        ):
             continue
         raw_text = cmake_file.read_text(encoding="utf-8", errors="ignore")
         text = "\n".join(_strip_line_comment(line) for line in raw_text.splitlines())
@@ -192,51 +203,9 @@ def discover_run_targets(source_dir: Path, build_dir: Path) -> list[RunTarget]:
     return targets
 
 
-def format_run_target_line(target: RunTarget) -> str:
-    command = shell_join(target.cmake_command)
-    return f"{target.name};\t{command}"
-
-
-def print_run_targets(targets: Sequence[RunTarget]) -> None:
-    for target in targets:
-        print(format_run_target_line(target))
-
-
 def find_run_target(targets: Sequence[RunTarget], name: str) -> RunTarget:
     for target in targets:
         if target.name == name:
             return target
     available = ", ".join(target.name for target in targets) or "<none>"
     raise RuntimeError(f"Unknown run entry: {name}\nAvailable run entries: {available}")
-
-
-def require_existing_build_tree(build_dir: Path) -> None:
-    cache_path = build_dir / "CMakeCache.txt"
-    if not cache_path.is_file():
-        raise RuntimeError(
-            f"CMake build tree not found: {build_dir}\n"
-            "Run the project zbuild.py build command first for the selected BUILD_TYPE."
-        )
-
-
-def require_existing_executable(target: RunTarget) -> None:
-    if not target.executable_path.is_file():
-        raise RuntimeError(
-            f"Run executable not found: {target.executable_path}\n"
-            "Build the project first for the selected BUILD_TYPE, or use the printed CMake command to build the run target."
-        )
-    if not os.access(target.executable_path, os.X_OK):
-        raise RuntimeError(f"Run executable is not executable: {target.executable_path}")
-
-
-def run_existing_target(target: RunTarget) -> int:
-    require_existing_build_tree(target.build_dir)
-    require_existing_executable(target)
-    run_command((str(target.executable_path), *target.resolved_args), cwd=target.working_dir)
-    return 0
-
-
-def build_type_parser(prog: str, description: str) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog=prog, description=description)
-    parser.add_argument("--BUILD_TYPE", dest="build_type", default="Release", choices=("Release", "Debug"))
-    return parser

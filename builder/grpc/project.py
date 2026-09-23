@@ -1,15 +1,9 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
 import shutil
-import sys
 from pathlib import Path
 
-FORGE_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(FORGE_ROOT / "common"))
-
-from zeta_forge.cmake_builder import CMakeProjectBuilder, CommonBuildArgs, common_build_argument_parser
-from zeta_forge.config import load_repo_config
+from zeta_forge.cmake_builder import CMakeProjectBuilder
 
 
 class GrpcBuilder(CMakeProjectBuilder):
@@ -91,10 +85,10 @@ class GrpcBuilder(CMakeProjectBuilder):
             "-DRE2_BUILD_TESTING=OFF",
         ]
 
-    def install_boringssl_fallback(self) -> None:
+    def install_boringssl_fallback(self, prefix: Path) -> None:
         include_src = self.source_dir / "third_party" / "boringssl-with-bazel" / "src" / "include"
-        include_dst = self.repo_config.install_prefix / "include"
-        lib_dst = self.repo_config.install_prefix / "lib"
+        include_dst = prefix / "include"
+        lib_dst = prefix / "lib"
         lib_dst.mkdir(parents=True, exist_ok=True)
 
         if include_src.is_dir():
@@ -106,27 +100,11 @@ class GrpcBuilder(CMakeProjectBuilder):
                 continue
             candidates = list(self.build_dir.rglob(lib_name))
             if not candidates:
-                raise RuntimeError(f"Unable to find built BoringSSL archive {lib_name} under {self.build_dir}")
+                raise RuntimeError(
+                    f"Unable to find built BoringSSL archive {lib_name} under {self.build_dir}"
+                )
             shutil.copy2(candidates[0], installed)
 
-    def run(self) -> None:
-        super().run()
-        if self.args.install:
-            self.install_boringssl_fallback()
-
-
-def main() -> int:
-    parser = common_build_argument_parser("Build gRPC")
-    namespace = parser.parse_args()
-    args = CommonBuildArgs(build_type=namespace.build_type, install=namespace.install, rebuild=namespace.rebuild)
-    repo_config = load_repo_config(Path(__file__))
-    GrpcBuilder(script_path=Path(__file__), repo_config=repo_config, args=args).run()
-    return 0
-
-
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:
-        print(exc, file=sys.stderr)
-        raise SystemExit(1)
+    def install(self, components=(), *, prefix: Path | None = None) -> None:
+        super().install(components, prefix=prefix)
+        self.install_boringssl_fallback(prefix or self.repo_config.install_prefix)

@@ -1,21 +1,20 @@
-#!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import shutil
-import sys
+import tempfile
 from pathlib import Path
 
-FORGE_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(FORGE_ROOT / "common"))
-
-from zeta_forge.cmake_builder import CommonBuildArgs, common_build_argument_parser
-from zeta_forge.config import RepoConfig, load_repo_config
+from zeta_forge.cmake_builder import CommonBuildArgs
 from zeta_forge.conan_openssl import package_from_generators, write_openssl_manifest
+from zeta_forge.config import RepoConfig
 from zeta_forge.process import run_command
 
 
 class DepsBuilder:
-    def __init__(self, *, script_path: Path, repo_config: RepoConfig, args: CommonBuildArgs) -> None:
+    def __init__(
+        self, *, script_path: Path, repo_config: RepoConfig, args: CommonBuildArgs
+    ) -> None:
         self.script_path = script_path.resolve()
         self.script_dir = self.script_path.parent
         self.repo_config = repo_config
@@ -23,7 +22,9 @@ class DepsBuilder:
         self.build_dir = self.script_dir / "build" / args.build_type
         self.conan_root = self.build_dir / "conan"
         self.generators_dir = self.conan_root / "build" / args.build_type / "generators"
-        self.install_dir = self.repo_config.install_prefix / "lib" / "cmake" / "zeta_deps" / args.build_type
+        self.install_dir = (
+            self.repo_config.install_prefix / "lib" / "cmake" / "zeta_deps" / args.build_type
+        )
 
     @property
     def conanfile(self) -> Path:
@@ -41,7 +42,6 @@ class DepsBuilder:
             )
 
     def run_conan(self) -> None:
-        run_command(["conan", "profile", "detect", "--force"], env=self.repo_config.env, check=False)
         run_command(
             [
                 "conan",
@@ -64,7 +64,7 @@ class DepsBuilder:
         if not self.generators_dir.is_dir():
             raise RuntimeError(
                 f"Conan generators directory not found: {self.generators_dir}\n"
-                "Run zeta_forge deps before installing the dependency environment."
+                "Build the deps deliverable before installing the dependency environment."
             )
 
         openssl_version, openssl_package = package_from_generators(
@@ -84,6 +84,34 @@ class DepsBuilder:
         write_openssl_manifest(self.install_dir, openssl_version, openssl_package)
 
         print(f"Installed zeta deps CMake package files to: {self.install_dir}")
+
+    def publish(self, prefix: Path) -> None:
+        """Copy the staged package files without deleting other prefix contents."""
+        if not self.install_dir.is_dir():
+            raise RuntimeError(f"zeta deps staging is missing: {self.install_dir}")
+        files = sorted(
+            path for path in self.install_dir.glob("*.cmake")
+            if path.is_file() and not path.is_symlink()
+        )
+        if not files:
+            raise RuntimeError(f"zeta deps staging has no CMake package files: {self.install_dir}")
+        destination = prefix / "lib" / "cmake" / "zeta_deps" / self.args.build_type
+        destination.mkdir(parents=True, exist_ok=True)
+        for source in files:
+            installed = destination / source.name
+            if installed.is_symlink():
+                raise RuntimeError(f"refusing to replace linked package file: {installed}")
+        for source in files:
+            installed = destination / source.name
+            descriptor, temporary = tempfile.mkstemp(prefix=f".{source.name}.", dir=destination)
+            os.close(descriptor)
+            try:
+                shutil.copy2(source, temporary)
+                os.replace(temporary, installed)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
+        print(f"Published zeta deps CMake package files to: {destination}")
 
     def install_boost_findboost_compat(self) -> None:
         """Append FindBoost compatibility variables to the Conan-generated BoostConfig.cmake.
@@ -110,9 +138,9 @@ class DepsBuilder:
                 "foreach(_zeta_boost_comp IN LISTS boost_COMPONENT_NAMES)",
                 '  string(REPLACE "Boost::" "" _zeta_short "${_zeta_boost_comp}")',
                 '  string(TOUPPER "${_zeta_short}" _zeta_upper)',
-                '  if(TARGET Boost::${_zeta_short})',
-                '    set(Boost_${_zeta_upper}_FOUND TRUE)',
-                '  endif()',
+                "  if(TARGET Boost::${_zeta_short})",
+                "    set(Boost_${_zeta_upper}_FOUND TRUE)",
+                "  endif()",
                 "endforeach()",
                 "unset(_zeta_boost_comp)",
                 "unset(_zeta_short)",
@@ -133,7 +161,7 @@ class DepsBuilder:
         config_file.write_text(
             "\n".join(
                 [
-                    'set(RapidJSON_FOUND TRUE)',
+                    "set(RapidJSON_FOUND TRUE)",
                     f'set(RAPIDJSON_INCLUDE_DIRS "{rapidjson_include_dir}")',
                     f'set(RapidJSON_INCLUDE_DIRS "{rapidjson_include_dir}")',
                     "",
@@ -166,28 +194,3 @@ class DepsBuilder:
             ),
             encoding="utf-8",
         )
-
-    def run(self) -> None:
-        self.validate()
-        if self.args.rebuild and self.build_dir.exists():
-            shutil.rmtree(self.build_dir)
-        self.run_conan()
-        if self.args.install:
-            self.install()
-
-
-def main() -> int:
-    parser = common_build_argument_parser("Build shared ZetaX Conan dependency environment")
-    namespace = parser.parse_args()
-    args = CommonBuildArgs(build_type=namespace.build_type, install=namespace.install, rebuild=namespace.rebuild)
-    repo_config = load_repo_config(Path(__file__))
-    DepsBuilder(script_path=Path(__file__), repo_config=repo_config, args=args).run()
-    return 0
-
-
-if __name__ == "__main__":
-    try:
-        raise SystemExit(main())
-    except Exception as exc:
-        print(exc, file=sys.stderr)
-        raise SystemExit(1)

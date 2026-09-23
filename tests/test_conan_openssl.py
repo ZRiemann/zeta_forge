@@ -1,25 +1,26 @@
 from __future__ import annotations
 
-from pathlib import Path
-import subprocess
 import sys
 import tempfile
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
-
 
 FORGE_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(FORGE_ROOT / "common"))
 sys.path.insert(0, str(FORGE_ROOT))
 
-from builder.deps.zbuild import DepsBuilder  # noqa: E402
 from zeta_forge.conan_openssl import (  # noqa: E402
     package_from_generators,
     read_openssl_manifest,
     write_openssl_manifest,
 )
-from zeta_forge.rust_workspace import RustWorkspaceManager, _native_environment  # noqa: E402
+from zeta_forge.rust_workspace import (  # noqa: E402
+    _native_environment,
+)
+
+from builder.deps.project import DepsBuilder  # noqa: E402
 
 
 class ConanOpensslTests(unittest.TestCase):
@@ -54,7 +55,7 @@ class ConanOpensslTests(unittest.TestCase):
             self.assertEqual(read_openssl_manifest(root / "prefix"), package_dir)
 
             builder = DepsBuilder(
-                script_path=FORGE_ROOT / "builder/deps/zbuild.py",
+                script_path=FORGE_ROOT / "builder/deps/project.py",
                 repo_config=SimpleNamespace(install_prefix=root / "installed"),
                 args=SimpleNamespace(build_type="Release"),
             )
@@ -69,7 +70,7 @@ class ConanOpensslTests(unittest.TestCase):
     def test_missing_manifest_and_library_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            with self.assertRaisesRegex(RuntimeError, "deps --BUILD_TYPE=Release --install"):
+            with self.assertRaisesRegex(RuntimeError, "install deps --profile release"):
                 read_openssl_manifest(root / "prefix")
             package_dir = self.create_package(root)
             self.install_manifest(root, package_dir)
@@ -91,21 +92,6 @@ class ConanOpensslTests(unittest.TestCase):
             self.assertEqual(environment["OPENSSL_STATIC"], "1")
             self.assertEqual(environment["OPENSSL_NO_VENDOR"], "1")
             self.assertEqual(environment["TEST_ENV"], "1")
-
-            project.manifest = root / "Cargo.toml"
-            project.workspace_dir = root
-            manager = RustWorkspaceManager(project, config)
-            with (
-                mock.patch.object(manager, "validate"),
-                mock.patch.object(manager, "resolve_profile", return_value="release"),
-                mock.patch.object(manager, "cargo_command", return_value=["cargo", "build"]),
-                mock.patch(
-                    "zeta_forge.rust_workspace.run_command",
-                    return_value=subprocess.CompletedProcess(args=(), returncode=0),
-                ) as run,
-            ):
-                self.assertEqual(manager.build(), 0)
-            self.assertEqual(run.call_args.kwargs["env"], environment)
 
     def test_conflicting_overrides_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

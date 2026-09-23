@@ -25,10 +25,11 @@ export ZETA_INSTALL_PREFIX=$HOME/.local
 #+begin_src bash
 cd "$ZETAX_ROOT/zeta_forge"
 ./common/prepare_debian.sh
-./zbuild.py grpc --rebuild --install
-./zbuild.py hpx --rebuild --install
-./zbuild.py folly --rebuild --install
-./zbuild.py nng --rebuild --install
+./zbuild.py build
+./zbuild.py install grpc
+./zbuild.py install hpx
+./zbuild.py install folly
+./zbuild.py install nng
 #+end_src
 
 * 关键环境变量
@@ -43,100 +44,15 @@ cd "$ZETAX_ROOT/zeta_forge"
 
 * 最小项目入口
 
-外部项目可以在自己的仓库根目录放一个薄 =zbuild.py=：
+参照 =zpp/zbuild.py= 的薄入口：定位共享库，导入 =build_cli.cli=，调用本项目
+=builder/<project>.py= 中的 =project(script_path)=。不要复制参数解析器或 Forge 内部路由。
+项目定义返回 =Project=，声明 =Product=、原生适配器、默认集合及必要的应用步骤。
 
-#+begin_src python
-#!/usr/bin/env python3
-from __future__ import annotations
-
-import os
-from pathlib import Path
-import sys
-
-
-def is_forge_root(candidate: Path) -> bool:
-    return (candidate / "common" / "zeta_forge" / "config.py").is_file()
-
-
-def find_forge_root() -> Path:
-    candidates: list[Path] = []
-    if os.environ.get("ZETAX_ROOT"):
-        candidates.append(Path(os.environ["ZETAX_ROOT"]).expanduser() / "zeta_forge")
-    candidates.extend(parent / "zeta_forge" for parent in PROJECT_ROOT.parents)
-    for candidate in candidates:
-        if is_forge_root(candidate):
-            return candidate.resolve()
-    raise RuntimeError("Set ZETAX_ROOT=/path/to/workspace and ensure $ZETAX_ROOT/zeta_forge exists")
-
-
-PROJECT_ROOT = Path(__file__).resolve().parent
-FORGE_ROOT = find_forge_root()
-sys.path.insert(0, str(FORGE_ROOT / "common"))
-
-from builder.your_project import main
-
-
-if __name__ == "__main__":
-    raise SystemExit(main(PROJECT_ROOT))
-#+end_src
-
-这个入口只做三件事：定位 =zeta_forge=、导入公共工具库、把当前项目根目录传给项目构建逻辑。
-
-* 复用 CMakeProjectBuilder
-
-项目构建逻辑可以继承 =CMakeProjectBuilder=：
-
-#+begin_src python
-from pathlib import Path
-
-from zeta_forge.cmake_builder import CMakeProjectBuilder, CommonBuildArgs, common_build_argument_parser
-from zeta_forge.config import load_repo_config
-
-
-class YourProjectBuilder(CMakeProjectBuilder):
-    @property
-    def project_name(self) -> str:
-        return "your_project"
-
-    @property
-    def source_dir(self) -> Path:
-        return Path(self.repo_config.env["YOUR_PROJECT_SRC_DIR"]).resolve()
-
-    @property
-    def missing_source_hint(self) -> str:
-        return "Set YOUR_PROJECT_SRC_DIR or run from the project checkout"
-
-    def conan_install_command(self) -> list[object]:
-        return [
-            "conan",
-            "install",
-            self.script_dir / "conanfile.py",
-            f"--output-folder={self.conan_root}",
-            "--build=missing",
-            "-s",
-            f"build_type={self.args.build_type}",
-            "-c",
-            "tools.cmake.cmaketoolchain:generator=Ninja",
-        ]
-
-    def configure_command(self) -> list[object]:
-        return [
-            "cmake",
-            "-S",
-            self.source_dir,
-            "-B",
-            self.build_dir,
-            "-G",
-            "Ninja",
-            f"-DCMAKE_BUILD_TYPE={self.args.build_type}",
-            f"-DCMAKE_TOOLCHAIN_FILE={self.conan_toolchain_file}",
-            f"-DCMAKE_PREFIX_PATH={self.repo_config.install_prefix}",
-            f"-DCMAKE_INSTALL_PREFIX={self.repo_config.install_prefix}",
-            f"-DCMAKE_CXX_STANDARD={self.repo_config.cxx_standard}",
-        ]
-#+end_src
-
-如果项目不使用 Conan，可以设置 =uses_conan = False=，并让 =configure_command= 直接使用系统或 forge 安装前缀中的依赖。
+原生 CMake 项目可保留 =CMakeProjectBuilder= 子类的 configure_command 和依赖校验，
+交由 =CMakeEngine= 选择真实 target、测试集合和 install component。
+Rust 项目使用 =RustEngine/RustTarget=；Android 使用 =GradleEngine=。
+新增内部模块不需要注册 CLI 目标；仅新增正式独立成果时声明目标。
+详见 [[file:../BUILD.org][公共入口契约]]，不要建立业务 subsystem 注册或重复依赖图。
 
 * 复用依赖配方
 
@@ -144,7 +60,7 @@ class YourProjectBuilder(CMakeProjectBuilder):
 
 1. 直接依赖 =ZETA_INSTALL_PREFIX= 中已安装的 gRPC、HPX、Folly、NNG 等库。
 2. 项目确有私有依赖时，才在项目自己的 =builder/conanfile.py= 中声明；ZetaX 公共 Conan 依赖不得在外部项目重复声明。
-3. 如果某个依赖组合会被多个项目共享，优先抽象到 =zeta_forge deps= 或其他 forge 公共库能力；项目目标本身仍留在项目仓库。
+3. 如果某个依赖组合会被多个项目共享，优先抽象到 Forge =deps= 交付目标 或其他 forge 公共库能力；项目目标本身仍留在项目仓库。
 
 优先选择第一种或第二种；只有共享价值明确的公共流程才放回 =zeta_forge=。
 
@@ -171,15 +87,16 @@ zpp 的 CMake helper 来自 =$ZETAX_ROOT/zeta_forge/cmake_util=，不再通过 z
 #+begin_src bash
 cd "$ZETAX_ROOT/zeta_forge"
 ./zbuild.py list
-./zbuild.py all --rebuild --install
+./zbuild.py rebuild
+./zbuild.py install deps grpc hpx folly nng
 #+end_src
 
 在外部项目中使用自己的入口：
 
 #+begin_src bash
 cd "$ZETAX_ROOT/your_project"
-./zbuild.py --BUILD_TYPE=Debug
-./zbuild.py --rebuild --install
+./zbuild.py build --profile debug
+./zbuild.py install
 #+end_src
 
 覆盖源码或安装前缀：
@@ -187,16 +104,16 @@ cd "$ZETAX_ROOT/your_project"
 #+begin_src bash
 export ZETA_INSTALL_PREFIX=$HOME/.local/zeta
 export ZETA_TASKFLOW_SRC_DIR=$HOME/git/taskflow
-./zbuild.py --rebuild
+./zbuild.py rebuild
 #+end_src
 
 * 故障排查
 
 - 找不到 =zeta_forge=：确认 =ZETAX_ROOT=/path/to/workspace= 已设置，并且 =$ZETAX_ROOT/zeta_forge= 存在；未设置 =ZETAX_ROOT= 时，确认外部项目与 =zeta_forge= 是标准兄弟目录布局。
-- 找不到依赖包：确认基础目标已经用 =--install= 安装到 =ZETA_INSTALL_PREFIX=，并检查 =CMAKE_PREFIX_PATH=。
-- Conan toolchain 不存在：重新运行项目入口并加 =--rebuild=，或删除对应 =build/<BUILD_TYPE>/conan= 后重试。
+- 找不到依赖包：确认基础目标已经用 =install= 安装到 =ZETA_INSTALL_PREFIX=，并检查 =CMAKE_PREFIX_PATH=。
+- Conan toolchain 不存在：重新运行项目入口并加 =rebuild=，或删除对应 =build/<BUILD_TYPE>/conan= 后重试。
 - 源码路径不对：检查 =ZETA_<NAME>_SRC_DIR= 是否覆盖到了预期 checkout。
-- 构建目录搬迁后 CMake 报错：使用 =--rebuild= 清理当前 build type 的 CMake 状态。
+- 构建目录搬迁后 CMake 报错：使用 =rebuild= 清理当前 build type 的 CMake 状态。
 
 * 版本与更新
 

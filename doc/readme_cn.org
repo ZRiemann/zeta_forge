@@ -61,16 +61,17 @@ git submodule update --init --recursive
 你可以直接在仓库根目录使用统一调度入口来触发构建：
 
 #+begin_src bash
-./zbuild.py grpc --rebuild --install
-./zbuild.py hpx --rebuild --install
-./zbuild.py all --rebuild
-./zbuild.py rust doctor --project-root ../zeta_trader
+./zbuild.py build grpc hpx
+./zbuild.py install grpc
+./zbuild.py install hpx
+./zbuild.py rebuild
+../zeta_trader/zbuild.py doctor zeta_owl
 #+end_src
 
 =zbuild.py= 中的 =z= 取自 =zeta_forge=，用于表达仓库顶层统一入口，而不是局限于 CMake 的 =c=。
 =zbuild.py= 可以直接执行，并分发到 =builder/= 下对应项目的工作区目标入口。
-当执行 =./zbuild.py all= 时，调度器会先构建 =grpc=，将 =hpx= 和 =nng= 视为相互独立的目标，然后在 =grpc= 后构建 =folly=。
-托管的第三方构建入口默认关闭上游 examples 和 tests，使 =all= 及单独目标构建聚焦于可安装库。gRPC 代码生成 plugins 保持开启，HPX 保留 =hpxdep= 和 =inspect= 工具，Folly 保留上游安装清单要求的 =libfolly_test_util.a= 支持库。
+默认按 =deps grpc hpx folly nng= 顺序构建。build 仅使用项目内 staging；install 只发布显式指定且同 profile 已成功构建的库，不会重复构建或调用 Conan。
+契约见 [[file:../BUILD.org][统一构建入口]]。上游测试尚未接入，Forge test 执行工具自身的 Python 测试。
 
 * 源码布局
 
@@ -94,18 +95,17 @@ Rust 治理配置位于 =rust/=，公共实现位于 =common/zeta_forge/rust_wor
 =rust/baselines/<rust-version>-r<revision>.toml= 是不可变的 Rust toolchain、component、第三方直接 crate 声明、Git revision、Cargo 安装工具和依赖组来源。业务仓库通过 =zeta-rust.toml= 精确选择一个 baseline，并声明 workspace、toolchain 文件、默认 build profile、依赖组和原生库需求；forge 不提供隐式 current baseline 或旧 ID 回退。
 
 #+begin_src bash
-./zbuild.py rust doctor --project-root ../zeta_trader
-./zbuild.py rust metadata --project-root ../zeta_trader
-./zbuild.py rust check --project-root ../zeta_trader --profile release
-./zbuild.py rust build --project-root ../zeta_trader --profile release
-./zbuild.py rust rebuild --project-root ../zeta_trader --profile release
-./zbuild.py rust test --project-root ../zeta_trader --profile release
+../zeta_trader/zbuild.py doctor zeta_owl
+../zeta_trader/zbuild.py metadata zeta_owl
+../zeta_trader/zbuild.py check zeta_owl --profile release
+../zeta_trader/zbuild.py build zeta_owl --profile release
+../zeta_trader/zbuild.py rebuild zeta_owl --profile release
+../zeta_trader/zbuild.py test zeta_owl --profile release
 #+end_src
 
 =check= 执行 format、Cargo check 与 Clippy gate，不生成最终应用产物；=build= 生成
 workspace 产物；=rebuild= 只清理指定 profile 的 workspace member 后重新构建，不清除 Cargo
-下载源码缓存。编译命令省略 =--profile= 时使用项目 =zeta-rust.toml= 的
-=default-profile=。
+下载源码缓存。公共 CLI 默认 release，debug 映射到 Cargo dev。
 
 业务仓库拥有 workspace 成员、应用 feature、源码和 =Cargo.lock=。成员 crate 必须从 workspace 继承第三方依赖，workspace 声明必须与 forge 基线一致。Cargo 继续负责 Rust package 解析，Conan 继续负责 native C/C++ package；NNG 等原生库由 forge 安装并传递给 Rust binding，禁止重复 vendored build。
 
@@ -149,16 +149,17 @@ export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 * 工作区目标入口示例
 
 #+begin_src bash
-./zbuild.py conan --BUILD_TYPE=Debug --install
-./builder/deps/zbuild.py --BUILD_TYPE=Debug --install
-./builder/grpc/zbuild.py --rebuild --install
-./builder/hpx/zbuild.py --rebuild --install
-./builder/folly/zbuild.py --rebuild --install
-./builder/nng/zbuild.py --rebuild --install
+./zbuild.py build deps --profile debug
+./zbuild.py install deps --profile debug
+./zbuild.py build grpc hpx folly nng
+./zbuild.py install grpc
+./zbuild.py install hpx
+./zbuild.py install folly
+./zbuild.py install nng
 #+end_src
 
 =deps= 是 =zpp=、=zeta_trader= 等外部项目消费公共 C++ package config 的统一 Conan 入口。
-=conan= 顶层命令是 =deps= 的别名，用于只准备 Conan 管理的依赖环境。它会把 Conan 生成的 package 文件安装到
+显式 =install deps= 将 Conan package 文件发布到
 =${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=。外部项目应消费该安装环境，
 不要为 =spdlog=、=fmt=、=GTest=、=SQLite3= 等共享依赖重复维护自己的 Conan 依赖图。
 
@@ -168,9 +169,10 @@ export ZETA_INSTALL_PREFIX=/path/to/install/prefix
 
 #+begin_src bash
 cd "$ZETAX_ROOT/zeta_forge"
-./zbuild.py conan --BUILD_TYPE=Debug --install
+./zbuild.py build deps --profile debug
+./zbuild.py install deps --profile debug
 cd "$ZETAX_ROOT/zpp"
-./zbuild.py --BUILD_TYPE=Debug --rebuild --no-tests
+./zbuild.py rebuild --profile debug
 #+end_src
 
 该入口默认把当前 =zpp= checkout 作为 =ZETA_ZPP_SRC_DIR=，除非用户显式设置了这个变量。

@@ -162,10 +162,10 @@ Installed toolchain layers:
 Suggested next steps:
 1. source \"$HOME/.profile\"
 2. cd \"{self.forge_root}\"
-3. ./builder/grpc/zbuild.py --rebuild --install
-4. ./builder/hpx/zbuild.py --rebuild --install
-5. ./builder/folly/zbuild.py --rebuild --install
-6. ./builder/nng/zbuild.py --rebuild --install
+3. ./zbuild.py install grpc
+4. ./zbuild.py install hpx
+5. ./zbuild.py install folly
+6. ./zbuild.py install nng
 """.rstrip()
         )
 

@@ -3,6 +3,23 @@
 
 * Release History
 
+** v1.0.0 - 2026-09-23
+*** 发布定位摘要
+- 建立统一、可发现的 Forge 构建契约，以产品和工程单元取代各目录独立脚本与旧式命令分派。
+- 分离构建、暂存与显式发布生命周期，并为 CMake、Rust 和 Gradle 提供共享执行引擎。
+
+*** 变更内容
+- 根 =./zbuild.py= 统一提供 =list=、=metadata=、=build=、=install=、=check=、=test=、=clean= 与 =rebuild=，支持目标选择、profile 和无副作用的 =--dry-run=。
+- 将各原生依赖入口改为项目定义，由共享 CLI、操作模型及 CMake/Rust/Gradle 引擎集中处理依赖顺序、目标能力和错误语义。
+- 构建产物先写入项目内 profile/target 隔离的 staging；=install= 仅发布显式选择且已成功构建的目标，并修正已安装 CMake 与 pkg-config 元数据前缀。
+- Rust 治理迁移到 =1.97.1-r2= 基线，移除项目级默认 profile，并由统一命令契约显式选择构建 profile。
+- 新增构建契约、原生交付和安装安全测试，并同步中英文架构、使用说明及迁移文档。
+
+*** 兼容性与升级说明
+- 旧的 flag-only、stack-first、别名命令以及 =builder/*/zbuild.py= 独立入口不再支持；调用方必须迁移到 =./zbuild.py <command> [deliverable ...] [--profile release|debug]=。
+- =install= 不再隐式构建或发布全部依赖；必须先用相同 profile 完成 =build=，再显式指定需要发布的目标。
+- Rust 项目必须采用 =1.97.1-r2= 并移除 =zeta-rust.toml= 中的 =default-profile=。
+
 ** v0.9.0 - 2026-09-20
 *** 发布定位摘要
 - 将 Rust 治理从单一活动基线升级为可并存、不可变的精确版本基线。

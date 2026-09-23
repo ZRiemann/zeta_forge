@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import argparse
+import json
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 from .config import RepoConfig
 from .process import cpu_count, run_command
@@ -13,16 +13,6 @@ from .process import cpu_count, run_command
 @dataclass(frozen=True)
 class CommonBuildArgs:
     build_type: str
-    install: bool
-    rebuild: bool
-
-
-def common_build_argument_parser(description: str) -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--BUILD_TYPE", dest="build_type", default="Release", choices=("Release", "Debug"))
-    parser.add_argument("--install", action="store_true", dest="install")
-    parser.add_argument("--rebuild", action="store_true", dest="rebuild")
-    return parser
 
 
 def cmake_bool(enabled: bool) -> str:
@@ -35,7 +25,9 @@ class CMakeProjectBuilder:
     uses_conan: bool = True
     reset_conan_on_move: bool = True
 
-    def __init__(self, *, script_path: Path, repo_config: RepoConfig, args: CommonBuildArgs) -> None:
+    def __init__(
+        self, *, script_path: Path, repo_config: RepoConfig, args: CommonBuildArgs
+    ) -> None:
         self.script_path = script_path.resolve()
         self.script_dir = self.script_path.parent
         self.repo_config = repo_config
@@ -62,7 +54,9 @@ class CMakeProjectBuilder:
 
     def validate(self) -> None:
         if not self.source_dir.is_dir():
-            raise RuntimeError(f"{self.project_name} source directory not found: {self.source_dir}\n{self.missing_source_hint}")
+            raise RuntimeError(
+                f"{self.project_name} source directory not found: {self.source_dir}\n{self.missing_source_hint}"
+            )
 
     def conan_input_files(self) -> Sequence[Path]:
         return [self.script_dir / "conanfile.py"]
@@ -112,7 +106,7 @@ class CMakeProjectBuilder:
     def should_run_conan(self) -> bool:
         if not self.uses_conan:
             return False
-        if self.args.rebuild or not self.conan_stamp.is_file():
+        if not self.conan_stamp.is_file():
             return True
         if not self.conan_toolchain_file.is_file():
             return True
@@ -140,7 +134,7 @@ class CMakeProjectBuilder:
         return False
 
     def should_configure(self) -> bool:
-        if self.args.rebuild or not self.configure_stamp.is_file():
+        if not self.configure_stamp.is_file():
             return True
         stamp_mtime = self.configure_stamp.stat().st_mtime_ns
         for path in self.configure_dependencies():
@@ -168,33 +162,43 @@ class CMakeProjectBuilder:
         except OSError:
             shutil.copy2(source, entrypoint)
 
-    def run(self) -> None:
+    def prepare(self) -> None:
+        """Configure the native tree, including changes in project options."""
         self.validate()
         moved_build_dir = self.detect_moved_build_dir()
-
-        if self.args.rebuild and self.build_dir.exists():
-            shutil.rmtree(self.build_dir)
-
         self.ensure_build_directory()
-
         if moved_build_dir:
             self.reset_moved_build_state()
-
         if self.should_run_conan():
-            run_command(["conan", "profile", "detect", "--force"], env=self.repo_config.env, check=False)
             run_command(self.conan_install_command(), cwd=self.script_dir, env=self.repo_config.env)
             self.conan_stamp.touch()
-
-        if self.args.rebuild:
-            self.clear_cmake_state()
-
-        if self.should_configure():
-            run_command(self.configure_command(), cwd=self.script_dir, env=self.repo_config.env)
+        signature = self.build_dir / ".configure.arguments.json"
+        command = [str(arg) for arg in self.configure_command()]
+        previous = json.loads(signature.read_text()) if signature.is_file() else None
+        if self.should_configure() or previous != command:
+            run_command(command, cwd=self.script_dir, env=self.repo_config.env)
+            signature.write_text(json.dumps(command), encoding="utf-8")
             self.configure_stamp.touch()
-
         self.refresh_compile_commands_entrypoint()
 
-        run_command(["cmake", "--build", self.build_dir, "--parallel", str(cpu_count())], env=self.repo_config.env)
+    def build(self, targets: Sequence[str] = (), *, jobs: int | None = None) -> None:
+        self.prepare()
+        command: list[object] = [
+            "cmake",
+            "--build",
+            self.build_dir,
+            "--parallel",
+            str(jobs or cpu_count()),
+        ]
+        if targets:
+            command.extend(("--target", *targets))
+        run_command(command, env=self.repo_config.env)
 
-        if self.args.install:
-            run_command(["cmake", "--install", self.build_dir], env=self.repo_config.env)
+    def install(self, components: Sequence[str] = (), *, prefix: Path | None = None) -> None:
+        for component in components or (None,):
+            command: list[object] = ["cmake", "--install", self.build_dir]
+            if prefix is not None:
+                command.extend(("--prefix", prefix))
+            if component is not None:
+                command.extend(("--component", component))
+            run_command(command, env=self.repo_config.env)

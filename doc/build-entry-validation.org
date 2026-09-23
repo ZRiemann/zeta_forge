@@ -1,0 +1,58 @@
+#+TITLE: Unified build-entry validation
+#+DATE: 2026-09-22
+
+* Scope
+
+This is a working-tree implementation record, not a release or an all-platform
+acceptance claim. No versions, tags or commits were created. Existing practice
+manifest/planning edits and agent's untracked .vorg.db were preserved. No third-party
+source, dependency lockfile or existing immutable Rust baseline was changed.
+Cat's new 1.97.1-r2 baseline records its existing locked direct dependencies.
+
+All seven buildable repository entrypoints were exercised for help, list,
+build/test dry-run, profile selection and rejection of removed flags. Additional
+shared tests cover selection, unsupported capabilities, preflight-before-execution,
+failure/interruption, argument redaction, CMake components, Cargo/Dioxus features,
+profile cleanup including Dioxus server/wasm caches, and Android APK preservation.
+
+* Results by repository
+
+| Repository | Executed verification | Limits / observed blockers |
+|------------+-----------------------+----------------------------|
+| zeta_forge | 30 Python tests, including a real temporary CMake build/test/install/clean fixture; shared adapter static checks | No full third-party rebuild or publication to the user prefix; upstream library suites are unsupported |
+| zpp | test --profile debug: built core suite, 71 of 75 CTest cases passed | Four LoggingTest cases abort at RapidJSON MemberBegin/IsObject; optional NNG/Folly/HPX builds not validated |
+| zeta_trader | 36 Python tests; doctor zeta_owl including WebKitGTK/libSoup; build zti_probe --profile release | No production service launch, native service rebuild, GUI run, benchmark or soak |
+| zeta_practice | check --profile debug (server plus Web/wasm and Clippy); test --profile debug (1 test); build --profile release (fullstack); local HTTP 200 smoke and interrupt exit 130 | No browser-interaction acceptance or platform matrix |
+| zeta_agent | test --profile debug (1 native CTest case) | Release runtime not tested |
+| zeta_vault | test --profile release (19 cases); C ABI install component into a temporary prefix, confirming no wrapper header/server publication | Debug configure lacks installed libsodium configuration; no real Vault data or installed services accessed |
+| zeta_cat | doctor server linux; test server --profile debug (26 tests across server/support packages); mocked ADB build-call test; Android dry-run | No signed Android build, device operation, release server build or production network launch |
+| zsa | agents/check_agents.py; skill-creator quick_validate; mocked deployment build-call test | No deployment or personal agent synchronization; system Python supplied PyYAML for quick_validate |
+| zeta_history | Applicability documentation reviewed; no native project exists | No fake build entry added |
+
+* Reproduction
+
+Run from the named repository:
+
+#+begin_src sh
+# Forge
+python3 -m unittest discover -s tests
+# Trader
+python3 -m unittest discover -s tests/python
+# Practice
+./zbuild.py check --profile debug -j 2
+./zbuild.py test --profile debug -j 2
+./zbuild.py build --profile release -j 2
+# Agent / Vault / zpp: select the profile shown in the table
+./zbuild.py test --profile debug -j 2
+# Cat
+./zbuild.py test server --profile debug -j 2
+python3 ops/test_build_calls.py
+# zsa
+python3 agents/check_agents.py
+python3 deploy/zeta_cat/test_build_calls.py
+#+end_src
+
+Do not use these results to imply that every delivery or platform passed.
+The zpp logging failures were observed, not repaired as part of this build-entry
+change. Missing native packages must be prepared explicitly; build never installs
+host packages to work around a failed validation.

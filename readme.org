@@ -141,6 +141,11 @@ composition, such as =dioxus/web=, =dioxus/server=, =dioxus/fullstack=, and
 Project =doctor= also verifies the pinned Dioxus CLI and, for Web projects,
 the baseline toolchain's =wasm32-unknown-unknown= target.
 
+The =1.97.1-r3= baseline extends the =r1= Web/Fullstack dependency set with
+the =sqlite= group (=rusqlite 0.40.2= with bundled SQLite). Server-side projects
+select both groups in =zeta-rust.toml= and inherit =rusqlite= from the workspace
+manifest. Earlier immutable baselines remain available.
+
 * ZetaX Workspace Root
 
 =ZETAX_ROOT= is the only public top-level workspace variable, for example =~/git=.

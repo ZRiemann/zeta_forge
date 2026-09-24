@@ -3,6 +3,14 @@
 
 * Release History
 
+** v1.1.1 - 2026-09-24
+*** 变更内容
+- Forge 构建契约测试只运行自身入口，不再依赖兄弟仓库的检出状态或分支。
+- 明确外部项目在各自仓库验证项目级构建入口。
+
+*** 验证
+- =python3 -m unittest discover -s tests=：35 项通过；未运行完整构建。
+
 ** v1.1.0 - 2026-09-24
 *** 发布定位摘要
 - 为 Web/Fullstack 服务端新增受管 SQLite 依赖基线，支持 zeta_practice Stage 1.2。

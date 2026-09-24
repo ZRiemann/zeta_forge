@@ -21,6 +21,8 @@ Conan/Cargo caches. =rebuild= then rebuilds selected outputs and required depend
 
 Forge =check= configures and compiles selected libraries. =test= defaults to
 =build-tools= and runs Python tooling tests, not upstream third-party test suites.
+These tests cover Forge's public entrypoint and shared adapters; each consuming
+project tests its own =zbuild.py= in its repository.
 Unsupported upstream tests, runtime and fetch capabilities are errors. Host preparation
 remains =common/prepare_debian.sh=; it is not a build action. No global Conan profile
 is overwritten by build. Provision the selected Conan profile separately.

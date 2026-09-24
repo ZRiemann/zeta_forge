@@ -259,37 +259,25 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(kill.call_count, 2)
 
 
-class WorkspaceEntrypointTests(unittest.TestCase):
-    def test_all_available_launchers_are_read_only_and_reject_legacy_flags(self) -> None:
-        for name in (
-            "zeta_forge",
-            "zpp",
-            "zeta_trader",
-            "zeta_practice",
-            "zeta_agent",
-            "zeta_vault",
-            "zeta_cat",
+class ForgeEntrypointTests(unittest.TestCase):
+    def test_launcher_is_read_only_and_rejects_legacy_flags(self) -> None:
+        for args, expected in (
+            (("--help",), 0),
+            (("list",), 0),
+            (("build", "--dry-run"), 0),
+            (("test", "--profile", "debug", "--dry-run"), 0),
+            (("build", "--all"), 2),
+            (("build", "--BUILD_TYPE=Release"), 2),
         ):
-            root = FORGE.parent / name
-            if not (root / "zbuild.py").is_file():
-                continue  # Forge can be tested without every application checkout.
-            for args, expected in (
-                (("--help",), 0),
-                (("list",), 0),
-                (("build", "--dry-run"), 0),
-                (("test", "--profile", "debug", "--dry-run"), 0),
-                (("build", "--all"), 2),
-                (("build", "--BUILD_TYPE=Release"), 2),
-            ):
-                with self.subTest(project=name, args=args):
-                    result = subprocess.run(
-                        [sys.executable, str(root / "zbuild.py"), *args],
-                        cwd=root,
-                        env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
-                        capture_output=True,
-                        text=True,
-                    )
-                    self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+            with self.subTest(args=args):
+                result = subprocess.run(
+                    [sys.executable, str(FORGE / "zbuild.py"), *args],
+                    cwd=FORGE,
+                    env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"),
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

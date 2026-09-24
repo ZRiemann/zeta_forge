@@ -12,322 +12,206 @@ sys.path.insert(0, str(FORGE_ROOT / "common"))
 
 from zeta_forge.rust_workspace import (  # noqa: E402
     RustWorkspaceManager,
-    load_baseline,
+    load_catalog,
     load_rust_project,
+    load_toolchain,
     validate_rust_project,
 )
 
-BASELINE_ID = "1.97.1-r1"
-
 
 class RustWorkspaceTests(unittest.TestCase):
-    def create_baseline(
-        self,
-        forge_root: Path,
-        identifier: str,
-        *,
-        rust_version: str,
-        revision: int,
-    ) -> Path:
-        path = forge_root / "rust" / "baselines" / f"{identifier}.toml"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(
-            "[baseline]\n"
-            "schema = 1\n"
-            f'id = "{identifier}"\n'
-            f'rust-version = "{rust_version}"\n'
-            f"revision = {revision}\n"
-            'released = "2026-09-20"\n'
-            "[toolchain]\n"
-            f'channel = "{rust_version}"\n'
-            'profile = "minimal"\n'
-            'components = ["rustfmt", "clippy"]\n'
-            "[groups]\n"
-            "[group-requirements]\n"
-            "[cargo-tools]\n"
-            "[dependencies]\n",
-            encoding="utf-8",
-        )
-        return path
-
     def create_project(self, root: Path) -> None:
-        (root / "rust" / "crate" / "src").mkdir(parents=True)
+        crate = root / "rust" / "crate"
+        (crate / "src").mkdir(parents=True)
         (root / "zeta-rust.toml").write_text(
-            "schema = 1\n"
-            f'baseline = "{BASELINE_ID}"\n'
-            'manifest = "rust/Cargo.toml"\n'
+            'schema = 2\nmanifest = "rust/Cargo.toml"\n'
             'toolchain = "rust/rust-toolchain.toml"\n'
-            'dependency-groups = ["foundation", "async-runtime", "native-nng"]\n'
-            "native-dependencies = []\n",
-            encoding="utf-8",
+            'capabilities = ["dioxus-web-fullstack"]\n'
+            'native-dependencies = []\n', encoding="utf-8"
         )
         (root / "rust" / "rust-toolchain.toml").write_text(
             '[toolchain]\nchannel = "1.97.1"\nprofile = "minimal"\n'
-            'components = ["rustfmt", "clippy"]\n',
-            encoding="utf-8",
+            'components = ["rustfmt", "clippy"]\n', encoding="utf-8"
         )
         (root / "rust" / "Cargo.toml").write_text(
             '[workspace]\nmembers = ["crate"]\nresolver = "2"\n'
-            f'[workspace.metadata.zeta-forge]\nbaseline = "{BASELINE_ID}"\n'
-            "[workspace.dependencies]\n"
-            'thiserror = "=2.0.20"\n'
-            'tokio = { version = "=1.53.1", features = ["macros", "rt-multi-thread", "sync", "time"] }\n'
+            '[workspace.dependencies]\n'
+            'tokio = { version = "=1.53.1", features = ["macros"] }\n'
+            'dioxus = { version = "=0.7.10", default-features = false, features = ["lib"] }\n'
             'anng = { git = "https://github.com/nanomsg/nng-rs", '
             'rev = "a474ee0272d18f20c360837e2f602dc53ae3b9ec", '
-            'default-features = false, features = ["tokio"] }\n',
-            encoding="utf-8",
+            'default-features = false, features = ["tokio"] }\n'
+            'rusqlite = { version = "=0.40.2", features = ["bundled"] }\n',
+            encoding="utf-8"
         )
-        (root / "rust" / "crate" / "Cargo.toml").write_text(
+        (crate / "Cargo.toml").write_text(
             '[package]\nname = "sample"\nversion = "0.1.0"\nedition = "2021"\n'
-            "[dependencies]\nthiserror.workspace = true\n",
-            encoding="utf-8",
+            '[dependencies]\ntokio.workspace = true\n', encoding="utf-8"
         )
-        (root / "rust" / "crate" / "src" / "lib.rs").write_text("", encoding="utf-8")
+        (crate / "src" / "lib.rs").write_text("", encoding="utf-8")
         (root / "rust" / "Cargo.lock").write_text("version = 4\n", encoding="utf-8")
 
-    def test_valid_project_uses_forge_baseline(self) -> None:
+    def manager(self, root: Path) -> RustWorkspaceManager:
+        config = mock.Mock()
+        config.env = {}
+        config.install_prefix = root / "install"
+        return RustWorkspaceManager(load_rust_project(root, FORGE_ROOT), config)
+
+    def replace(self, root: Path, old: str, new: str) -> None:
+        manifest = root / "rust" / "Cargo.toml"
+        manifest.write_text(manifest.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+
+    def test_parallel_approved_versions(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_project(root)
-            project = load_rust_project(root, FORGE_ROOT)
-            validate_rust_project(project)
-            self.assertEqual(project.baseline.identifier, BASELINE_ID)
-            self.assertEqual(project.baseline.rust_version, "1.97.1")
-            self.assertEqual(project.baseline.revision, 1)
-            self.assertEqual(project.baseline.cargo_tools["dioxus-cli"]["version"], "0.7.10")
-            self.assertEqual(project.baseline.groups["dioxus-web-fullstack"], ("dioxus",))
-            self.assertEqual(
-                project.baseline.group_requirements["dioxus-web-fullstack"],
-                {
-                    "cargo-tools": ("dioxus-cli",),
-                    "rust-targets": ("wasm32-unknown-unknown",),
-                },
-            )
+            validate_rust_project(load_rust_project(root, FORGE_ROOT))
+            self.assertEqual(len(load_catalog(FORGE_ROOT).dependencies["tokio"]), 2)
+            self.replace(root, "=1.53.1", "=1.52.1")
+            validate_rust_project(load_rust_project(root, FORGE_ROOT))
 
-    def create_manager(self, root: Path) -> RustWorkspaceManager:
-        project = load_rust_project(root, FORGE_ROOT)
-        repo_config = mock.Mock()
-        repo_config.env = {"TEST_ENV": "1"}
-        repo_config.install_prefix = root / "install"
-        return RustWorkspaceManager(project, repo_config)
-
-    def test_selects_exact_baseline_from_multiple_versions(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            forge_root = Path(directory)
-            self.create_baseline(
-                forge_root,
-                "1.97.1-r1",
-                rust_version="1.97.1",
-                revision=1,
-            )
-            self.create_baseline(
-                forge_root,
-                "1.98.0-r1",
-                rust_version="1.98.0",
-                revision=1,
-            )
-
-            baseline = load_baseline(forge_root, "1.98.0-r1")
-
-            self.assertEqual(baseline.identifier, "1.98.0-r1")
-            self.assertEqual(baseline.rust_version, "1.98.0")
-
-    def test_legacy_or_unknown_baseline_lists_available_versions(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_project(root)
-            config = root / "zeta-rust.toml"
-            config.write_text(
-                config.read_text(encoding="utf-8").replace(BASELINE_ID, "2026.09"),
-                encoding="utf-8",
-            )
-
-            with self.assertRaisesRegex(
-                RuntimeError,
-                r"Unknown Rust baseline '2026\.09'.*available: 1\.97\.1-r1",
-            ):
-                load_rust_project(root, FORGE_ROOT)
-
-    def test_baseline_metadata_must_match_identifier(self) -> None:
+    def test_unapproved_version_git_source_and_revision(self) -> None:
         cases = (
-            ('id = "1.97.1-r1"', 'id = "1.97.1-r2"', "id does not match"),
-            (
-                'rust-version = "1.97.1"',
-                'rust-version = "1.98.0"',
-                "version does not match",
-            ),
-            ("revision = 1", "revision = 2", "revision does not match"),
-            (
-                'channel = "1.97.1"',
-                'channel = "1.98.0"',
-                "toolchain channel does not match",
-            ),
-            (
-                'released = "2026-09-20"',
-                'released = "2026-99-99"',
-                "Invalid Rust baseline release date",
-            ),
+            ("=1.53.1", "=1.54.0"),
+            ("a474ee0272d18f20c360837e2f602dc53ae3b9ec", "0" * 40),
+            ("https://github.com/nanomsg/nng-rs", "https://example.com/other"),
         )
-        for original, replacement, expected_error in cases:
-            with (
-                self.subTest(replacement=replacement),
-                tempfile.TemporaryDirectory() as directory,
-            ):
-                forge_root = Path(directory)
-                path = self.create_baseline(
-                    forge_root,
-                    BASELINE_ID,
-                    rust_version="1.97.1",
-                    revision=1,
-                )
-                path.write_text(
-                    path.read_text(encoding="utf-8").replace(original, replacement),
-                    encoding="utf-8",
-                )
+        for old, new in cases:
+            with self.subTest(new=new), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.create_project(root)
+                self.replace(root, old, new)
+                with self.assertRaisesRegex(RuntimeError, "not approved"):
+                    validate_rust_project(load_rust_project(root, FORGE_ROOT))
 
-                with self.assertRaisesRegex(RuntimeError, expected_error):
-                    load_baseline(forge_root, BASELINE_ID)
+    def test_required_features_and_native_source_constraint(self) -> None:
+        cases = (
+            ('features = ["bundled"]', 'features = []'),
+            ('features = ["tokio"]', 'features = []'),
+            ('default-features = false, features = ["tokio"]', 'features = ["tokio"]'),
+        )
+        for old, new in cases:
+            with self.subTest(old=old), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                self.create_project(root)
+                self.replace(root, old, new)
+                with self.assertRaisesRegex(RuntimeError, "not approved"):
+                    validate_rust_project(load_rust_project(root, FORGE_ROOT))
 
-    def test_project_toolchain_and_workspace_metadata_must_match_baseline(self) -> None:
+    def test_member_inheritance_and_toolchain(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_project(root)
-            toolchain = root / "rust" / "rust-toolchain.toml"
-            toolchain.write_text(
-                toolchain.read_text(encoding="utf-8").replace("1.97.1", "1.98.0"),
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(RuntimeError, "toolchain does not match"):
-                validate_rust_project(load_rust_project(root, FORGE_ROOT))
-
-            toolchain.write_text(
-                toolchain.read_text(encoding="utf-8").replace("1.98.0", "1.97.1"),
-                encoding="utf-8",
-            )
-            manifest = root / "rust" / "Cargo.toml"
-            manifest.write_text(
-                manifest.read_text(encoding="utf-8").replace(BASELINE_ID, "1.97.1-r2"),
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(RuntimeError, "metadata is missing or stale"):
-                validate_rust_project(load_rust_project(root, FORGE_ROOT))
-
-    def test_cargo_tool_uses_baseline_install_root(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_project(root)
-            manager = self.create_manager(root)
-            executable = manager.cargo_tool_root / "bin" / "dx"
-            executable.parent.mkdir(parents=True)
-            executable.write_text("", encoding="utf-8")
-            executable.chmod(0o755)
-            completed = subprocess.CompletedProcess(
-                args=(),
-                returncode=0,
-                stdout="dioxus 0.7.10\n",
-            )
-            with mock.patch(
-                "zeta_forge.rust_workspace.run_command",
-                return_value=completed,
-            ) as run:
-                resolved = manager.require_cargo_tool("dioxus-cli")
-
-            self.assertEqual(resolved, str(executable))
-            self.assertEqual(run.call_args.args[0], [executable, "--version"])
-
-    def test_cargo_tool_does_not_fall_back_to_path(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_project(root)
-            manager = self.create_manager(root)
-            with (
-                mock.patch(
-                    "zeta_forge.rust_workspace.shutil.which",
-                    return_value="/usr/local/bin/dx",
-                ) as which,
-                self.assertRaisesRegex(RuntimeError, "missing or not executable") as raised,
-            ):
-                manager.require_cargo_tool("dioxus-cli")
-
-            which.assert_not_called()
-            self.assertIn(f"--root {manager.cargo_tool_root}", str(raised.exception))
-
-    def test_cargo_tool_rejects_non_executable_or_wrong_version(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_project(root)
-            manager = self.create_manager(root)
-            executable = manager.cargo_tool_root / "bin" / "dx"
-            executable.parent.mkdir(parents=True)
-            executable.write_text("", encoding="utf-8")
-            executable.chmod(0o644)
-            with self.assertRaisesRegex(RuntimeError, "missing or not executable"):
-                manager.require_cargo_tool("dioxus-cli")
-
-            executable.chmod(0o755)
-            completed = subprocess.CompletedProcess(
-                args=(),
-                returncode=0,
-                stdout="dioxus 0.8.0\n",
-            )
-            with (
-                mock.patch(
-                    "zeta_forge.rust_workspace.run_command",
-                    return_value=completed,
-                ),
-                self.assertRaisesRegex(RuntimeError, "must be version 0.7.10") as raised,
-            ):
-                manager.require_cargo_tool("dioxus-cli")
-
-            self.assertIn(f"--root {manager.cargo_tool_root}", str(raised.exception))
-
-    def test_member_cannot_declare_independent_dependency_version(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_project(root)
-            manifest = root / "rust" / "crate" / "Cargo.toml"
-            manifest.write_text(
-                manifest.read_text(encoding="utf-8").replace(
-                    "thiserror.workspace = true", 'thiserror = "2"'
-                ),
-                encoding="utf-8",
-            )
+            member = root / "rust" / "crate" / "Cargo.toml"
+            member.write_text(member.read_text(encoding="utf-8").replace(
+                "tokio.workspace = true", 'tokio = "=1.53.1"'
+            ), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "must inherit"):
                 validate_rust_project(load_rust_project(root, FORGE_ROOT))
-
-    def test_project_cannot_select_unknown_dependency_group(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_project(root)
-            config = root / "zeta-rust.toml"
-            config.write_text(
-                config.read_text(encoding="utf-8").replace('"foundation"', '"unknown"'),
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(RuntimeError, "Unknown Rust dependency group"):
-                validate_rust_project(load_rust_project(root, FORGE_ROOT))
-
-    def test_project_rejects_obsolete_default_profile(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            self.create_project(root)
-            config = root / "zeta-rust.toml"
-            config.write_text(
-                config.read_text(encoding="utf-8") + 'default-profile = "release"\n',
-                encoding="utf-8",
-            )
-            with self.assertRaisesRegex(RuntimeError, "default-profile"):
+            toolchain = root / "rust" / "rust-toolchain.toml"
+            toolchain.write_text(toolchain.read_text(encoding="utf-8").replace("1.97.1", "1.98.0"), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "not approved"):
                 load_rust_project(root, FORGE_ROOT)
 
-    def test_target_dependency_must_use_workspace_baseline(self) -> None:
+    def test_member_unknown_workspace_dependency_and_local_escape(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_project(root)
-            manifest = root / "rust" / "crate" / "Cargo.toml"
-            with manifest.open("a", encoding="utf-8") as stream:
-                stream.write('\n[target."cfg(unix)".dependencies]\ntokio = "1"\n')
+            member = root / "rust" / "crate" / "Cargo.toml"
+            member.write_text(member.read_text(encoding="utf-8").replace(
+                "tokio.workspace = true", "unknown.workspace = true"
+            ), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "must inherit"):
                 validate_rust_project(load_rust_project(root, FORGE_ROOT))
+            member.write_text(member.read_text(encoding="utf-8").replace(
+                "unknown.workspace = true", 'local = { path = "../../../../outside" }'
+            ), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "escapes project root"):
+                validate_rust_project(load_rust_project(root, FORGE_ROOT))
+
+    def test_catalog_duplicate_and_invalid_git_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "rust").mkdir()
+            source = (FORGE_ROOT / "rust" / "catalog.toml").read_text(encoding="utf-8")
+            catalog = root / "rust" / "catalog.toml"
+            catalog.write_text(source + '\n[[dependencies]]\nname = "tokio"\nversion = "=1.53.1"\n', encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "Duplicate"):
+                load_catalog(root)
+            catalog.write_text(source.replace("a474ee0272d18f20c360837e2f602dc53ae3b9ec", "short"), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "full revision"):
+                load_catalog(root)
+
+    def test_toolchain_filename_and_capability(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            folder = root / "rust" / "toolchains"
+            folder.mkdir(parents=True)
+            (folder / "1.97.1.toml").write_text('[toolchain]\nchannel = "1.98.0"\n', encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "does not match filename"):
+                load_toolchain(root, "1.97.1")
+            self.create_project(root)
+            config = root / "zeta-rust.toml"
+            config.write_text(config.read_text(encoding="utf-8").replace("dioxus-web-fullstack", "unknown"), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "Unknown Rust capability"):
+                validate_rust_project(load_rust_project(root, FORGE_ROOT))
+
+    def test_old_schema_and_workspace_metadata_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_project(root)
+            config = root / "zeta-rust.toml"
+            config.write_text(config.read_text(encoding="utf-8").replace("schema = 2", "schema = 1"), encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "Unsupported Rust project schema"):
+                load_rust_project(root, FORGE_ROOT)
+            config.write_text(config.read_text(encoding="utf-8").replace("schema = 1", "schema = 2"), encoding="utf-8")
+            manifest = root / "rust" / "Cargo.toml"
+            manifest.write_text(manifest.read_text(encoding="utf-8") + '\n[workspace.metadata.zeta-forge]\nbaseline = "old"\n', encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "Obsolete"):
+                validate_rust_project(load_rust_project(root, FORGE_ROOT))
+
+    def test_cargo_tool_path_and_no_path_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_project(root)
+            manager = self.manager(root)
+            tool_root = manager.cargo_tool_root("dioxus-cli", "0.7.10")
+            self.assertIn("rust-tools/1.97.1/dioxus-cli/0.7.10", str(tool_root))
+            with mock.patch("zeta_forge.rust_workspace.shutil.which") as which:
+                with self.assertRaisesRegex(RuntimeError, "missing or not executable"):
+                    manager.require_cargo_tool("dioxus-cli")
+                which.assert_not_called()
+            executable = tool_root / "bin" / "dx"
+            executable.parent.mkdir(parents=True)
+            executable.write_text("", encoding="utf-8")
+            executable.chmod(0o755)
+            completed = subprocess.CompletedProcess(args=(), returncode=0, stdout="dioxus 0.7.10\n")
+            with mock.patch("zeta_forge.rust_workspace.run_command", return_value=completed):
+                self.assertEqual(manager.require_cargo_tool("dioxus-cli"), str(executable))
+            wrong = subprocess.CompletedProcess(args=(), returncode=0, stdout="dioxus 0.8.0\n")
+            with mock.patch("zeta_forge.rust_workspace.run_command", return_value=wrong):
+                with self.assertRaisesRegex(RuntimeError, "must be version 0.7.10"):
+                    manager.require_cargo_tool("dioxus-cli")
+
+    def test_web_target_and_desktop_capability(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_project(root)
+            manager = self.manager(root)
+            completed = subprocess.CompletedProcess(args=(), returncode=0, stdout="rustc 1.97.1\n")
+            with mock.patch("zeta_forge.rust_workspace.run_command", return_value=completed):
+                with mock.patch.object(manager, "require_cargo_tool"), mock.patch.object(manager, "require_rust_target") as target:
+                    manager.doctor()
+                    target.assert_called_once_with("wasm32-unknown-unknown")
+                    target.reset_mock()
+                    manager.doctor(application_tools=False)
+                    target.assert_not_called()
+                config = root / "zeta-rust.toml"
+                config.write_text(config.read_text(encoding="utf-8").replace("dioxus-web-fullstack", "dioxus-desktop"), encoding="utf-8")
+                desktop = self.manager(root)
+                with mock.patch.object(desktop, "require_cargo_tool"), mock.patch.object(desktop, "require_rust_target") as target:
+                    desktop.doctor()
+                    target.assert_not_called()
 
 
 if __name__ == "__main__":

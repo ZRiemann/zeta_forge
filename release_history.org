@@ -3,6 +3,23 @@
 
 * Release History
 
+** v1.2.0 - 2026-09-24
+*** 发布定位摘要
+- 将 Rust 治理从整套版本基线改为工具链定义与可并存的直接依赖批准目录。
+
+*** 变更内容
+- 新增 =rust/toolchains/1.97.1.toml= 与 =rust/catalog.toml=，批准精确 crate 版本、Git revision、Cargo 工具和 Dioxus 能力。
+- 使用 schema 2 的 =zeta-rust.toml= 和项目 =[workspace.dependencies]= 选择已批准的依赖，并校验必要 feature、工具链和能力要求。
+- Cargo 工具改按工具链、工具名和版本隔离；Rust metadata 报告工具链、能力和依赖。
+- 更新 Rust 工作区测试及中英文接入文档。
+
+*** 兼容性与升级说明
+- 删除 =rust/baselines/1.97.1-r1.toml=、=1.97.1-r2.toml= 和 =1.97.1-r3.toml=；旧的 schema 1 项目配置与 Cargo 工具安装目录不再受支持。
+- 消费项目须迁移到 schema 2，使用项目工具链文件和 Forge 目录中批准的直接依赖；需要 Dioxus 的项目须按新目录安装 CLI。
+
+*** 验证
+- =python3 -m unittest discover -s tests=：35 项通过；未运行完整构建。
+
 ** v1.1.1 - 2026-09-24
 *** 变更内容
 - Forge 构建契约测试只运行自身入口，不再依赖兄弟仓库的检出状态或分支。

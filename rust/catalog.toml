@@ -1,0 +1,105 @@
+schema = 1
+
+[[dependencies]]
+name = "thiserror"
+version = "=2.0.20"
+
+[[dependencies]]
+name = "tokio"
+version = "=1.53.1"
+
+[[dependencies]]
+name = "tokio"
+version = "=1.52.1"
+
+[[dependencies]]
+name = "anng"
+git = "https://github.com/nanomsg/nng-rs"
+rev = "a474ee0272d18f20c360837e2f602dc53ae3b9ec"
+default-features = false
+required-features = ["tokio"]
+
+[[dependencies]]
+name = "dioxus"
+version = "=0.7.10"
+
+[[dependencies]]
+name = "futures-timer"
+version = "=3.0.4"
+
+[[dependencies]]
+name = "serde"
+version = "=1.0.229"
+
+[[dependencies]]
+name = "serde"
+version = "=1.0.228"
+
+[[dependencies]]
+name = "serde_json"
+version = "=1.0.151"
+
+[[dependencies]]
+name = "rusqlite"
+version = "=0.40.2"
+required-features = ["bundled"]
+
+[[dependencies]]
+name = "anyhow"
+version = "=1.0.102"
+
+[[dependencies]]
+name = "bytes"
+version = "=1.11.1"
+
+[[dependencies]]
+name = "clap"
+version = "=4.6.1"
+
+[[dependencies]]
+name = "futures"
+version = "=0.3.32"
+
+[[dependencies]]
+name = "libc"
+version = "=0.2.185"
+
+[[dependencies]]
+name = "ring"
+version = "=0.17.14"
+
+[[dependencies]]
+name = "rustls"
+version = "=0.23.38"
+
+[[dependencies]]
+name = "rustls-pemfile"
+version = "=2.2.0"
+
+[[dependencies]]
+name = "time"
+version = "=0.3.47"
+
+[[dependencies]]
+name = "tokio-rustls"
+version = "=0.26.4"
+
+[[dependencies]]
+name = "toml"
+version = "=0.8.23"
+
+[[cargo-tools]]
+name = "dioxus-cli"
+version = "0.7.10"
+executable = "dx"
+crate = "dioxus"
+crate-version = "=0.7.10"
+
+[capabilities.dioxus-desktop]
+crate = "dioxus"
+cargo-tool = "dioxus-cli"
+
+[capabilities.dioxus-web-fullstack]
+crate = "dioxus"
+cargo-tool = "dioxus-cli"
+rust-targets = ["wasm32-unknown-unknown"]

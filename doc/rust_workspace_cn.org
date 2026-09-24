@@ -1,97 +1,53 @@
 #+STARTUP: indent
 #+TITLE: Zeta Forge Rust 工程治理
 
-* 目标
+* 目标与归属
 
-=zeta_forge= 是 ZetaX Rust 工具链、第三方 crate 版本和工程检查规则的唯一来源。
-业务仓库拥有自己的 Rust 源码、workspace 成员、功能组合和 =Cargo.lock=，但不再独立选择
-工具链或第三方直接依赖版本。
+=zeta_forge= 统一批准 Rust 工具链、第三方直接 crate 的精确版本与来源，以及应用能力所需的 Cargo 工具。业务仓库拥有源码、workspace 成员、普通 Cargo feature 组合和提交的 =Cargo.lock=。Cargo 解析完整依赖图；Forge 校验直接依赖是否在批准目录内。Conan 只管理 C/C++ package。
 
-该模式保留 Cargo 的原生工作方式：Cargo 继续解析 crate 和维护 lockfile；forge 负责统一
-约束、环境和执行入口。Conan 只管理 C/C++ package，不管理纯 Rust crate。
+* 工具链与依赖目录
 
-* 公共基线
-
-不可变公共基线位于 =rust/baselines/<rust-version>-r<revision>.toml=。文件名、内部 ID、
-Rust 精确版本和修订号必须一致；forge 不提供隐式 current baseline 或旧 ID 回退。每个基线包含：
-
-- Rust channel、profile、rustfmt 和 Clippy component；
-- 第三方直接依赖的版本、来源、Git revision 和基础 feature；
-- 按能力划分的依赖组。
-- Cargo 安装工具的可执行文件与版本；当前 Dioxus CLI 固定为 0.7.10。
-
-业务项目通过仓库根目录 =zeta-rust.toml= 精确选择基线和依赖组。例如：
+=rust/toolchains/<channel>.toml= 固定 Rust channel、profile 和 component。项目的 =rust-toolchain.toml= 必须与选中的 Forge 文件完全一致。=rust/catalog.toml= 的每个依赖条目批准一个 crate 的精确 registry 版本或 HTTPS Git URL 加完整 commit；同一 crate 可以有多个已批准版本。项目可选择其中一个版本，增加普通 feature 不需要新增目录条目。目录中的 =required-features= 与 =default-features= 仅用于明确必需的约束，例如 =rusqlite/bundled= 和原生 NNG binding。
 
 #+begin_src toml
-schema = 1
-baseline = "1.97.1-r1"
-manifest = "rust/Cargo.toml"
-toolchain = "rust/rust-toolchain.toml"
-dependency-groups = ["foundation", "async-runtime", "native-nng", "dioxus-desktop"]
+[[dependencies]]
+name = "rusqlite"
+version = "=0.40.2"
+required-features = ["bundled"]
+
+[[dependencies]]
+name = "anng"
+git = "https://github.com/nanomsg/nng-rs"
+rev = "a474ee0272d18f20c360837e2f602dc53ae3b9ec"
+default-features = false
+required-features = ["tokio"]
+#+end_src
+
+项目根目录的 =zeta-rust.toml= 使用 schema 2：
+
+#+begin_src toml
+schema = 2
+manifest = "frontend/Cargo.toml"
+toolchain = "frontend/rust-toolchain.toml"
+capabilities = ["dioxus-desktop"]
 native-dependencies = ["nng", "openssl-conan"]
 #+end_src
 
-项目 workspace 必须在 =[workspace.metadata.zeta-forge]= 中记录同一基线。所有成员 crate
-通过 =workspace = true= 使用第三方直接依赖；业务仓库内的 crate 之间使用 =path= 依赖。
-workspace 必须提交一个 =Cargo.lock=。
+Cargo workspace 的 =[workspace.dependencies]= 精确选择 Forge 已批准的版本或来源。成员 crate 必须通过 =workspace = true= 继承第三方依赖；仓库内的 crate 通过 =path= 依赖。提交 =Cargo.lock=，执行命令使用 =--locked=。新增直接依赖时先在 Forge 审批条目，再修改项目 Cargo manifest 和 lockfile；不创建整套依赖快照。
 
-Cargo 安装工具按 baseline 隔离在
-=${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust/<baseline-id>/bin=，不会回退到全局 =PATH=。
-当前基线的 Dioxus CLI 安装命令为：
+* 应用能力与工具
+
+=dioxus-desktop= 要求 workspace 采用已批准的 Dioxus，并检查匹配版本的 Dioxus CLI。=dioxus-web-fullstack= 另外检查所选 Rust 工具链的 =wasm32-unknown-unknown= target。业务项目自行选择 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 等应用 feature。
+
+Cargo 工具按工具链、名称、版本隔离在 =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>/bin=。不回退全局 =PATH=，缺失时 =doctor= 会给出安装命令。例如：
 
 #+begin_src bash
 cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked \
-  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust/1.97.1-r1"
+  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
 #+end_src
 
-* 命令
+* 命令与升级
 
-在所属项目使用其薄入口；从 Forge 目录也应调用项目自己的入口：
+项目通过自己的 =./zbuild.py doctor=、=metadata=、=check=、=build=、=test= 调用 Forge 公共引擎。公共 CLI 默认 release；=--profile debug= 映射 Cargo dev。=doctor= 只读检查工具链、能力工具和原生库；=metadata= 不修改锁文件。构建与检查使用项目已提交的锁文件。
 
-#+begin_src bash
-../zeta_trader/zbuild.py doctor zeta_owl
-../zeta_trader/zbuild.py metadata zeta_owl
-../zeta_trader/zbuild.py check zeta_owl --profile release
-../zeta_trader/zbuild.py build zeta_owl --profile release
-../zeta_trader/zbuild.py rebuild zeta_owl --profile release
-../zeta_trader/zbuild.py test zeta_owl --profile release
-#+end_src
-
-=doctor= 只读检查工具链和依赖；=metadata= 输出声明的工程、依赖和产物路径，不修改锁文件。
-=check= 检查整个 workspace 的格式，并检查所选包及声明的共用测试包；=test= 使用宿主机
-正确性测试。=build= 生成所选成果及资源，=rebuild= 清理所属工程的所选 profile 后重建。
-公共 CLI 默认 release；=--profile debug= 映射 Cargo dev。清理不会删除另一 profile 或依赖缓存。
-所有 Cargo 命令通过基线指定的 rustup toolchain 执行，不依赖用户全局默认版本。
-
-Web/Fullstack 项目选择 =dioxus-web-fullstack= 依赖组，并在自己的 application feature
-中组合 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 和 =dioxus/router=。
-=doctor= 会按依赖组检查 Dioxus CLI 和 Web target，避免工具链基础检查通过但应用
-仍无法构建或启动。
-
-项目自己的 =zbuild.py= 可以复用 =zeta_forge.rust_engine.RustEngine=，组合
-业务所需的资源生成、运行参数和验收流程。公共模块不感知业务 crate 或应用名称。
-
-* 原生依赖
-
-Rust binding 复用 forge 管理的原生库。当前 =nng= profile 要求安装前缀中存在 NNG header
-和静态库，并向 Cargo child process 设置 =NNG_NO_VENDOR=1=、=NNG_DIR= 和 =NNG_STATIC=1=。
-缺失时给出 forge 的安装命令，不自动安装、不回退到 Cargo vendored build。
-
-=openssl-conan= profile 从先执行 =./zbuild.py build deps --profile release=，再执行
-=./zbuild.py install deps --profile release= 所发布的清单读取
-Conan OpenSSL 版本及包目录；Rust 的 =dev= 和 =release= 均使用这套 Release 静态库。
-构建器为 Cargo 设置同源的 =OPENSSL_DIR=、=OPENSSL_LIB_DIR=、=OPENSSL_INCLUDE_DIR=、
-=OPENSSL_STATIC=1= 和 =OPENSSL_NO_VENDOR=1=，拒绝冲突的环境覆盖。gRPC 的 BoringSSL 安装不受影响。
-
-* 升级规则
-
-升级工具链或受管 crate 时，新增一个 =<rust-version>-r<revision>= 基线并验证公共测试，
-不原地修改已经发布的基线。同一 Rust 版本的依赖修订递增 =rN=；Rust 版本变化时从 =r1=
-开始。随后在业务仓库中同步 =zeta-rust.toml=、workspace metadata、=Cargo.toml=、
-=rust-toolchain.toml= 和 =Cargo.lock=。未迁移的项目继续选择其原基线；不存在的旧 ID 会在
-检查阶段明确失败。日常 check/test 不修改项目文件或 lockfile。
-
-* Cat 基线
-
-=1.97.1-r2= 是 Cat 现有 Cargo.lock 的直接依赖与 feature 快照，使用同一 Rust 1.97.1。
-它不升级 Cat 业务依赖，也不替换 trader/practice 使用的 =1.97.1-r1=。修订不可原地改写。
+升级工具链时新增相应工具链定义并同步项目 =rust-toolchain.toml=。升级或新增直接 crate 时在目录中批准新精确条目，并由需要它的项目显式采用；未采用的项目不受影响。旧版本条目只有在所有消费者迁出后才可删除。Forge 不读取旧的 =rN= 整套基线格式，也不读取旧的 Cargo 工具安装目录。

@@ -88,11 +88,11 @@ git submodule update --init --recursive
 本仓库中的工作区目标入口默认都使用托管的 =3rd/*= submodules 作为源码输入。
 工作区编排入口统一放在 =builder/= 目录下。
 公共 CMake helper 模块位于 =cmake_util/=。该目录是遗留独立 =cmake_util= 项目的 ZetaX 维护副本，后续更新在 =zeta_forge= 内进行。
-Rust 治理配置位于 =rust/=，公共实现位于 =common/zeta_forge/rust_workspace.py=。外部 Rust 项目保留源码和 lockfile，通过 =zeta-rust.toml= 采用 forge 基线。
+Rust 治理配置位于 =rust/=，公共实现位于 =common/zeta_forge/rust_workspace.py=。外部 Rust 项目保留源码和 lockfile，通过 =zeta-rust.toml= 使用 Forge 批准的依赖目录。
 
 * Rust 项目管理
 
-=rust/baselines/<rust-version>-r<revision>.toml= 是不可变的 Rust toolchain、component、第三方直接 crate 声明、Git revision、Cargo 安装工具和依赖组来源。业务仓库通过 =zeta-rust.toml= 精确选择一个 baseline，并声明 workspace、toolchain 文件、默认 build profile、依赖组和原生库需求；forge 不提供隐式 current baseline 或旧 ID 回退。
+=rust/toolchains/= 管理精确 Rust 工具链；=rust/catalog.toml= 批准可并存的 crate 精确版本、Git revision、必要 feature 约束、Cargo 工具和应用能力。业务仓库通过 schema 2 的 =zeta-rust.toml= 声明 workspace、toolchain 文件、能力和原生库需求，通过 =[workspace.dependencies]= 选择已批准版本。
 
 #+begin_src bash
 ../zeta_trader/zbuild.py doctor zeta_owl
@@ -107,12 +107,12 @@ Rust 治理配置位于 =rust/=，公共实现位于 =common/zeta_forge/rust_wor
 workspace 产物；=rebuild= 只清理指定 profile 的 workspace member 后重新构建，不清除 Cargo
 下载源码缓存。公共 CLI 默认 release，debug 映射到 Cargo dev。
 
-业务仓库拥有 workspace 成员、应用 feature、源码和 =Cargo.lock=。成员 crate 必须从 workspace 继承第三方依赖，workspace 声明必须与 forge 基线一致。Cargo 继续负责 Rust package 解析，Conan 继续负责 native C/C++ package；NNG 等原生库由 forge 安装并传递给 Rust binding，禁止重复 vendored build。
+业务仓库拥有 workspace 成员、应用 feature、源码和 =Cargo.lock=。成员 crate 必须从 workspace 继承第三方依赖；所有非本地直接依赖必须匹配 Forge 目录。Cargo 继续负责 Rust package 解析，Conan 继续负责 native C/C++ package；NNG 等原生库由 forge 安装并传递给 Rust binding，禁止重复 vendored build。
 
-=dioxus-web-fullstack= 依赖组允许 Web/Fullstack 应用使用基线中统一管理的 Dioxus。
+=dioxus-web-fullstack= 能力检查已批准的 Dioxus、CLI 和 Web target。
 业务项目仍然拥有 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 和
 =dioxus/router= 等平台 feature 组合；这些 feature 不形成另一套依赖版本。
-Forge =rust doctor= 还会检查固定版本的 Dioxus CLI；Web 项目同时检查基线工具链的
+Forge =rust doctor= 还会检查固定版本的 Dioxus CLI；Web 项目同时检查所选工具链的
 =wasm32-unknown-unknown= target。
 
 * ZetaX 工作区根目录

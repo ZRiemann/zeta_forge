@@ -89,27 +89,28 @@ External ZetaX projects such as =zpp= live next to =zeta_forge= under =ZETAX_ROO
 The workspace target entrypoints in this repository use the managed =3rd/*= submodules by default.
 The workspace orchestration entrypoints live under =builder/=.
 Shared CMake helper modules live under =cmake_util/=. This directory is the maintained ZetaX copy of the legacy standalone =cmake_util= project.
-Rust governance lives under =rust/= and =common/zeta_forge/rust_workspace.py=. External Rust projects keep their source and lockfile while adopting the forge baseline through =zeta-rust.toml=.
+Rust governance lives under =rust/= and =common/zeta_forge/rust_workspace.py=. External Rust projects keep their source and lockfile while adopting Forge's approved dependency catalog through =zeta-rust.toml=.
 
 * Rust Project Management
 
-Immutable Rust baselines live under =rust/baselines/<rust-version>-r<revision>.toml=.
-Each baseline owns one exact Rust toolchain, required components, approved
-direct crate declarations, Git revisions, dependency groups, and Cargo tools.
-A managed project selects one exact baseline in =zeta-rust.toml= and records
-its workspace, toolchain file, dependency groups and native-library requirements.
-The shared CLI alone owns the release/debug default. There is no implicit current baseline or legacy ID
-fallback; the initial versioned baseline is =1.97.1-r1=.
+Forge approves exact toolchains under =rust/toolchains/= and direct crate versions,
+Git revisions, Cargo tools and application capabilities in =rust/catalog.toml=.
+The catalog may approve multiple exact versions of one crate. A project's
+=zeta-rust.toml= (schema 2) records its workspace, toolchain file, capabilities
+and native-library requirements. Its =[workspace.dependencies]= selects approved
+versions; =Cargo.lock= retains the resolved graph. Project-owned Cargo features
+are allowed except for explicit catalog requirements such as bundled SQLite and
+the native NNG binding's disabled default features. The shared CLI owns the
+release/debug default.
 
 Cargo-installed tools such as Dioxus CLI are isolated under
-=${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust/<baseline-id>=. Project commands
+=${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>=. Project commands
 ignore executables with the same name on the global =PATH= and validate the
-baseline-specific executable only when its capability is requested. For the
-initial baseline, install Dioxus CLI with:
+isolated executable only when its capability is requested. Install Dioxus CLI with:
 
 #+begin_src bash
 cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked \
-  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust/1.97.1-r1"
+  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
 #+end_src
 
 #+begin_src bash
@@ -129,22 +130,18 @@ to =release=; choose =--profile debug= for Cargo's dev profile.
 
 Projects own their workspace members, application features, source code, and
 =Cargo.lock=. Member crates inherit third-party dependencies from the workspace;
-the workspace declaration must match the forge baseline. Cargo remains the
+each external workspace dependency must match the Forge catalog. Cargo remains the
 Rust package resolver, while Conan remains responsible for native C/C++
 packages. Forge passes managed native installations such as NNG to Rust
 bindings without enabling a second vendored build.
 
-The =dioxus-web-fullstack= group approves the managed Dioxus dependency for
-Web/Fullstack applications. Projects continue to own their platform feature
+The =dioxus-web-fullstack= capability checks the approved Dioxus dependency,
+CLI and Web target. Projects continue to own their platform feature
 composition, such as =dioxus/web=, =dioxus/server=, =dioxus/fullstack=, and
 =dioxus/router=; those features do not establish a separate dependency version.
 Project =doctor= also verifies the pinned Dioxus CLI and, for Web projects,
-the baseline toolchain's =wasm32-unknown-unknown= target.
-
-The =1.97.1-r3= baseline extends the =r1= Web/Fullstack dependency set with
-the =sqlite= group (=rusqlite 0.40.2= with bundled SQLite). Server-side projects
-select both groups in =zeta-rust.toml= and inherit =rusqlite= from the workspace
-manifest. Earlier immutable baselines remain available.
+the selected toolchain's =wasm32-unknown-unknown= target. SQLite projects select
+the approved =rusqlite= version directly and enable its required =bundled= feature.
 
 * ZetaX Workspace Root
 

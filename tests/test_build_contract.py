@@ -168,6 +168,24 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(cargo.call_count, 1)
             self.assertNotIn("wasm32-unknown-unknown", cargo.call_args.args)
 
+    def test_dioxus_target_requires_matching_capability(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            engine = RustEngine(
+                root,
+                mock.Mock(),
+                {"app": RustTarget("app", root, "fullstack", ("web",))},
+                root / "target",
+            )
+            manager = mock.Mock()
+            manager.project.capabilities = ()
+            with mock.patch.object(engine, "manager", return_value=manager):
+                with self.assertRaisesRegex(RuntimeError, "requires capability"):
+                    engine.preflight(request("doctor"), ("app",))
+                manager.project.capabilities = ("dioxus-web-fullstack",)
+                engine.preflight(request("doctor"), ("app",))
+                manager.doctor.assert_called_once_with(application_tools=True)
+
     def test_run_never_builds_and_preserves_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

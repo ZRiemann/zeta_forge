@@ -11,7 +11,13 @@ from .build_cli import Request
 from .build_ops import remove_generated, run_program, validate_generated_path
 from .config import RepoConfig
 from .process import require_command, run_command
-from .rust_workspace import RustWorkspaceManager, _native_environment, load_rust_project
+from .rust_workspace import (
+    RustWorkspaceManager,
+    _native_environment,
+    load_rust_project,
+    validate_rust_project,
+    workspace_dependencies,
+)
 
 RUST_ACTIONS = ("doctor", "check", "build", "rebuild", "test", "run", "dev", "clean", "fetch")
 
@@ -89,15 +95,16 @@ class RustEngine:
         }
         if request.action == "metadata":
             project = self.manager().project
+            validate_rust_project(project)
             result.update(
                 manifest=str(project.manifest),
-                baseline=project.baseline.identifier,
+                toolchain=project.toolchain_spec["channel"],
                 native_dependencies=project.native_dependencies,
-                dependency_groups=project.dependency_groups,
+                capabilities=project.capabilities,
                 dependencies={
-                    name: project.baseline.dependencies[name]
-                    for group in project.dependency_groups
-                    for name in project.baseline.groups[group]
+                    name: value
+                    for name, value in workspace_dependencies(project).items()
+                    if not isinstance(value, dict) or "path" not in value
                 },
             )
         if request.action in {"clean", "rebuild"}:
@@ -116,7 +123,7 @@ class RustEngine:
         environment.update(
             CARGO_TARGET_DIR=str(self.target_dir),
             CARGO_BUILD_JOBS=str(request.jobs),
-            RUSTUP_TOOLCHAIN=str(manager.project.baseline.toolchain["channel"]),
+            RUSTUP_TOOLCHAIN=str(manager.project.toolchain_spec["channel"]),
         )
         return environment
 
@@ -130,6 +137,18 @@ class RustEngine:
             return
         manager = self.manager()
         manager.validate()
+        for name in names:
+            target = self.targets[name]
+            if target.kind == "cargo":
+                continue
+            platform = self.platform(request, target)
+            capability = (
+                "dioxus-web-fullstack" if platform == "web" else "dioxus-desktop"
+            )
+            if capability not in manager.project.capabilities:
+                raise RuntimeError(
+                    f"Rust target {name!r} requires capability {capability!r}"
+                )
         if request.action == "run":
             artifact = self.artifact(request, names[0])
             if not artifact.exists():

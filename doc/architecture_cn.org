@@ -9,7 +9,7 @@ zeta_forge 的目标不是成为业务源码仓库，而是成为稳定的工具
 1. 为 =3rd/*= 提供统一、可复现的编译入口，并为 =zpp= 等外部项目提供可复用的编译框架。
 2. 将第三方依赖版本、submodule revision、Conan 配方和构建参数集中管理。
 3. 允许外部项目通过轻量 =zbuild.py= 复用同一套工具链，减少重复维护成本。
-4. 为 Rust 项目统一工具链、直接依赖基线、Cargo 执行和原生库接入规则。
+4. 为 Rust 项目统一工具链、批准的直接依赖目录、Cargo 执行和原生库接入规则。
 
 * 职责边界
 
@@ -38,7 +38,7 @@ Forge 测试只验证自身入口和公共工具库契约；外部项目在各�
 - =zbuild.py=：薄入口，调用公共动作 CLI 和项目定义，宿主机准备使用独立入口。
 - =common/zeta_forge/=：通用 Python 工具链库，是外部项目复用的主要接口。
 - =cmake_util/=：公共 CMake helper 模块，包括编译选项、依赖查找和 =add_run_target= 等辅助函数。该目录接管遗留独立 =cmake_util= 项目的最新内容，后续在 =zeta_forge= 内维护。
-- =rust/=：Rust 工具链、依赖版本与来源基线。
+- =rust/=：Rust 工具链与批准的依赖版本、来源目录。
 - =builder/<project>/=：zeta_forge 内部项目构建工作区，保存项目入口、Conan 配方、CMake helper 和 build 输出。
 - =3rd/*=：第三方源码 submodule，默认作为 gRPC、HPX、Folly、NNG、Taskflow、RapidJSON 等源码输入。
 - =doc/=：设计、接入和中文说明文档。
@@ -84,7 +84,7 @@ Forge 测试只验证自身入口和公共工具库契约；外部项目在各�
 - =build_cli.py=：公共动作、选择、profile、预检与退出码契约。
 - =cmake_engine.py/rust_engine.py/gradle_engine.py=：原生技术栈适配器；不复制原生依赖图。
 - =debian_prep.py=：准备 Debian/Ubuntu 系统依赖和 Conan 工具链。
-- =rust_workspace.py=：加载 Rust 基线和项目描述，检查 workspace，并通过固定 toolchain 执行 Cargo。
+- =rust_workspace.py=：加载 Rust 工具链、依赖目录和项目描述，检查 workspace，并通过固定 toolchain 执行 Cargo。
 
 外部项目入口应尽量保持薄层，只负责定位工具库、设置当前项目源码默认值并调用项目仓库自己的 Builder。
 

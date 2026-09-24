@@ -20,6 +20,7 @@ from .rust_workspace import (
 )
 
 RUST_ACTIONS = ("doctor", "check", "build", "rebuild", "test", "run", "dev", "clean", "fetch")
+PREPARE_CARGO_TOOLS_ACTIONS = {"check", "build", "rebuild", "test", "dev", "fetch"}
 
 
 @dataclass(frozen=True)
@@ -157,7 +158,8 @@ class RustEngine:
                 self.application_environment(request, names[0])
         else:
             manager.doctor(
-                application_tools=any(self.targets[name].kind != "cargo" for name in names)
+                application_tools=any(self.targets[name].kind != "cargo" for name in names),
+                check_cargo_tools=request.action not in PREPARE_CARGO_TOOLS_ACTIONS,
             )
             if (
                 request.action != "fetch"
@@ -174,6 +176,23 @@ class RustEngine:
                 )
         if self.validate_assets:
             self.validate_assets(request, names)
+
+    def prepare(self, request: Request, names: tuple[str, ...]) -> None:
+        if request.action not in PREPARE_CARGO_TOOLS_ACTIONS:
+            return
+        manager = self.manager()
+        cargo_tools: set[str] = set()
+        for name in names:
+            target = self.targets[name]
+            if target.kind == "cargo":
+                continue
+            capability = (
+                "dioxus-web-fullstack" if self.platform(request, target) == "web"
+                else "dioxus-desktop"
+            )
+            cargo_tools.add(str(manager.project.catalog.capabilities[capability]["cargo-tool"]))
+        for cargo_tool in sorted(cargo_tools):
+            manager.ensure_cargo_tool(cargo_tool)
 
     def cargo(self, manager: RustWorkspaceManager, request: Request, *args: str) -> None:
         run_command(

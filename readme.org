@@ -105,11 +105,16 @@ release/debug default.
 
 Cargo-installed tools such as Dioxus CLI are isolated under
 =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>=. Project commands
-ignore executables with the same name on the global =PATH= and validate the
-isolated executable only when its capability is requested. Install Dioxus CLI with:
+ignore executables with the same name on the global =PATH=. =doctor= checks the
+isolated tool without changing the environment. When a selected Rust delivery
+needs a missing or mismatched tool, =check=, =build=, =rebuild=, =test=, =dev=,
+and =fetch= install its approved version with the pinned toolchain and =--locked=.
+Tool preparation follows all preflight checks and precedes any build or rebuild
+cleanup. Installation requires registry access; an installation failure stops the
+command before project build state is removed. The equivalent standalone command is:
 
 #+begin_src bash
-cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked \
+cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
   --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
 #+end_src
 

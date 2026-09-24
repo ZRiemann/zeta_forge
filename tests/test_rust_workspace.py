@@ -193,6 +193,53 @@ class RustWorkspaceTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "must be version 0.7.10"):
                     manager.require_cargo_tool("dioxus-cli")
 
+    def test_cargo_tool_install_is_idempotent_and_repairs_wrong_version(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_project(root)
+            manager = self.manager(root)
+            executable = manager.cargo_tool_root("dioxus-cli", "0.7.10") / "bin" / "dx"
+            version = "0.7.10"
+            installs: list[list[str]] = []
+
+            def run(args, **_kwargs):
+                nonlocal version
+                if "install" in args:
+                    installs.append([str(arg) for arg in args])
+                    executable.parent.mkdir(parents=True, exist_ok=True)
+                    executable.write_text("", encoding="utf-8")
+                    executable.chmod(0o755)
+                    version = "0.7.10"
+                return subprocess.CompletedProcess(
+                    args=args, returncode=0, stdout=f"dioxus {version}\n"
+                )
+
+            with (
+                mock.patch("zeta_forge.rust_workspace.shutil.which", return_value="/cargo"),
+                mock.patch("zeta_forge.rust_workspace.run_command", side_effect=run),
+            ):
+                self.assertEqual(manager.ensure_cargo_tool("dioxus-cli"), str(executable))
+                self.assertEqual(manager.ensure_cargo_tool("dioxus-cli"), str(executable))
+                self.assertEqual(len(installs), 1)
+                self.assertIn("--locked", installs[0])
+                self.assertIn("--force", installs[0])
+                self.assertEqual(installs[0][-1], str(executable.parent.parent))
+                version = "0.8.0"
+                self.assertEqual(manager.ensure_cargo_tool("dioxus-cli"), str(executable))
+                self.assertEqual(len(installs), 2)
+
+    def test_cargo_tool_install_failure_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.create_project(root)
+            manager = self.manager(root)
+            with (
+                mock.patch("zeta_forge.rust_workspace.shutil.which", return_value="/cargo"),
+                mock.patch("zeta_forge.rust_workspace.run_command", side_effect=RuntimeError("install failed")),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "install failed"):
+                    manager.ensure_cargo_tool("dioxus-cli")
+
     def test_web_target_and_desktop_capability(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

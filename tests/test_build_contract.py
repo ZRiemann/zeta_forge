@@ -83,6 +83,7 @@ class ContractTests(unittest.TestCase):
             self.assertEqual(self.invoke(*args)[0], 0)
         self.engine.execute.assert_not_called()
         self.engine.preflight.assert_not_called()
+        self.engine.prepare.assert_not_called()
 
     def test_run_forwards_without_logging_arguments(self) -> None:
         status, output = self.invoke("run", "--", "--password", "test-secret")
@@ -110,6 +111,40 @@ class ContractTests(unittest.TestCase):
         second.execute.assert_not_called()
         self.engine.execute.side_effect = KeyboardInterrupt
         self.assertEqual(self.invoke("build")[0], 130)
+
+    def test_all_preflights_and_preparations_precede_execution(self) -> None:
+        second = mock.Mock()
+        second.describe.return_value = {}
+        self.project = Project(
+            "two",
+            (
+                Product("app", "native", "application", ("rebuild",)),
+                Product("other", "other", "other", ("rebuild",)),
+            ),
+            {"native": self.engine, "other": second},
+            ("app", "other"),
+        )
+        order: list[str] = []
+        self.engine.preflight.side_effect = lambda *_: order.append("native preflight")
+        second.preflight.side_effect = lambda *_: order.append("other preflight")
+        self.engine.prepare.side_effect = lambda *_: order.append("native prepare")
+        second.prepare.side_effect = lambda *_: order.append("other prepare")
+        self.engine.execute.side_effect = lambda *_: order.append("native execute")
+        second.execute.side_effect = lambda *_: order.append("other execute")
+        self.assertEqual(self.invoke("rebuild")[0], 0)
+        self.assertEqual(
+            order,
+            [
+                "native preflight", "other preflight", "native prepare",
+                "other prepare", "native execute", "other execute",
+            ],
+        )
+        order.clear()
+        second.prepare.side_effect = RuntimeError("tool installation failed")
+        self.assertEqual(self.invoke("rebuild")[0], 1)
+        self.assertEqual(order, ["native preflight", "other preflight", "native prepare"])
+        self.engine.execute.assert_called_once()
+        second.execute.assert_called_once()
 
 
 class AdapterTests(unittest.TestCase):
@@ -184,7 +219,19 @@ class AdapterTests(unittest.TestCase):
                     engine.preflight(request("doctor"), ("app",))
                 manager.project.capabilities = ("dioxus-web-fullstack",)
                 engine.preflight(request("doctor"), ("app",))
-                manager.doctor.assert_called_once_with(application_tools=True)
+                manager.doctor.assert_called_once_with(
+                    application_tools=True, check_cargo_tools=True
+                )
+                manager.doctor.reset_mock()
+                engine.preflight(request("rebuild"), ("app",))
+                manager.doctor.assert_called_once_with(
+                    application_tools=True, check_cargo_tools=False
+                )
+                manager.project.catalog.capabilities = {
+                    "dioxus-web-fullstack": {"cargo-tool": "dioxus-cli"}
+                }
+                engine.prepare(request("rebuild"), ("app",))
+                manager.ensure_cargo_tool.assert_called_once_with("dioxus-cli")
 
     def test_run_never_builds_and_preserves_cwd(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

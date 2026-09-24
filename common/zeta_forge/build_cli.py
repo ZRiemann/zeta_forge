@@ -101,7 +101,8 @@ def parser_for(project: Project) -> argparse.ArgumentParser:
             "Defaults: release profile; project deliverables unless named explicitly. "
             "run uses existing artifacts. dev builds and runs once unless its native "
             "engine supplies a development watcher. Use list for capabilities and "
-            "--dry-run for the execution/cleanup scope. Prepare host tools separately."
+            "--dry-run for the execution/cleanup scope. Prepare host packages and "
+            "toolchains separately; Rust deliveries prepare approved Cargo tools."
             + install_help
         ),
     )
@@ -147,7 +148,7 @@ def select(project: Project, action: str, supplied: Sequence[str]) -> tuple[Prod
 
 
 def cli(project: Project, argv: Sequence[str] | None = None) -> int:
-    """Validate the entire plan before executing the first engineering unit."""
+    """Validate and prepare the entire plan before executing engineering units."""
     parser = parser_for(project)
     arguments = list(sys.argv[1:] if argv is None else argv)
     program_arguments: tuple[str, ...] = ()
@@ -221,6 +222,10 @@ def cli(project: Project, argv: Sequence[str] | None = None) -> int:
             return 0
         for key, names in steps:
             project.engines[key].preflight(request, names)
+        for key, names in steps:
+            prepare = getattr(project.engines[key], "prepare", None)
+            if prepare is not None:
+                prepare(request, names)
         for index, (key, names) in enumerate(steps, 1):
             log(
                 "I",

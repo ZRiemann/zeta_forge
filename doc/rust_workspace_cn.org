@@ -39,15 +39,15 @@ Cargo workspace 的 =[workspace.dependencies]= 精确选择 Forge 已批准的�
 
 =dioxus-desktop= 要求 workspace 采用已批准的 Dioxus，并检查匹配版本的 Dioxus CLI。=dioxus-web-fullstack= 另外检查所选 Rust 工具链的 =wasm32-unknown-unknown= target。业务项目自行选择 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 等应用 feature。
 
-Cargo 工具按工具链、名称、版本隔离在 =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>/bin=。不回退全局 =PATH=，缺失时 =doctor= 会给出安装命令。例如：
+Cargo 工具按工具链、名称、版本隔离在 =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>/bin=，不回退全局 =PATH=。=doctor= 只读检查并在缺失时报告路径。所选 Rust 交付项需要的工具缺失或版本不符时，=check=、=build=、=rebuild=、=test=、=dev= 和 =fetch= 使用固定工具链与 =--locked= 安装 Forge 批准的版本。工具准备在全部预检完成后、构建及 rebuild 清理前执行；安装需要访问 crate registry，失败时不清理项目构建产物。等价的独立安装命令如下：
 
 #+begin_src bash
-cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked \
+cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
   --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
 #+end_src
 
 * 命令与升级
 
-项目通过自己的 =./zbuild.py doctor=、=metadata=、=check=、=build=、=test= 调用 Forge 公共引擎。公共 CLI 默认 release；=--profile debug= 映射 Cargo dev。=doctor= 只读检查工具链、能力工具和原生库；=metadata= 不修改锁文件。构建与检查使用项目已提交的锁文件。
+项目通过自己的 =./zbuild.py doctor=、=metadata=、=check=、=build=、=test= 调用 Forge 公共引擎。公共 CLI 默认 release；=--profile debug= 映射 Cargo dev。=doctor= 只读检查工具链、能力工具和原生库；=run= 只使用既有工具与产物；=metadata= 不修改锁文件。构建与检查使用项目已提交的锁文件。
 
 升级工具链时新增相应工具链定义并同步项目 =rust-toolchain.toml=。升级或新增直接 crate 时在目录中批准新精确条目，并由需要它的项目显式采用；未采用的项目不受影响。旧版本条目只有在所有消费者迁出后才可删除。Forge 不读取旧的 =rN= 整套基线格式，也不读取旧的 Cargo 工具安装目录。

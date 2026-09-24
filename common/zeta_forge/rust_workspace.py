@@ -21,6 +21,10 @@ GIT_REV_PATTERN = re.compile(r"^[0-9a-f]{40}$")
 PACKAGE_NAME_PATTERN = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
 
 
+class CargoToolUnavailable(RuntimeError):
+    """A Forge-managed Cargo tool is absent or has the wrong version."""
+
+
 @dataclass(frozen=True)
 class RustCatalog:
     dependencies: Mapping[str, tuple[Mapping[str, object], ...]]
@@ -443,7 +447,7 @@ class RustWorkspaceManager:
     def validate(self) -> None:
         validate_rust_project(self.project)
 
-    def doctor(self, *, application_tools: bool = True) -> int:
+    def doctor(self, *, application_tools: bool = True, check_cargo_tools: bool = True) -> int:
         self.validate()
         for program in ("rustc", "cargo", "rustfmt", "clippy-driver"):
             completed = run_command(
@@ -464,8 +468,9 @@ class RustWorkspaceManager:
             requirements = self.project.catalog.capabilities[name]
             required_cargo_tools.add(str(requirements["cargo-tool"]))
             required_rust_targets.update(requirements.get("rust-targets", ()))
-        for cargo_tool in sorted(required_cargo_tools):
-            self.require_cargo_tool(cargo_tool)
+        if check_cargo_tools:
+            for cargo_tool in sorted(required_cargo_tools):
+                self.require_cargo_tool(cargo_tool)
         for rust_target in sorted(required_rust_targets):
             self.require_rust_target(rust_target)
         _native_environment(self.project, self.repo_config)
@@ -517,10 +522,10 @@ class RustWorkspaceManager:
         executable = tool_root / "bin" / executable_name
         install = (
             f"cargo +{self.project.toolchain_spec['channel']} install {name} "
-            f"--version {expected_version} --locked --root {tool_root}"
+            f"--version {expected_version} --locked --force --root {tool_root}"
         )
         if not executable.is_file() or not os.access(executable, os.X_OK):
-            raise RuntimeError(
+            raise CargoToolUnavailable(
                 f"Forge-managed Cargo tool {name} is missing or not executable at {executable}; "
                 f"install it with: {install}"
             )
@@ -533,11 +538,40 @@ class RustWorkspaceManager:
         version_output = (completed.stdout or completed.stderr).strip()
         version_tokens = {token.lstrip("v") for token in version_output.split()}
         if completed.returncode != 0 or expected_version not in version_tokens:
-            raise RuntimeError(
+            raise CargoToolUnavailable(
                 f"Forge-managed Cargo tool {name} must be version {expected_version}; "
                 f"got {version_output or 'unavailable'}. Install it with: {install}"
             )
         return str(executable)
+
+    def ensure_cargo_tool(self, name: str) -> str:
+        try:
+            return self.require_cargo_tool(name)
+        except CargoToolUnavailable:
+            pass
+        specification = _project_cargo_tool(self.project, name)
+        expected_version = str(specification["version"])
+        tool_root = self.cargo_tool_root(name, expected_version)
+        cargo = shutil.which("cargo")
+        if cargo is None:
+            raise RuntimeError("Required command not found on PATH: cargo")
+        run_command(
+            [
+                cargo,
+                f"+{self.project.toolchain_spec['channel']}",
+                "install",
+                name,
+                "--version",
+                expected_version,
+                "--locked",
+                "--force",
+                "--root",
+                tool_root,
+            ],
+            cwd=self.project.workspace_dir,
+            env=self.repo_config.env,
+        )
+        return self.require_cargo_tool(name)
 
     def require_rust_target(self, target: str) -> None:
         rustup = shutil.which("rustup")

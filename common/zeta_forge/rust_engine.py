@@ -29,6 +29,7 @@ class RustTarget:
     directory: Path
     kind: str = "cargo"
     platforms: tuple[str, ...] = ()
+    web_release_debug_symbols: bool | None = None
 
 
 class RustEngine:
@@ -214,6 +215,14 @@ class RustEngine:
         command.append(f"--{self.platform(request, target) or 'desktop'}")
         if request.profile == "release":
             command.append("--release")
+            if (
+                action == "build"
+                and self.platform(request, target) == "web"
+                and target.web_release_debug_symbols is not None
+            ):
+                command.extend(
+                    ("--debug-symbols", str(target.web_release_debug_symbols).lower())
+                )
         if target.kind == "fullstack":
             command.extend(("--fullstack", "true", "--force-sequential", "true"))
         if action == "serve":

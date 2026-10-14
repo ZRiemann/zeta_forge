@@ -38,6 +38,7 @@ Cargo workspace 的 =[workspace.dependencies]= 精确选择 Forge 已批准的�
 * 应用能力与工具
 
 =dioxus-desktop= 要求 workspace 采用已批准的 Dioxus，并检查匹配版本的 Dioxus CLI。=dioxus-web-fullstack= 另外检查所选 Rust 工具链的 =wasm32-unknown-unknown= target。业务项目自行选择 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 等应用 feature。
+Web 项目如需在 release 构建中去掉 DWARF 调试符号，可在项目构建定义中设置 =RustTarget(..., web_release_debug_symbols=False)=。Forge 此时向 Dioxus release build 传入 =--debug-symbols false=；其他目标及 debug profile 保持 Dioxus 默认值。
 
 Cargo 工具按工具链、名称、版本隔离在 =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>/bin=，不回退全局 =PATH=。=doctor= 只读检查并在缺失时报告路径。所选 Rust 交付项需要的工具缺失或版本不符时，=check=、=build=、=rebuild=、=test=、=dev= 和 =fetch= 使用固定工具链与 =--locked= 安装 Forge 批准的版本。工具准备在全部预检完成后、构建及 rebuild 清理前执行；安装需要访问 crate registry，失败时不清理项目构建产物。等价的独立安装命令如下：
 

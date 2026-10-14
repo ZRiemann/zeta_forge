@@ -144,6 +144,10 @@ The =dioxus-web-fullstack= capability checks the approved Dioxus dependency,
 CLI and Web target. Projects continue to own their platform feature
 composition, such as =dioxus/web=, =dioxus/server=, =dioxus/fullstack=, and
 =dioxus/router=; those features do not establish a separate dependency version.
+For a Web target that must omit release DWARF symbols, set
+=RustTarget(..., web_release_debug_symbols=False)= in the project build definition.
+Forge then passes =--debug-symbols false= to Dioxus release builds; other targets
+and debug-profile builds keep the Dioxus default.
 Project =doctor= also verifies the pinned Dioxus CLI and, for Web projects,
 the selected toolchain's =wasm32-unknown-unknown= target. SQLite projects select
 the approved =rusqlite= version directly and enable its required =bundled= feature.

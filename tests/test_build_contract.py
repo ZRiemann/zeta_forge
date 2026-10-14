@@ -188,6 +188,7 @@ class AdapterTests(unittest.TestCase):
             command = run.call_args.args[0]
             for flag in ("--locked", "--release", "--web", "--fullstack", "--force-sequential"):
                 self.assertIn(flag, command)
+            self.assertNotIn("--debug-symbols", command)
             with mock.patch.object(engine, "cargo") as cargo:
                 engine.validate_code(manager, request("check", "debug"), ("app",))
             commands = [call.args[2:] for call in cargo.call_args_list]
@@ -202,6 +203,34 @@ class AdapterTests(unittest.TestCase):
                 engine.validate_code(manager, request("test"), ("app",))
             self.assertEqual(cargo.call_count, 1)
             self.assertNotIn("wasm32-unknown-unknown", cargo.call_args.args)
+
+    def test_dioxus_web_release_can_disable_debug_symbols(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            engine = RustEngine(
+                root,
+                mock.Mock(),
+                {
+                    "app": RustTarget(
+                        "app", root, "fullstack", ("web",), web_release_debug_symbols=False
+                    )
+                },
+                root / "target",
+            )
+            manager = mock.Mock()
+            manager.require_cargo_tool.return_value = "/managed/bin/dx"
+            with (
+                mock.patch.object(engine, "environment", return_value={}),
+                mock.patch("zeta_forge.rust_engine.run_command") as run,
+            ):
+                engine.build(manager, request("build"), ("app",))
+                release_command = run.call_args.args[0]
+                engine.build(manager, request("build", "debug"), ("app",))
+                debug_command = run.call_args.args[0]
+            self.assertEqual(
+                release_command[release_command.index("--debug-symbols") + 1], "false"
+            )
+            self.assertNotIn("--debug-symbols", debug_command)
 
     def test_dioxus_target_requires_matching_capability(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

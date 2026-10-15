@@ -1,0 +1,104 @@
+#+STARTUP: indent
+#+TITLE: NNG 2.0 RC 升级与下游适配
+
+* 版本与来源
+
+NNG 源码由 =zeta_forge/3rd/nng= submodule 管理。本次固定到上游
+=v2.0.0-rc.1=，完整提交为
+=8fde97db953012882298254bc4753d53e9155bb6=，不包含本地源码补丁。
+历史 CPM fallback 使用同一版本；现代项目仍消费 Forge 安装的 package config。
+构建保持静态链接、HTTP 开启、TLS 和 nngcat 关闭。
+
+该 RC 的头文件 =NNG_RELEASE_SUFFIX= 仍是 =beta=，仅检查
+=nng_version()= 或 CMake package version 不能区分 beta 与此 RC。
+应核对实际源码提交，再从该源码重新构建并安装：
+
+#+begin_src bash
+git -C "$ZETAX_ROOT/zeta_forge/3rd/nng" rev-parse HEAD
+git -C "$ZETAX_ROOT/zeta_forge/3rd/nng" describe --tags --exact-match
+#+end_src
+
+若设置了 =ZETA_NNG_SRC_DIR= 或 =ZETA_3RD_DIR=，先确认实际输入也是上述提交。
+安装目录沿用 =ZETA_INSTALL_PREFIX=，默认 =~/.local=；不修改运行配置或代理环境。
+
+* C++ 接口迁移
+
+上游删除 =NNG_OPT_LOCADDR= 与 =nng_dialer_set_addr=，改用
+=nng_dialer_bind=。zpp 同步删除 =dialer::set_addr=，新增：
+
+#+begin_src cpp
+int bind(const nng_sockaddr &local_address) noexcept;
+#+end_src
+
+调用顺序为 =create -> bind -> start=。源地址的 port 必须为零；地址仅在
+=bind= 调用期间借用，封装直接返回 NNG 错误码。不支持绑定的 transport 返回
+=NNG_ENOTSUP=。本次不改变消息所有权、业务通信协议或现有显式接收大小配置。
+
+NNG 的默认 =NNG_OPT_RECVMAXSZ= 从无限制改为 1 GiB；zpp 已显式配置的
+endpoint 上限仍按原有选项生效。Windows 的 =ipc://= 现在使用 AF_UNIX，
+与 =unix://= 等价；需要旧 named pipe 行为或与旧应用互联时使用
+=winpipe://=。Linux 的 IPC 路径配置保持原有语义。
+
+* Rust 绑定
+
+=nng-rs/anng= 保持批准的提交
+=a474ee0272d18f20c360837e2f602dc53ae3b9ec=。截至 2026-10-14，上游最新
+提交相对它只包含四个 CI 更新，没有 Rust 或 FFI 源码变化。
+Forge 的 =rust/catalog.toml=、Trader 的 Cargo 依赖声明及 =Cargo.lock= 保持该固定版本。
+
+继续禁用 vendored NNG，使用 Forge 注入的 =NNG_NO_VENDOR=1=、
+=NNG_DIR= 与 =NNG_STATIC=1=。当前 =nng-sys= 在使用外部库时根据实际
+安装头文件生成 FFI，输出位于 Cargo 构建目录，无需修改预生成绑定或 Cargo 缓存。
+同一安装前缀下替换静态库后，必须重建 Rust 产物，不能依赖旧缓存自动失效。
+
+* Release 编译、安装和验证顺序
+
+以下命令由操作者执行。每一步成功后再执行下一步。使用当前工作区的
+=ZETAX_ROOT=；本机标准布局可显式设置为 =/home/booster/git=。
+基础 Release 依赖以及原有 HPX/zpp HPX 安装是前置条件，此流程只更新 NNG 和消费者。
+
+先重新构建 NNG，再发布到安装目录。Forge 的 =install= 不重复构建：
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zeta_forge"
+./zbuild.py doctor nng --profile release
+./zbuild.py rebuild nng --profile release
+./zbuild.py install nng --profile release
+#+end_src
+
+=rebuild= 清理 NNG 的 Release 构建目录及对应 staging，不清理其他依赖或 Debug。
+接着构建、测试并安装 zpp NNG 模块：
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zpp"
+./zbuild.py build zpp_nng --profile release
+./zbuild.py test zpp_nng --profile release
+./zbuild.py install zpp_nng --profile release
+#+end_src
+
+=test= 包含 core 与 NNG 正确性测试；=install= 同时发布所需 core 组件。
+NNG endpoint 测试覆盖绑定前的地址校验、无效 handle、以及绑定后的本地 TCP 通信。
+
+最后重建所有受影响的 Trader 交付物并运行正确性测试：
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zeta_trader"
+./zbuild.py build zeta_ctp_md zeta_ctp_trader zeta_trader_hpx zeta_nng_md_consumer zeta_nng_gateway_consumer --profile release
+./zbuild.py rebuild zeta_owl zti_probe dioxus_trading_ui --profile release
+./zbuild.py test zeta_nng_md_consumer --profile release
+./zbuild.py test zti_probe --profile release
+#+end_src
+
+Rust =rebuild= 清理 Release 共享 Cargo/Dioxus 产物，包括旧 FFI 和静态链接产物，
+所以同一次重建选择全部三个前端交付项；Debug 产物保留。
+原生测试入口运行共享 CTest 正确性测试；Rust 测试包含
+=zti_transport_nng= 等支持包，涵盖 PUB/SUB、REQ/REP 和取消行为。
+
+此文档不代表构建或测试已经执行。验收需记录上述命令的实际结果；Debug、
+Windows、实盘连接、sanitizer 与长时间压力测试属于单独验证范围。
+
+* 上游参考
+
+- [[https://github.com/nanomsg/nng/releases/tag/v2.0.0-rc.1][NNG v2.0.0-rc.1 发布说明]]
+- [[https://nng.nanomsg.org/ref/migrate/nng1.html][NNG 2.0 迁移说明]]
+- [[https://github.com/nanomsg/nng-rs/blob/a474ee0272d18f20c360837e2f602dc53ae3b9ec/nng-sys/build.rs][固定 nng-sys 提交的绑定生成逻辑]]

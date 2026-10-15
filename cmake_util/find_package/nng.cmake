@@ -42,7 +42,7 @@ if(NOT TARGET nng::nng)
     CPMAddPackage(
         NAME nng
         GITHUB_REPOSITORY nanomsg/nng
-        VERSION 2.0.0-alpha.6
+        VERSION 2.0.0-rc.1
         #VERSION main
         GIT_SHALLOW TRUE
         GIT_PROGRESS TRUE

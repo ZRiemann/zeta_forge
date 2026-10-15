@@ -3,6 +3,15 @@
 
 * Release History
 
+** v1.5.0 - 2026-10-15
+*** 变更内容
+- 将 NNG submodule 固定到 =v2.0.0-rc.1=（=8fde97db953012882298254bc4753d53e9155bb6=），同步历史 CPM fallback 版本。
+- 新增 NNG 升级与下游适配文档，记录 C++ 接口迁移、Rust FFI 重建及 Release 编译安装和验证顺序。
+- 在 Rust 工作区和第三方依赖使用文档中补充升级说明与操作文档链接。
+
+*** 验证
+- 本次提交仅检查差异与版本记录，未重新运行构建或测试；文档中的验证命令不代表已经执行。
+
 ** v1.4.0 - 2026-10-14
 *** 变更内容
 - 新增 =RustTarget.web_release_debug_symbols= 可选配置，供 Web release build 显式控制 Dioxus 调试符号；默认保持既有行为。

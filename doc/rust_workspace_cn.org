@@ -35,6 +35,16 @@ native-dependencies = ["nng", "openssl-conan"]
 
 Cargo workspace 的 =[workspace.dependencies]= 精确选择 Forge 已批准的版本或来源。成员 crate 必须通过 =workspace = true= 继承第三方依赖；仓库内的 crate 通过 =path= 依赖。提交 =Cargo.lock=，执行命令使用 =--locked=。新增直接依赖时先在 Forge 审批条目，再修改项目 Cargo manifest 和 lockfile；不创建整套依赖快照。
 
+* 原生 NNG 升级后的重建
+
+NNG 由 Forge 管理源码、构建和安装；Cargo 继续禁用 vendored NNG。
+当前固定的 =nng-sys= 使用外部库时会根据安装头文件生成 FFI。
+在相同安装前缀更新 NNG 后，使用项目 =rebuild= 重新生成绑定并链接静态库，
+避免复用旧产物；Rust =rebuild= 清理所选 profile 的共享 Cargo/Dioxus 输出，
+因此应显式选择需要恢复的全部交付项。
+本次 NNG =v2.0.0-rc.1= 升级保持 =anng= 的批准提交及项目锁文件不变。
+完整操作顺序和验证边界见 [[file:nng_upgrade_cn.org][NNG 升级与下游适配]]。
+
 * 应用能力与工具
 
 =dioxus-desktop= 要求 workspace 采用已批准的 Dioxus，并检查匹配版本的 Dioxus CLI。=dioxus-web-fullstack= 另外检查所选 Rust 工具链的 =wasm32-unknown-unknown= target。业务项目自行选择 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 等应用 feature。

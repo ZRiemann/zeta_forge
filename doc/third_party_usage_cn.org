@@ -117,6 +117,9 @@ export ZETA_TASKFLOW_SRC_DIR=$HOME/git/taskflow
 
 * 版本与更新
 
+NNG 当前固定到 =v2.0.0-rc.1=。源码提交、zpp API 迁移、Rust FFI 重建以及
+Release 编译安装顺序见 [[file:nng_upgrade_cn.org][NNG 升级与下游适配]]。
+
 外部系统依赖 =zeta_forge= 公共行为时，应记录所使用的 =zeta_forge= 版本。当前版本在 [[file:../VERSION][../VERSION]]，发布历史在 [[file:../release_history.org][../release_history.org]]。
 
 当外部项目依赖公共 CLI、环境变量、Conan 配方或 Builder API 时，升级 =zeta_forge= 前应先阅读对应版本的更新说明。

@@ -1,6 +1,8 @@
 * 第三方系统使用 zeta_forge 工具链说明
 
-本文说明外部项目如何复用 =zeta_forge= 的通用 C++ 编译工具链。架构背景见 [[file:architecture_cn.org][architecture_cn.org]]。
+[[file:readme.org][返回文档首页]] | [[file:../en/third_party_usage.org][English Version]]
+
+本文说明外部项目如何复用 =zeta_forge= 的通用 C++ 编译工具链。架构背景见 [[file:architecture.org][architecture.org]]。
 
 * 前置条件
 
@@ -52,7 +54,7 @@ cd "$ZETAX_ROOT/zeta_forge"
 交由 =CMakeEngine= 选择真实 target、测试集合和 install component。
 Rust 项目使用 =RustEngine/RustTarget=；Android 使用 =GradleEngine=。
 新增内部模块不需要注册 CLI 目标；仅新增正式独立成果时声明目标。
-详见 [[file:../BUILD.org][公共入口契约]]，不要建立业务 subsystem 注册或重复依赖图。
+详见 [[file:build.org][公共入口契约]]，不要建立业务 subsystem 注册或重复依赖图。
 
 * 复用依赖配方
 
@@ -118,8 +120,8 @@ export ZETA_TASKFLOW_SRC_DIR=$HOME/git/taskflow
 * 版本与更新
 
 NNG 当前固定到 =v2.0.0-rc.1=。源码提交、zpp API 迁移、Rust FFI 重建以及
-Release 编译安装顺序见 [[file:nng_upgrade_cn.org][NNG 升级与下游适配]]。
+Release 编译安装顺序见 [[file:nng_upgrade.org][NNG 升级与下游适配]]。
 
-外部系统依赖 =zeta_forge= 公共行为时，应记录所使用的 =zeta_forge= 版本。当前版本在 [[file:../VERSION][../VERSION]]，发布历史在 [[file:../release_history.org][../release_history.org]]。
+外部系统依赖 =zeta_forge= 公共行为时，应记录所使用的 =zeta_forge= 版本。当前版本在 [[file:../../VERSION][VERSION]]，发布历史在 [[file:release_history.org][发布历史]]。
 
 当外部项目依赖公共 CLI、环境变量、Conan 配方或 Builder API 时，升级 =zeta_forge= 前应先阅读对应版本的更新说明。

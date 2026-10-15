@@ -1,5 +1,7 @@
 #+TITLE: ZetaX build contract
 
+[[file:doc/en/readme.org][Back to Documentation]] | [[file:doc/zh-CN/build.org][Chinese Version]]
+
 * Unified build contract
 
 =./zbuild.py <command> [deliverable ...] [--profile release|debug]= defaults to release

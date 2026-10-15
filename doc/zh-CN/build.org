@@ -1,0 +1,44 @@
+#+TITLE: ZetaX 构建契约
+
+[[file:readme.org][返回文档首页]] | [[file:../../BUILD.org][English Version]]
+
+本文完整翻译根目录 [[file:../../BUILD.org][BUILD.org]] 的英文主契约。
+英文文档目录中的 [[file:../en/build.org][构建入口页]] 引导至该主契约。
+
+* 统一构建契约
+
+=./zbuild.py <command> [deliverable ...] [--profile release|debug]= 默认使用 release，
+按 =deps grpc hpx folly nng= 顺序执行。显式指定名称可缩小交付范围。
+=list= 显示支持的动作；=metadata= 描述原生工程单元及产物；=--dry-run= 无需工具、
+签名材料或服务即可预览执行范围。旧的 flag-only、stack-first 和别名语法无效。
+
+=build= 构建并将依赖包物化到项目内的 =build/staging/<profile>/<target>/=。
+只有 staging 完成后才记录成功，绝不发布到 =ZETA_INSTALL_PREFIX=。
+Folly 配置前会先暂存其所需的 gRPC package。=install= 要求显式指定目标名称，
+且同一 profile 已成功构建；只发布这些目标，不重新构建或运行 Conan。
+未显式选择安装的构建前置依赖只保留在 staging 中。
+CMake 和 pkg-config 元数据会调整为发布前缀。
+=clean/rebuild= 仅影响一个 profile 下指定的原生构建目录及目标 staging，
+不影响安装内容或共享 Conan/Cargo 缓存。=rebuild= 随后重建所选产物及必要依赖。
+
+Forge =check= 配置并编译所选库。=test= 默认选择 =build-tools=，运行 Python 工具测试，
+而非上游第三方测试套件。测试覆盖 Forge 公共入口及共享适配器；
+各消费项目在自身仓库测试自己的 =zbuild.py=。
+不支持的上游测试、运行及 fetch 能力会报错。
+宿主机准备仍使用 =common/prepare_debian.sh=，不属于构建动作。
+构建不会覆盖全局 Conan profile；应单独准备所选 Conan profile。
+
+#+begin_src sh
+./zbuild.py list
+./zbuild.py build nng --profile debug
+./zbuild.py rebuild nng --dry-run
+./zbuild.py build deps nng
+./zbuild.py install deps nng
+./zbuild.py test
+#+end_src
+
+公共契约位于 =common/zeta_forge/build_cli.py=；原生适配器为
+=cmake_engine.py=、=rust_engine.py=、=gradle_engine.py=；项目定义位于
+=builder/project.py= 和 =builder/<target>/project.py=。
+应用保留自己的薄入口与项目定义，不建立 subsystem 注册或另一套原生依赖图。
+根目录 =zbuild.py= 是唯一可执行的 Forge 构建入口。

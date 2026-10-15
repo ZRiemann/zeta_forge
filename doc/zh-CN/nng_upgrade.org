@@ -1,6 +1,8 @@
 #+STARTUP: indent
 #+TITLE: NNG 2.0 RC 升级与下游适配
 
+[[file:readme.org][返回文档首页]] | [[file:../en/nng_upgrade.org][English Version]]
+
 * 版本与来源
 
 NNG 源码由 =zeta_forge/3rd/nng= submodule 管理。本次固定到上游

@@ -1,0 +1,60 @@
+#+TITLE: 统一构建入口验证
+#+DATE: 2026-09-22
+
+[[file:readme.org][返回文档首页]] | [[file:../en/build-entry-validation.org][English Version]]
+
+* 范围
+
+这是 2026-09-22 的历史记录；当前用法见 [[file:build.org][构建契约]]。
+本次迁移和翻译没有重新执行记录中的验证。
+
+本文是工作区实现记录，不代表发布或全平台验收。当时未创建版本、标签或提交。
+保留了 practice 已有的 manifest/规划修改及 agent 未跟踪的 .vorg.db。
+未修改第三方源码、依赖 lockfile 或已有不可变 Rust 基线。
+Cat 新增的 1.97.1-r2 基线记录其已有 lockfile 中的直接依赖。
+
+对全部七个可构建仓库的入口执行了 help、list、build/test dry-run、profile 选择，
+以及拒绝已移除参数的验证。额外共享测试覆盖选择、不支持的能力、执行前预检、
+失败/中断、参数脱敏、CMake component、Cargo/Dioxus feature、profile 清理
+（包括 Dioxus server/wasm 缓存）和 Android APK 保留。
+
+* 各仓库结果
+
+| 仓库 | 已执行验证 | 限制及观察到的阻塞 |
+|------+------------+--------------------|
+| zeta_forge | 30 项 Python 测试，包括真实的临时 CMake build/test/install/clean fixture；共享适配器静态检查 | 未全量重建第三方库或发布到用户前缀；不支持上游库测试套件 |
+| zpp | test --profile debug：构建 core 测试套件，75 项 CTest 中 71 项通过 | 四项 LoggingTest 在 RapidJSON MemberBegin/IsObject 处中止；未验证可选 NNG/Folly/HPX 构建 |
+| zeta_trader | 36 项 Python 测试；doctor zeta_owl（包括 WebKitGTK/libSoup）；build zti_probe --profile release | 未启动生产服务、重建原生服务、运行 GUI、benchmark 或 soak |
+| zeta_practice | check --profile debug（server、Web/wasm 及 Clippy）；test --profile debug（1 项测试）；build --profile release（fullstack）；本地 HTTP 200 冒烟及中断退出码 130 | 未进行浏览器交互验收或平台矩阵验证 |
+| zeta_agent | test --profile debug（1 项原生 CTest） | 未测试 Release 运行时 |
+| zeta_vault | test --profile release（19 项）；在临时前缀安装 C ABI component，确认没有发布 wrapper header/server | Debug 配置缺少已安装的 libsodium 配置；未访问真实 Vault 数据或已安装服务 |
+| zeta_cat | doctor server linux；test server --profile debug（server/support 包中 26 项测试）；mock ADB 构建调用测试；Android dry-run | 未进行签名 Android 构建、设备操作、release server 构建或生产网络启动 |
+| zsa | agents/check_agents.py；skill-creator quick_validate；mock 部署构建调用测试 | 未执行部署或个人 agent 同步；quick_validate 使用系统 Python 的 PyYAML |
+| zeta_history | 已检查适用性文档；不存在原生项目 | 未添加虚构构建入口 |
+
+* 复现
+
+在表中对应仓库执行：
+
+#+begin_src sh
+# Forge
+python3 -m unittest discover -s tests
+# Trader
+python3 -m unittest discover -s tests/python
+# Practice
+./zbuild.py check --profile debug -j 2
+./zbuild.py test --profile debug -j 2
+./zbuild.py build --profile release -j 2
+# Agent / Vault / zpp: select the profile shown in the table
+./zbuild.py test --profile debug -j 2
+# Cat
+./zbuild.py test server --profile debug -j 2
+python3 ops/test_build_calls.py
+# zsa
+python3 agents/check_agents.py
+python3 deploy/zeta_cat/test_build_calls.py
+#+end_src
+
+这些结果不能证明每个交付物或平台都通过。
+zpp 日志测试失败是当时观察到的问题，并未在该次构建入口改造中修复。
+缺少的原生 package 必须显式准备；构建不会通过安装宿主机软件绕过验证失败。

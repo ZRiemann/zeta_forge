@@ -1,0 +1,104 @@
+#+STARTUP: indent
+#+TITLE: Zeta Forge Rust Workspace Governance
+
+[[file:readme.org][Back to Documentation]] | [[file:../zh-CN/rust_workspace.org][Chinese Version]]
+
+* Goals and Ownership
+
+=zeta_forge= approves Rust toolchains, exact third-party direct-crate versions and
+sources, and Cargo tools required by application capabilities. Projects own their
+source, workspace members, ordinary Cargo feature composition and committed
+=Cargo.lock=. Cargo resolves the full graph; Forge validates direct dependencies
+against the approved catalog. Conan manages only C/C++ packages.
+
+* Toolchains and Dependency Catalog
+
+=rust/toolchains/<channel>.toml= pins the Rust channel, profile and components.
+The project's =rust-toolchain.toml= must exactly match the selected Forge file.
+Each entry in =rust/catalog.toml= approves an exact registry version or an HTTPS
+Git URL with a full commit. Multiple versions of a crate may coexist. Projects
+select one approved version; ordinary extra features do not need another entry.
+=required-features= and =default-features= apply only to explicit requirements,
+such as =rusqlite/bundled= and the native NNG binding.
+
+#+begin_src toml
+[[dependencies]]
+name = "rusqlite"
+version = "=0.40.2"
+required-features = ["bundled"]
+
+[[dependencies]]
+name = "anng"
+git = "https://github.com/nanomsg/nng-rs"
+rev = "a474ee0272d18f20c360837e2f602dc53ae3b9ec"
+default-features = false
+required-features = ["tokio"]
+#+end_src
+
+The project-root =zeta-rust.toml= uses schema 2:
+
+#+begin_src toml
+schema = 2
+manifest = "frontend/Cargo.toml"
+toolchain = "frontend/rust-toolchain.toml"
+capabilities = ["dioxus-desktop"]
+native-dependencies = ["nng", "openssl-conan"]
+#+end_src
+
+=[workspace.dependencies]= selects exact Forge-approved versions or sources.
+Member crates inherit third-party dependencies with =workspace = true=; local
+crates use =path= dependencies. Commit =Cargo.lock= and execute with =--locked=.
+Approve new direct dependencies in Forge before changing project manifests and
+lockfiles; do not create a snapshot of the entire dependency set.
+
+* Rebuilding after a Native NNG Upgrade
+
+Forge owns NNG source, build and installation; Cargo keeps vendored NNG disabled.
+The pinned =nng-sys= generates FFI from installed headers when using an external
+library. After updating NNG at the same prefix, use the project's =rebuild= to
+regenerate bindings and relink the static library instead of reusing old outputs.
+Rust =rebuild= clears shared Cargo/Dioxus outputs for the selected profile, so
+explicitly select every deliverable that must be restored. The NNG =v2.0.0-rc.1=
+upgrade preserves the approved =anng= commit and project lockfiles.
+See [[file:nng_upgrade.org][NNG Upgrade and Downstream Adaptation]] for the full sequence
+and validation boundaries.
+
+* Application Capabilities and Tools
+
+=dioxus-desktop= requires approved Dioxus and checks the matching Dioxus CLI.
+=dioxus-web-fullstack= additionally checks the selected toolchain's
+=wasm32-unknown-unknown= target. Projects own their application feature composition,
+such as =dioxus/web=, =dioxus/server= and =dioxus/fullstack=.
+To omit release DWARF symbols for a Web project, set
+=RustTarget(..., web_release_debug_symbols=False)= in its build definition.
+Forge passes =--debug-symbols false= to Dioxus release builds; other targets and
+debug profiles keep the Dioxus default.
+
+Cargo tools are isolated by toolchain, name and version under
+=${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>/bin=;
+there is no global =PATH= fallback. =doctor= is read-only and reports a missing
+tool's path. If a selected Rust deliverable needs a missing or mismatched tool,
+=check=, =build=, =rebuild=, =test=, =dev= and =fetch= install the approved version
+with the pinned toolchain and =--locked=. Tool preparation follows all preflight
+checks and precedes building or rebuild cleanup. Installation needs crate-registry
+access; failure leaves project build outputs intact. The equivalent standalone
+installation command is:
+
+#+begin_src bash
+cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
+  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
+#+end_src
+
+* Commands and Upgrades
+
+Projects call the shared engines through their own =./zbuild.py doctor=,
+=metadata=, =check=, =build= and =test=. The public CLI defaults to release;
+=--profile debug= maps to Cargo dev. =doctor= checks toolchains, capability tools
+and native libraries without mutation; =run= uses existing tools and outputs;
+=metadata= does not change lockfiles. Builds and checks use committed lockfiles.
+
+Add a toolchain definition and synchronize the project's =rust-toolchain.toml=
+when upgrading Rust. Approve new exact catalog entries for crate additions or
+upgrades; projects adopt them explicitly, leaving other consumers unaffected.
+Remove old entries only after every consumer has migrated. Forge no longer reads
+the old =rN= whole-baseline format or the former Cargo-tool installation directory.

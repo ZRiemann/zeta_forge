@@ -1,8 +1,8 @@
-* Zeta Forge
+* Zeta Forge - 中文文档
+
+[[file:../../readme.org][返回项目主页]] | [[file:../en/readme.org][English Version]]
 
 Zeta Forge 是 ZetaX 的工程治理层，面向 C++ 与 Rust 项目统一管理源码、可复现构建、依赖版本和公共工程工具。
-
-English README: [[file:../readme.org][../readme.org]]
 
 * 项目用途
 
@@ -12,12 +12,26 @@ Zeta Forge 有三个明确用途：
 2. 协调 ZetaX 各项目版本，包括 submodule revision、C++ package、Rust toolchain、受管 crate 声明和共享构建默认值。
 3. 为外部仓库提供可复用的项目管理 API。业务仓库只保留自身编排，并通过 =$ZETAX_ROOT/zeta_forge= 或附近兄弟目录复用公共能力。
 
-架构与接入文档：
+* 文档导航
 
-- 架构设计：[[file:architecture_cn.org][architecture_cn.org]]
-- 第三方系统使用说明：[[file:third_party_usage_cn.org][third_party_usage_cn.org]]
-- Rust 工程治理：[[file:rust_workspace_cn.org][rust_workspace_cn.org]]
-- 发布历史：[[file:../release_history.org][../release_history.org]]
+- [[file:architecture.org][架构设计]]
+- [[file:third_party_usage.org][外部项目接入]]
+- [[file:rust_workspace.org][Rust 工程治理]]
+- [[file:nng_upgrade.org][NNG 升级与下游适配]]
+- [[file:build.org][构建契约]]
+- [[file:build-entry-validation.org][历史构建入口验证]]
+- [[file:cmake_util.org][CMake 辅助模块]]
+- [[file:release_history.org][发布历史]]
+
+* 文档维护规则
+
+=doc/en/= 为英文主文档，=doc/zh-CN/= 为简体中文辅助翻译。
+根 README、BUILD 契约和发布历史保留英文入口。
+修改时同步更新英文原文及相关中文译文；命令、API 名称、版本和提交号必须一致。
+各主题链接到对应语言版本及本语言首页，正文优先引用同语言文档。
+
+发布历史与带日期的验证记录保留原始背景、命令及验证证据。
+翻译不构成新的验证结果。
 
 * 克隆与初始化
 
@@ -71,7 +85,7 @@ git submodule update --init --recursive
 =zbuild.py= 中的 =z= 取自 =zeta_forge=，用于表达仓库顶层统一入口，而不是局限于 CMake 的 =c=。
 =zbuild.py= 可以直接执行，并分发到 =builder/= 下对应项目的工作区目标入口。
 默认按 =deps grpc hpx folly nng= 顺序构建。build 仅使用项目内 staging；install 只发布显式指定且同 profile 已成功构建的库，不会重复构建或调用 Conan。
-契约见 [[file:../BUILD.org][统一构建入口]]。上游测试尚未接入，Forge test 执行工具自身的 Python 测试。
+契约见 [[file:build.org][统一构建入口]]。上游测试尚未接入，Forge test 执行工具自身的 Python 测试。
 
 * 源码布局
 
@@ -92,7 +106,25 @@ Rust 治理配置位于 =rust/=，公共实现位于 =common/zeta_forge/rust_wor
 
 * Rust 项目管理
 
-=rust/toolchains/= 管理精确 Rust 工具链；=rust/catalog.toml= 批准可并存的 crate 精确版本、Git revision、必要 feature 约束、Cargo 工具和应用能力。业务仓库通过 schema 2 的 =zeta-rust.toml= 声明 workspace、toolchain 文件、能力和原生库需求，通过 =[workspace.dependencies]= 选择已批准版本。
+=rust/toolchains/= 管理精确 Rust 工具链；=rust/catalog.toml= 批准可并存的 crate 精确版本、
+Git revision、Cargo 工具和应用能力。业务仓库通过 schema 2 的 =zeta-rust.toml= 声明
+workspace、toolchain 文件、能力和原生库需求，通过 =[workspace.dependencies]= 选择
+已批准版本，=Cargo.lock= 保留解析后的依赖图。项目拥有普通 Cargo feature 组合，
+但必须遵守 bundled SQLite、原生 NNG binding 禁用默认 feature 等明确目录约束。
+release/debug 默认值由公共 CLI 管理。
+
+Dioxus CLI 等 Cargo 工具隔离安装到
+=${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>=。
+项目命令忽略全局 =PATH= 上的同名程序。=doctor= 只读检查隔离工具。
+所选 Rust 交付物需要的工具缺失或版本不符时，=check=、=build=、=rebuild=、
+=test=、=dev= 和 =fetch= 使用固定工具链与 =--locked= 安装批准版本。
+工具准备在全部预检后、构建及 rebuild 清理前执行；安装需要访问 registry，
+失败时不会清理项目构建状态。等价的独立安装命令是：
+
+#+begin_src bash
+cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
+  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
+#+end_src
 
 #+begin_src bash
 ../zeta_trader/zbuild.py doctor zeta_owl
@@ -112,8 +144,12 @@ workspace 产物；=rebuild= 只清理指定 profile 的 workspace member 后重
 =dioxus-web-fullstack= 能力检查已批准的 Dioxus、CLI 和 Web target。
 业务项目仍然拥有 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 和
 =dioxus/router= 等平台 feature 组合；这些 feature 不形成另一套依赖版本。
-Forge =rust doctor= 还会检查固定版本的 Dioxus CLI；Web 项目同时检查所选工具链的
-=wasm32-unknown-unknown= target。
+Web 目标如需去掉 release DWARF 调试符号，在项目构建定义中设置
+=RustTarget(..., web_release_debug_symbols=False)=。
+Forge 向 Dioxus release build 传入 =--debug-symbols false=；其他目标和 debug profile
+保留 Dioxus 默认行为。项目 =doctor= 检查固定版本的 Dioxus CLI；Web 项目还检查
+所选工具链的 =wasm32-unknown-unknown= target。SQLite 项目直接选择批准的
+=rusqlite= 版本并启用所需的 =bundled= feature。
 
 * ZetaX 工作区根目录
 
@@ -124,7 +160,7 @@ Forge =rust doctor= 还会检查固定版本的 Dioxus CLI；Web 项目同时检
 项目入口需要复用共享编译工具库时，按以下顺序定位 =zeta_forge=：
 
 1. 设置了 =ZETAX_ROOT= 时，使用 =$ZETAX_ROOT/zeta_forge=。
-2. 从当前入口路径向上发现附近的 =zeta_forge= 目录。
+2. 使用兄弟目录中的 =zeta_forge= checkout。
 
 * 覆盖源码目录
 

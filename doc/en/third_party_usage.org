@@ -1,0 +1,138 @@
+* Using the zeta_forge Toolchain from External Projects
+
+[[file:readme.org][Back to Documentation]] | [[file:../zh-CN/third_party_usage.org][Chinese Version]]
+
+This guide explains how external projects reuse the shared =zeta_forge= C++
+toolchain. See [[file:architecture.org][Architecture]] for the design background.
+
+* Prerequisites
+
+Recommended layout:
+
+#+begin_src text
+$ZETAX_ROOT/
+  zsa/
+  zeta_forge/
+  your_project/
+#+end_src
+
+Loading the =zsa= environment sets =ZETAX_ROOT= to the workspace root. You can also
+set it manually without depending on =zsa=:
+
+#+begin_src bash
+export ZETAX_ROOT=/path/to/workspace
+export ZETA_INSTALL_PREFIX=$HOME/.local
+#+end_src
+
+Prepare the Forge toolchain before first use:
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zeta_forge"
+./common/prepare_debian.sh
+./zbuild.py build
+./zbuild.py install grpc
+./zbuild.py install hpx
+./zbuild.py install folly
+./zbuild.py install nng
+#+end_src
+
+* Key Environment Variables
+
+- =ZETAX_ROOT=: top-level ZetaX workspace directory, for example =~/git=.
+- =ZETA_INSTALL_PREFIX=: dependency installation prefix, defaulting to =~/.local=.
+- =ZETA_3RD_DIR=: third-party source root, defaulting to =$ZETAX_ROOT/zeta_forge/3rd=.
+- =ZETA_CMAKE_UTIL_DIR=: shared CMake helper directory, defaulting to =$ZETAX_ROOT/zeta_forge/cmake_util= and normally injected into CMake by the Forge Builder.
+- =ZETA_<NAME>_SRC_DIR=: override a source checkout, for example =ZETA_GRPC_SRC_DIR= or =ZETA_TASKFLOW_SRC_DIR=. Projects can define their own source variable, such as zpp's =ZETA_ZPP_SRC_DIR=.
+
+External projects do not need an additional Forge-specific root variable; the
+public path contract is =$ZETAX_ROOT/zeta_forge=.
+
+* Minimal Project Entrypoint
+
+Follow the thin =zpp/zbuild.py=: locate the shared library, import =build_cli.cli=
+and call =project(script_path)= in the project's =builder/<project>.py=.
+Do not copy the argument parser or Forge's internal routing. The definition returns
+=Project= and declares =Product= entries, native adapters, default sets and any
+necessary application steps.
+
+Native CMake projects can retain =CMakeProjectBuilder= subclasses for
+configure_command and dependency checks, while =CMakeEngine= selects real targets,
+test sets and install components. Rust uses =RustEngine/RustTarget=; Android uses
+=GradleEngine=. Internal modules do not need CLI target registration; declare a
+target only for a new independent deliverable.
+See [[file:build.org][the public build contract]]; do not create a business subsystem
+registry or duplicate dependency graph.
+
+* Reusing Dependency Recipes
+
+External projects have three dependency-management options:
+
+1. Consume gRPC, HPX, Folly, NNG and other libraries already installed in =ZETA_INSTALL_PREFIX=.
+2. Declare genuinely private dependencies in the project's own =builder/conanfile.py=; do not duplicate ZetaX shared Conan dependencies.
+3. Move dependency combinations shared by multiple projects into Forge's =deps= deliverable or another shared Forge library capability; project targets stay in their owning repository.
+
+Prefer the first or second option; move only clearly reusable flows into Forge.
+
+* zpp Integration Pattern
+
+=zpp= is the reference layout for external Forge reuse:
+
+#+begin_src text
+$ZETAX_ROOT/zpp/
+  zbuild.py
+  builder/
+    __init__.py
+    zpp.py
+#+end_src
+
+=zbuild.py= locates the shared library through =$ZETAX_ROOT/zeta_forge= or a nearby
+sibling checkout. =builder/zpp.py= defines =ZppBuilder=, deriving from
+=CMakeProjectBuilder= and injecting zpp-specific CMake options and test/example
+switches. =zeta_forge deps= supplies shared Conan versions and package configs;
+zpp does not maintain a Conan recipe. Its CMake helpers come from
+=$ZETAX_ROOT/zeta_forge/cmake_util= rather than a project-owned =cmake_util= submodule.
+
+* Common Commands
+
+Use Forge's built-in targets:
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zeta_forge"
+./zbuild.py list
+./zbuild.py rebuild
+./zbuild.py install deps grpc hpx folly nng
+#+end_src
+
+Use the external project's entrypoint:
+
+#+begin_src bash
+cd "$ZETAX_ROOT/your_project"
+./zbuild.py build --profile debug
+./zbuild.py install
+#+end_src
+
+Override sources or the installation prefix:
+
+#+begin_src bash
+export ZETA_INSTALL_PREFIX=$HOME/.local/zeta
+export ZETA_TASKFLOW_SRC_DIR=$HOME/git/taskflow
+./zbuild.py rebuild
+#+end_src
+
+* Troubleshooting
+
+- Forge not found: set =ZETAX_ROOT=/path/to/workspace= and verify =$ZETAX_ROOT/zeta_forge= exists; without =ZETAX_ROOT=, use the standard sibling-checkout layout.
+- Dependency package missing: install the base target into =ZETA_INSTALL_PREFIX= with =install= and check =CMAKE_PREFIX_PATH=.
+- Conan toolchain missing: rerun the project entrypoint with =rebuild=, or remove the corresponding =build/<BUILD_TYPE>/conan= and retry.
+- Wrong source path: check that =ZETA_<NAME>_SRC_DIR= selects the intended checkout.
+- CMake fails after moving the build directory: use =rebuild= to clear CMake state for the current build type.
+
+* Versions and Updates
+
+NNG is pinned to =v2.0.0-rc.1=. See [[file:nng_upgrade.org][NNG Upgrade and Downstream Adaptation]]
+for the source commit, zpp API migration, Rust FFI rebuilds and Release build/install order.
+
+External consumers should record the Forge version they use.
+See [[file:../../VERSION][VERSION]] and [[file:../../release_history.org][release_history.org]].
+Before upgrading a consumer of public CLI, environment variables, Conan recipes
+or Builder APIs, read the corresponding release notes.

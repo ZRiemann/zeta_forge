@@ -1,0 +1,37 @@
+#+TITLE: Zeta Forge CMake 辅助模块
+
+[[file:readme.org][返回文档首页]] | [[file:../en/cmake_util.org][English Version]]
+
+* 归属与依赖查找
+
+=cmake_util/= 提供 package 查找、公共预定义等 CMake 辅助模块。
+该副本由 =zeta_forge= 维护；原独立 =cmake_util= 项目已属遗留项目，
+不再作为 ZetaX 项目的更新点。
+
+此处不维护遗留 =cbuild= 启动脚本。项目使用自己的 =zbuild.py= 入口，
+以 CMake 模块形式消费这些文件。
+
+=common.cmake= 不管理第三方 fallback 下载。现代 ZetaX 项目通过显式
+=CMAKE_PREFIX_PATH= 消费 =zeta_forge deps= 准备的 package config。
+=find_package/= 下的文件属于历史兼容模块，不由现代公共入口引入。
+
+* add_run_target 辅助函数
+
+=add_run_target(exe_target [ARGS <args>...])= 创建名为 =run_<exe_target>= 的
+CMake 自定义目标，在当前 binary directory 执行已构建的可执行文件。
+
+使用 Forge 公共 Python 框架的项目可以通过自己的 =zbuild.py= 命令暴露这些入口。
+共享的 action-first CLI 维护在 =zeta_forge.run_targets= 中，读取项目
+=CMakeLists.txt=，列出配置的运行入口名称及对应 CMake 命令。
+
+使用示例：
+
+#+begin_src cmake
+add_run_target(uni_svr ARGS ${PROJECT_SOURCE_DIR}/doc/server.json uni_svr)
+#+end_src
+
+通过 CMake 执行，不附加额外参数：
+
+#+begin_src bash
+cmake --build build --target run_uni_svr
+#+end_src

@@ -1,0 +1,14 @@
+#+TITLE: Zeta Forge Build Documentation
+
+[[file:readme.org][Back to Documentation]] | [[file:../zh-CN/build.org][Chinese Version]]
+
+* Current Build Contract
+
+The root [[file:../../BUILD.org][BUILD.org]] is the authoritative English contract for
+commands, default targets, profiles, staging, installation, cleanup and verification
+scope. It is maintained at the root so build users can discover it directly.
+The [[file:../zh-CN/build.org][Chinese version]] translates that contract.
+
+For setup and command examples, see [[file:readme.org][the project guide]].
+The [[file:build-entry-validation.org][dated validation record]] documents historical
+results; it does not establish the status of the current checkout.

@@ -1,0 +1,116 @@
+#+STARTUP: indent
+#+TITLE: NNG 2.0 RC Upgrade and Downstream Adaptation
+
+[[file:readme.org][Back to Documentation]] | [[file:../zh-CN/nng_upgrade.org][Chinese Version]]
+
+* Version and Source
+
+The =zeta_forge/3rd/nng= submodule manages NNG source. This upgrade pins upstream
+=v2.0.0-rc.1= at =8fde97db953012882298254bc4753d53e9155bb6= without local source
+patches. The legacy CPM fallback uses the same version; modern projects continue
+to consume Forge-installed package configs. Builds remain static, with HTTP
+enabled and TLS and nngcat disabled.
+
+This RC's header still sets =NNG_RELEASE_SUFFIX= to =beta=; checking only
+=nng_version()= or the CMake package version cannot distinguish beta from this RC.
+Verify the actual source commit, then rebuild and install from that source:
+
+#+begin_src bash
+git -C "$ZETAX_ROOT/zeta_forge/3rd/nng" rev-parse HEAD
+git -C "$ZETAX_ROOT/zeta_forge/3rd/nng" describe --tags --exact-match
+#+end_src
+
+If =ZETA_NNG_SRC_DIR= or =ZETA_3RD_DIR= is set, first confirm that the actual input
+is the same commit. Keep =ZETA_INSTALL_PREFIX=, defaulting to =~/.local=;
+leave runtime configuration and proxy settings unchanged.
+
+* C++ API Migration
+
+Upstream removed =NNG_OPT_LOCADDR= and =nng_dialer_set_addr= in favor of
+=nng_dialer_bind=. zpp correspondingly removes =dialer::set_addr= and adds:
+
+#+begin_src cpp
+int bind(const nng_sockaddr &local_address) noexcept;
+#+end_src
+
+Call in the order =create -> bind -> start=. The source port must be zero;
+the address is borrowed only during =bind=, and the wrapper returns NNG error
+codes directly. Transports without bind support return =NNG_ENOTSUP=.
+The upgrade does not change message ownership, application protocols or existing
+explicit receive-size configuration.
+
+NNG's default =NNG_OPT_RECVMAXSZ= changes from unlimited to 1 GiB; existing explicit
+zpp endpoint limits still apply. On Windows, =ipc://= now uses AF_UNIX and is
+equivalent to =unix://=. Use =winpipe://= for legacy named pipes or interoperability
+with older applications. Linux IPC path semantics remain unchanged.
+
+* Rust Bindings
+
+=nng-rs/anng= stays at the approved commit
+=a474ee0272d18f20c360837e2f602dc53ae3b9ec=. As of 2026-10-14, upstream's latest
+commit differed only by four CI updates, with no Rust or FFI source changes.
+Forge's =rust/catalog.toml=, Trader's Cargo dependency declarations and =Cargo.lock=
+retain that pin.
+
+Keep vendored NNG disabled using Forge-injected =NNG_NO_VENDOR=1=, =NNG_DIR= and
+=NNG_STATIC=1=. When using an external library, the pinned =nng-sys= generates FFI
+from the installed headers into the Cargo build directory. No edits to pregenerated
+bindings or the Cargo cache are needed. Rebuild Rust outputs after replacing a
+static library at the same prefix; do not rely on automatic cache invalidation.
+
+* Release Build, Install and Validation Order
+
+The operator runs these commands, proceeding only after each step succeeds.
+Use the current workspace's =ZETAX_ROOT=; the standard local layout can explicitly
+set it to =/home/booster/git=. Base Release dependencies and existing HPX/zpp HPX
+installations are prerequisites; this sequence updates only NNG and its consumers.
+
+Rebuild NNG before publishing it to the installation prefix. Forge's =install=
+does not rebuild:
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zeta_forge"
+./zbuild.py doctor nng --profile release
+./zbuild.py rebuild nng --profile release
+./zbuild.py install nng --profile release
+#+end_src
+
+=rebuild= clears NNG's Release build directory and staging, leaving other
+dependencies and Debug intact. Then build, test and install zpp's NNG module:
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zpp"
+./zbuild.py build zpp_nng --profile release
+./zbuild.py test zpp_nng --profile release
+./zbuild.py install zpp_nng --profile release
+#+end_src
+
+=test= includes core and NNG correctness tests; =install= also publishes the
+required core components. NNG endpoint tests cover address validation before bind,
+invalid handles and local TCP communication after bind.
+
+Finally rebuild all affected Trader deliverables and run correctness tests:
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zeta_trader"
+./zbuild.py build zeta_ctp_md zeta_ctp_trader zeta_trader_hpx zeta_nng_md_consumer zeta_nng_gateway_consumer --profile release
+./zbuild.py rebuild zeta_owl zti_probe dioxus_trading_ui --profile release
+./zbuild.py test zeta_nng_md_consumer --profile release
+./zbuild.py test zti_probe --profile release
+#+end_src
+
+Rust =rebuild= clears shared Release Cargo/Dioxus outputs, including old FFI and
+statically linked artifacts, so select all three frontend deliverables together.
+Debug outputs remain intact. The native test entrypoint runs shared CTest
+correctness tests. Rust tests include support packages such as =zti_transport_nng=,
+covering PUB/SUB, REQ/REP and cancellation.
+
+This document does not establish that builds or tests have run. Acceptance must
+record actual command results. Debug, Windows, live trading connections,
+sanitizers and long-running stress tests require separate validation.
+
+* Upstream References
+
+- [[https://github.com/nanomsg/nng/releases/tag/v2.0.0-rc.1][NNG v2.0.0-rc.1 release notes]]
+- [[https://nng.nanomsg.org/ref/migrate/nng1.html][NNG 2.0 migration guide]]
+- [[https://github.com/nanomsg/nng-rs/blob/a474ee0272d18f20c360837e2f602dc53ae3b9ec/nng-sys/build.rs][Binding generation at the pinned nng-sys commit]]

@@ -1,232 +1,37 @@
 * Zeta Forge
 
-Zeta Forge is the ZetaX engineering-management layer for unified source management, reproducible builds, dependency governance, and reusable project tooling across C++ and Rust repositories.
+[[file:doc/en/readme.org][English Documentation]] (Primary) | [[file:doc/zh-CN/readme.org][中文文档]]
 
-中文 README: [[file:doc/readme_cn.org][doc/readme_cn.org]]
+Zeta Forge is the ZetaX engineering-management layer for source management,
+reproducible C++/Rust builds, dependency governance and reusable project tooling.
+External projects keep their business code and reuse Forge through their own
+thin =zbuild.py= entrypoints.
 
-* Project Purpose
+* Quick Start
 
-Zeta Forge has three explicit roles:
-
-1. It provides shared project tooling: Conan/CMake/Ninja orchestration for native projects and Cargo workspace governance for Rust projects.
-2. It coordinates versions across ZetaX, including submodule revisions, C++ package versions, Rust toolchains, managed crate declarations, and shared build defaults.
-3. It provides reusable project-management APIs. External repositories locate =zeta_forge= through =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout and keep only business-specific orchestration locally.
-
-Architecture and integration documents:
-
-- Chinese architecture design: [[file:doc/architecture_cn.org][doc/architecture_cn.org]]
-- Chinese third-party usage guide: [[file:doc/third_party_usage_cn.org][doc/third_party_usage_cn.org]]
-- Chinese Rust workspace guide: [[file:doc/rust_workspace_cn.org][doc/rust_workspace_cn.org]]
-- Release history: [[file:release_history.org][release_history.org]]
-
-* Clone And Initialize
-
-Clone with submodules:
+Clone with submodules, prepare the host prerequisites, then run commands from
+the repository root:
 
 #+begin_src bash
 git clone --recurse-submodules <repo-url>
-#+end_src
-
-If the repository has already been cloned, initialize all submodules recursively:
-
-#+begin_src bash
-git submodule update --init --recursive
-#+end_src
-
-This is required because some source repositories also contain nested submodules, for example gRPC.
-
-* Prepare Debian-Based Systems
-
-For private ZetaX environments, the preparation flow can be split into two layers:
-
-1. =zsa= bootstraps the Debian/Ubuntu host environment.
-2. =zeta_forge= prepares repo-local toolchains and dependencies.
-
-If =zsa= is checked out next to =zeta_forge=, you can bootstrap the host with:
-
-#+begin_src bash
-../zsa/util/bootstrap_debian.sh --minimal
-#+end_src
-
-Public users can prepare the same host packages manually, then prepare the =zeta_forge= workspace with:
-
-#+begin_src bash
+cd zeta_forge
 ./common/prepare_debian.sh
+./zbuild.py list
+./zbuild.py build nng --profile release
+./zbuild.py install nng --profile release
 #+end_src
 
-=./common/prepare_debian.sh= focuses on =zeta_forge=-local toolchain management: build dependencies, Conan 2, and submodule initialization. By default it follows the active ZetaX/uv Python environment prepared by =zsa=; pass =--python-version X.Y= only when a project needs an explicit Conan Python runtime. =zsa= is optional for public users. If Python is not available yet, the wrapper prints the minimal host packages that must be installed first; when a sibling =zsa= checkout exists, it also shows the optional =../zsa/util/bootstrap_debian.sh --minimal= helper.
+Host preparation details and all supported workflows are in the
+[[file:doc/en/readme.org][English guide]] and [[file:doc/zh-CN/readme.org][中文指南]].
+=build= stages outputs locally; =install= publishes explicitly selected,
+previously built targets of the same profile. See [[file:BUILD.org][the build contract]].
 
-* Unified Build Entry
+* Documentation and Version
 
-You can invoke builds from the repository root through the unified dispatcher:
+- [[file:doc/en/readme.org][English documentation]] is primary; [[file:doc/zh-CN/readme.org][简体中文文档]] is maintained alongside it.
+- [[file:VERSION][VERSION]] records the current project version.
+- [[file:release_history.org][Release history]] | [[file:doc/zh-CN/release_history.org][发布历史]]
 
-#+begin_src bash
-./zbuild.py build grpc hpx
-./zbuild.py install grpc
-./zbuild.py install hpx
-./zbuild.py rebuild
-../zeta_trader/zbuild.py doctor zeta_owl
-#+end_src
-
-=zbuild.py= uses the =z= from =zeta_forge= to represent the top-level workspace entry rather than a CMake-specific command.
-=zbuild.py= can be executed directly and routes commands to the corresponding workspace target entrypoints under =builder/=.
-The default sequence is =deps grpc hpx folly nng=. Build uses per-target local staging;
-only =install= publishes explicitly selected, previously built libraries. See [[file:BUILD.org][the build contract]].
-Upstream tests/examples remain disabled; Forge's own test action runs tooling tests.
-
-* Source Layout
-
-Third-party source checkouts live under =3rd/=:
-
-- =3rd/hpx=
-- =3rd/folly=
-- =3rd/grpc=
-- =3rd/nng=
-- =3rd/taskflow=
-- =3rd/rapidjson=
-
-External ZetaX projects such as =zpp= live next to =zeta_forge= under =ZETAX_ROOT= and call this repository as a reusable toolchain framework.
-The workspace target entrypoints in this repository use the managed =3rd/*= submodules by default.
-The workspace orchestration entrypoints live under =builder/=.
-Shared CMake helper modules live under =cmake_util/=. This directory is the maintained ZetaX copy of the legacy standalone =cmake_util= project.
-Rust governance lives under =rust/= and =common/zeta_forge/rust_workspace.py=. External Rust projects keep their source and lockfile while adopting Forge's approved dependency catalog through =zeta-rust.toml=.
-
-* Rust Project Management
-
-Forge approves exact toolchains under =rust/toolchains/= and direct crate versions,
-Git revisions, Cargo tools and application capabilities in =rust/catalog.toml=.
-The catalog may approve multiple exact versions of one crate. A project's
-=zeta-rust.toml= (schema 2) records its workspace, toolchain file, capabilities
-and native-library requirements. Its =[workspace.dependencies]= selects approved
-versions; =Cargo.lock= retains the resolved graph. Project-owned Cargo features
-are allowed except for explicit catalog requirements such as bundled SQLite and
-the native NNG binding's disabled default features. The shared CLI owns the
-release/debug default.
-
-Cargo-installed tools such as Dioxus CLI are isolated under
-=${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>=. Project commands
-ignore executables with the same name on the global =PATH=. =doctor= checks the
-isolated tool without changing the environment. When a selected Rust delivery
-needs a missing or mismatched tool, =check=, =build=, =rebuild=, =test=, =dev=,
-and =fetch= install its approved version with the pinned toolchain and =--locked=.
-Tool preparation follows all preflight checks and precedes any build or rebuild
-cleanup. Installation requires registry access; an installation failure stops the
-command before project build state is removed. The equivalent standalone command is:
-
-#+begin_src bash
-cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
-  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
-#+end_src
-
-#+begin_src bash
-../zeta_trader/zbuild.py doctor zeta_owl
-../zeta_trader/zbuild.py metadata zeta_owl
-../zeta_trader/zbuild.py check zeta_owl --profile release
-../zeta_trader/zbuild.py build zeta_owl --profile release
-../zeta_trader/zbuild.py rebuild zeta_owl --profile release
-../zeta_trader/zbuild.py test zeta_owl --profile release
-#+end_src
-
-=check= performs format, Cargo check, and Clippy gates without producing final
-application artifacts. =build= produces workspace artifacts. =rebuild= cleans
-only the selected profile's workspace-member artifacts before building again;
-it does not clear Cargo's downloaded source cache. Compilation commands default
-to =release=; choose =--profile debug= for Cargo's dev profile.
-
-Projects own their workspace members, application features, source code, and
-=Cargo.lock=. Member crates inherit third-party dependencies from the workspace;
-each external workspace dependency must match the Forge catalog. Cargo remains the
-Rust package resolver, while Conan remains responsible for native C/C++
-packages. Forge passes managed native installations such as NNG to Rust
-bindings without enabling a second vendored build.
-
-The =dioxus-web-fullstack= capability checks the approved Dioxus dependency,
-CLI and Web target. Projects continue to own their platform feature
-composition, such as =dioxus/web=, =dioxus/server=, =dioxus/fullstack=, and
-=dioxus/router=; those features do not establish a separate dependency version.
-For a Web target that must omit release DWARF symbols, set
-=RustTarget(..., web_release_debug_symbols=False)= in the project build definition.
-Forge then passes =--debug-symbols false= to Dioxus release builds; other targets
-and debug-profile builds keep the Dioxus default.
-Project =doctor= also verifies the pinned Dioxus CLI and, for Web projects,
-the selected toolchain's =wasm32-unknown-unknown= target. SQLite projects select
-the approved =rusqlite= version directly and enable its required =bundled= feature.
-
-* ZetaX Workspace Root
-
-=ZETAX_ROOT= is the only public top-level workspace variable, for example =~/git=.
-With the standard layout, =zeta_forge= lives at =$ZETAX_ROOT/zeta_forge= and external projects such as =zpp= live at =$ZETAX_ROOT/zpp=.
-=zsa= can export =ZETAX_ROOT= for private workflows, but public users may set it manually.
-
-When a project entrypoint needs the shared build library, it resolves =zeta_forge= in this order:
-
-1. =$ZETAX_ROOT/zeta_forge= when =ZETAX_ROOT= is set.
-2. the sibling =zeta_forge= checkout.
-
-* Override Source Directories
-
-If you want to build against your own local checkout instead of the managed submodules, override the corresponding environment variable before running a workspace target entrypoint:
-
-#+begin_src bash
-export ZETA_GRPC_SRC_DIR=/path/to/grpc
-export ZETA_HPX_SRC_DIR=/path/to/hpx
-export ZETA_FOLLY_SRC_DIR=/path/to/folly
-export ZETA_NNG_SRC_DIR=/path/to/nng
-export ZETA_TASKFLOW_SRC_DIR=/path/to/taskflow
-export ZETA_RAPIDJSON_SRC_DIR=/path/to/rapidjson
-export ZETAX_ROOT=/path/to/zetax-workspace
-export ZETA_3RD_DIR=/path/to/zeta_forge/3rd
-export ZETA_INSTALL_PREFIX=/path/to/install/prefix
-#+end_src
-
-If an override is not provided, third-party source paths default to the corresponding path under =3rd/=.
-
-By default, =ZETA_INSTALL_PREFIX= is set to =~/.local=.
-
-* Workspace Target Entrypoints
-
-Examples:
-
-#+begin_src bash
-./zbuild.py build deps --profile debug
-./zbuild.py install deps --profile debug
-./zbuild.py build grpc hpx folly nng
-./zbuild.py install grpc
-./zbuild.py install hpx
-./zbuild.py install folly
-./zbuild.py install nng
-#+end_src
-
-=deps= is the single ZetaX Conan entrypoint for common C++ package configs
-consumed by external projects such as =zpp= and =zeta_trader=. The explicit =install deps= action publishes
-Conan-generated package files under
-=${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=. External projects
-should consume that installed environment and should not run their own Conan
-dependency graph for shared packages such as =spdlog=, =fmt=, =GTest=, or =SQLite3=.
-
-* External zpp Entrypoint
-
-=zpp= is an independent ZetaX project under =$ZETAX_ROOT/zpp=. It owns only project-specific build logic, while shared Conan dependency versions and package configs are owned by =zeta_forge deps=.
-
-#+begin_src bash
-cd "$ZETAX_ROOT/zeta_forge"
-./zbuild.py build deps --profile debug
-./zbuild.py install deps --profile debug
-cd "$ZETAX_ROOT/zpp"
-./zbuild.py rebuild
-#+end_src
-
-The entrypoint uses the current =zpp= checkout as =ZETA_ZPP_SRC_DIR= unless that variable is explicitly set.
-It reuses the shared build library from =$ZETAX_ROOT/zeta_forge= or a nearby sibling checkout, while zpp-specific build logic lives under =zpp/builder/=.
-It also consumes shared CMake helper modules from =$ZETAX_ROOT/zeta_forge/cmake_util= instead of carrying a =cmake_util= submodule.
-The shared Conan dependency versions, including =spdlog=, =fmt=, and =SQLite3=, are owned by =zeta_forge deps=.
-
-* Current Notes
-
-- gRPC is the workspace source for the core RPC dependency family: Abseil, Protobuf, zlib, TLS/BoringSSL, c-ares, RE2, upb, utf8_range, xxhash, and address_sorting.
-- HPX examples and tests, including performance-test targets, are disabled by default; the =hpxdep= and =inspect= tools remain enabled and =hpx_stat_viewer.py= remains installable.
-- HPX always fetches stdexec at commit =05e3f5ec59655fee2536fc3116e5ffb4927ae955= through =HPX_WITH_FETCH_STDEXEC=ON=; this keeps the installed execution API aligned with the managed =3rd/hpx= source revision.
-- gRPC test/tooling ecosystem dependencies such as benchmark, bloaty, googletest, googleapis, xDS, Envoy API, protoc-gen-validate, and OpenTelemetry C++ are not installed as default Zeta Forge development dependencies.
-- External zpp builds use Taskflow and RapidJSON from =3rd/= by default.
-- RapidJSON is passed to zpp through =RAPIDJSON_ROOT=.
-- zpp's optional HPX module consumes the installed HPX package together with the forge Asio/Hwloc compatibility configs and rejects an installation whose =HPX_GIT_COMMIT= differs from the current =3rd/hpx= source.
+Architecture, integration, Rust, NNG, build and CMake helper guides are listed in
+each language's documentation index. Historical validation records describe only
+the dated checks they record.

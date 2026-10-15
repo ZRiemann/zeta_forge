@@ -1,0 +1,39 @@
+#+TITLE: Zeta Forge CMake Helpers
+
+[[file:readme.org][Back to Documentation]] | [[file:../zh-CN/cmake_util.org][Chinese Version]]
+
+* Ownership and Dependency Discovery
+
+=cmake_util/= provides CMake helpers such as package discovery and shared
+predefinitions. This copy is maintained by =zeta_forge=. The original standalone
+=cmake_util= project is legacy and is no longer the update point for ZetaX projects.
+
+Legacy =cbuild= launchers are not maintained here. Projects use their =zbuild.py=
+entrypoints and consume these files as CMake modules.
+
+=common.cmake= does not manage third-party fallback downloads. Modern ZetaX
+projects consume package configs prepared by =zeta_forge deps= through an explicit
+=CMAKE_PREFIX_PATH=. Files under =find_package/= are legacy compatibility modules
+and are not included by the modern shared entrypoint.
+
+* add_run_target Helper
+
+=add_run_target(exe_target [ARGS <args>...])= creates a CMake custom target named
+=run_<exe_target>= that executes the built executable in the current binary directory.
+
+Projects using the shared Forge Python framework can expose these entries through
+their =zbuild.py= commands. The shared action-first CLI is maintained in
+=zeta_forge.run_targets= and reads project =CMakeLists.txt= files to list the
+configured run entry name and matching CMake command.
+
+Usage example:
+
+#+begin_src cmake
+add_run_target(uni_svr ARGS ${PROJECT_SOURCE_DIR}/doc/server.json uni_svr)
+#+end_src
+
+Run it from CMake without extra arguments:
+
+#+begin_src bash
+cmake --build build --target run_uni_svr
+#+end_src

@@ -1,6 +1,8 @@
 #+STARTUP: indent
 #+TITLE: Zeta Forge Rust 工程治理
 
+[[file:readme.org][返回文档首页]] | [[file:../en/rust_workspace.org][English Version]]
+
 * 目标与归属
 
 =zeta_forge= 统一批准 Rust 工具链、第三方直接 crate 的精确版本与来源，以及应用能力所需的 Cargo 工具。业务仓库拥有源码、workspace 成员、普通 Cargo feature 组合和提交的 =Cargo.lock=。Cargo 解析完整依赖图；Forge 校验直接依赖是否在批准目录内。Conan 只管理 C/C++ package。
@@ -43,7 +45,7 @@ NNG 由 Forge 管理源码、构建和安装；Cargo 继续禁用 vendored NNG�
 避免复用旧产物；Rust =rebuild= 清理所选 profile 的共享 Cargo/Dioxus 输出，
 因此应显式选择需要恢复的全部交付项。
 本次 NNG =v2.0.0-rc.1= 升级保持 =anng= 的批准提交及项目锁文件不变。
-完整操作顺序和验证边界见 [[file:nng_upgrade_cn.org][NNG 升级与下游适配]]。
+完整操作顺序和验证边界见 [[file:nng_upgrade.org][NNG 升级与下游适配]]。
 
 * 应用能力与工具
 

@@ -1,249 +1,263 @@
 #+STARTUP: indent
 #+TITLE: Zeta Forge Release History
 
+[[file:doc/en/readme.org][Back to Documentation]] | [[file:doc/zh-CN/release_history.org][Chinese Version]]
+
 * Release History
 
-** v1.5.0 - 2026-10-15
-*** 变更内容
-- 将 NNG submodule 固定到 =v2.0.0-rc.1=（=8fde97db953012882298254bc4753d53e9155bb6=），同步历史 CPM fallback 版本。
-- 新增 NNG 升级与下游适配文档，记录 C++ 接口迁移、Rust FFI 重建及 Release 编译安装和验证顺序。
-- 在 Rust 工作区和第三方依赖使用文档中补充升级说明与操作文档链接。
+** v1.6.0 - 2026-10-15
+*** Changes
+- Establish primary English documentation in =doc/en/= and Simplified Chinese translations in =doc/zh-CN/=, with shared topic names, language links and synchronized maintenance rules.
+- Simplify the root README, organize bilingual architecture, integration, Rust, NNG, build and CMake helper guides, and retain the root English build contract.
+- Translate all 17 existing release entries into English, preserve the complete Chinese history and dated validation evidence, and align the zpp README example with its debug dependency profile.
 
-*** 验证
-- 本次提交仅检查差异与版本记录，未重新运行构建或测试；文档中的验证命令不代表已经执行。
+*** Compatibility and Upgrade Notes
+- Remove the former flat documentation paths without redirect pages; update bookmarks and external links to the language-specific paths. Public APIs, build behavior and dependency revisions are unchanged.
+
+*** Validation
+- Documentation migration checks passed for 20 Org files, 98 local links, bilingual source blocks and the 17 existing release entries; diff checks passed. No builds, business tests or documented commands were executed.
+
+** v1.5.0 - 2026-10-15
+*** Changes
+- Pin the NNG submodule to =v2.0.0-rc.1= (=8fde97db953012882298254bc4753d53e9155bb6=) and synchronize the legacy CPM fallback version.
+- Add NNG upgrade and downstream adaptation documentation covering C++ API migration, Rust FFI rebuilds and Release build, install and validation order.
+- Add upgrade guidance and links to the Rust workspace and third-party usage guides.
+
+*** Validation
+- This commit checked only diffs and version records; builds and tests were not rerun. Documented validation commands do not establish that they ran.
 
 ** v1.4.0 - 2026-10-14
-*** 变更内容
-- 新增 =RustTarget.web_release_debug_symbols= 可选配置，供 Web release build 显式控制 Dioxus 调试符号；默认保持既有行为。
-- 补充关闭调试符号及 debug profile 不受影响的构建契约测试，并同步中英文使用文档。
+*** Changes
+- Add optional =RustTarget.web_release_debug_symbols= configuration to control Dioxus debug symbols for Web release builds; the default preserves existing behavior.
+- Add build-contract tests for disabling debug symbols and preserving debug-profile behavior; synchronize English and Chinese usage documentation.
 
-*** 验证
-- 本次提交仅检查差异与版本记录，未重新运行构建或测试。
+*** Validation
+- This commit checked only diffs and version records; builds and tests were not rerun.
 
 ** v1.3.0 - 2026-09-24
-*** 变更内容
-- Rust 交付项在所有预检通过后，按 Forge 目录准备缺失或版本不符的 Cargo 工具；准备失败时不执行构建或 rebuild 清理。
-- =doctor= 继续只读检查工具，=run= 继续使用既有工具与产物；补充构建契约和工具安装测试及文档。
+*** Changes
+- Prepare missing or mismatched Cargo tools for Rust deliverables from the Forge catalog after all preflight checks pass; preparation failure prevents building or rebuild cleanup.
+- Keep =doctor= read-only and =run= limited to existing tools and outputs; add build-contract and tool-installation tests and documentation.
 
-*** 验证
-- 本次提交仅检查差异与版本记录，未重新运行构建或测试。
+*** Validation
+- This commit checked only diffs and version records; builds and tests were not rerun.
 
 ** v1.2.0 - 2026-09-24
-*** 发布定位摘要
-- 将 Rust 治理从整套版本基线改为工具链定义与可并存的直接依赖批准目录。
+*** Release Summary
+- Replace whole-version Rust baselines with toolchain definitions and an approved direct-dependency catalog supporting coexisting versions.
 
-*** 变更内容
-- 新增 =rust/toolchains/1.97.1.toml= 与 =rust/catalog.toml=，批准精确 crate 版本、Git revision、Cargo 工具和 Dioxus 能力。
-- 使用 schema 2 的 =zeta-rust.toml= 和项目 =[workspace.dependencies]= 选择已批准的依赖，并校验必要 feature、工具链和能力要求。
-- Cargo 工具改按工具链、工具名和版本隔离；Rust metadata 报告工具链、能力和依赖。
-- 更新 Rust 工作区测试及中英文接入文档。
+*** Changes
+- Add =rust/toolchains/1.97.1.toml= and =rust/catalog.toml= to approve exact crate versions, Git revisions, Cargo tools and Dioxus capabilities.
+- Use schema 2 =zeta-rust.toml= and project =[workspace.dependencies]= to select approved dependencies and validate required features, toolchains and capabilities.
+- Isolate Cargo tools by toolchain, name and version; report toolchains, capabilities and dependencies in Rust metadata.
+- Update Rust workspace tests and English/Chinese integration documentation.
 
-*** 兼容性与升级说明
-- 删除 =rust/baselines/1.97.1-r1.toml=、=1.97.1-r2.toml= 和 =1.97.1-r3.toml=；旧的 schema 1 项目配置与 Cargo 工具安装目录不再受支持。
-- 消费项目须迁移到 schema 2，使用项目工具链文件和 Forge 目录中批准的直接依赖；需要 Dioxus 的项目须按新目录安装 CLI。
+*** Compatibility and Upgrade Notes
+- Remove =rust/baselines/1.97.1-r1.toml=, =1.97.1-r2.toml= and =1.97.1-r3.toml=; schema 1 project configuration and the old Cargo-tool installation directory are no longer supported.
+- Consumers must migrate to schema 2, using project toolchain files and Forge-approved direct dependencies; Dioxus projects must install the CLI in the new directory.
 
-*** 验证
-- =python3 -m unittest discover -s tests=：35 项通过；未运行完整构建。
+*** Validation
+- =python3 -m unittest discover -s tests=: 35 tests passed; no full build was run.
 
 ** v1.1.1 - 2026-09-24
-*** 变更内容
-- Forge 构建契约测试只运行自身入口，不再依赖兄弟仓库的检出状态或分支。
-- 明确外部项目在各自仓库验证项目级构建入口。
+*** Changes
+- Limit Forge build-contract tests to its own entrypoint, removing dependency on sibling checkout state or branches.
+- Clarify that external projects validate their project-level build entrypoints in their own repositories.
 
-*** 验证
-- =python3 -m unittest discover -s tests=：35 项通过；未运行完整构建。
+*** Validation
+- =python3 -m unittest discover -s tests=: 35 tests passed; no full build was run.
 
 ** v1.1.0 - 2026-09-24
-*** 发布定位摘要
-- 为 Web/Fullstack 服务端新增受管 SQLite 依赖基线，支持 zeta_practice Stage 1.2。
+*** Release Summary
+- Add a managed SQLite dependency baseline for Web/Fullstack servers, supporting zeta_practice Stage 1.2.
 
-*** 变更内容
-- 新增不可变 Rust =1.97.1-r3= 基线，保留 =1.97.1-r1= 的 Dioxus 能力并增加 =sqlite= 依赖组。
-- 固定 =rusqlite 0.40.2=，启用 bundled SQLite，避免运行环境依赖系统 SQLite 开发包。
-- 记录新基线的项目采用与验证方式。
+*** Changes
+- Add immutable Rust baseline =1.97.1-r3=, retaining the Dioxus capabilities of =1.97.1-r1= and adding the =sqlite= dependency group.
+- Pin =rusqlite 0.40.2= with bundled SQLite so runtime environments do not require system SQLite development packages.
+- Document project adoption and validation of the new baseline.
 
-*** 兼容性与升级说明
-- 已采用 =1.97.1-r1= 或 =1.97.1-r2= 的项目无需自动迁移；需要 SQLite 能力的项目显式选择 =1.97.1-r3=。
+*** Compatibility and Upgrade Notes
+- Projects using =1.97.1-r1= or =1.97.1-r2= need no automatic migration; projects requiring SQLite explicitly select =1.97.1-r3=.
 
 ** v1.0.0 - 2026-09-23
-*** 发布定位摘要
-- 建立统一、可发现的 Forge 构建契约，以产品和工程单元取代各目录独立脚本与旧式命令分派。
-- 分离构建、暂存与显式发布生命周期，并为 CMake、Rust 和 Gradle 提供共享执行引擎。
+*** Release Summary
+- Establish a unified, discoverable Forge build contract, replacing directory-specific scripts and legacy dispatch with products and engineering units.
+- Separate build, staging and explicit publication lifecycles with shared CMake, Rust and Gradle engines.
 
-*** 变更内容
-- 根 =./zbuild.py= 统一提供 =list=、=metadata=、=build=、=install=、=check=、=test=、=clean= 与 =rebuild=，支持目标选择、profile 和无副作用的 =--dry-run=。
-- 将各原生依赖入口改为项目定义，由共享 CLI、操作模型及 CMake/Rust/Gradle 引擎集中处理依赖顺序、目标能力和错误语义。
-- 构建产物先写入项目内 profile/target 隔离的 staging；=install= 仅发布显式选择且已成功构建的目标，并修正已安装 CMake 与 pkg-config 元数据前缀。
-- Rust 治理迁移到 =1.97.1-r2= 基线，移除项目级默认 profile，并由统一命令契约显式选择构建 profile。
-- 新增构建契约、原生交付和安装安全测试，并同步中英文架构、使用说明及迁移文档。
+*** Changes
+- Unify =list=, =metadata=, =build=, =install=, =check=, =test=, =clean= and =rebuild= under root =./zbuild.py=, with target selection, profiles and side-effect-free =--dry-run=.
+- Replace individual native dependency entrypoints with project definitions; centralize dependency order, target capabilities and error semantics in the shared CLI, operation model and CMake/Rust/Gradle engines.
+- Write build outputs to project-local staging isolated by profile/target; =install= publishes only explicitly selected, successfully built targets and fixes installed CMake and pkg-config metadata prefixes.
+- Migrate Rust governance to baseline =1.97.1-r2=, remove project-level default profiles and select build profiles through the unified command contract.
+- Add build-contract, native-delivery and install-safety tests; synchronize English/Chinese architecture, usage and migration documentation.
 
-*** 兼容性与升级说明
-- 旧的 flag-only、stack-first、别名命令以及 =builder/*/zbuild.py= 独立入口不再支持；调用方必须迁移到 =./zbuild.py <command> [deliverable ...] [--profile release|debug]=。
-- =install= 不再隐式构建或发布全部依赖；必须先用相同 profile 完成 =build=，再显式指定需要发布的目标。
-- Rust 项目必须采用 =1.97.1-r2= 并移除 =zeta-rust.toml= 中的 =default-profile=。
+*** Compatibility and Upgrade Notes
+- Remove support for legacy flag-only, stack-first and alias commands and standalone =builder/*/zbuild.py= entrypoints; callers must migrate to =./zbuild.py <command> [deliverable ...] [--profile release|debug]=.
+- =install= no longer builds implicitly or publishes every dependency; first complete =build= with the same profile, then explicitly select the targets to publish.
+- Rust projects must adopt =1.97.1-r2= and remove =default-profile= from =zeta-rust.toml=.
 
 ** v0.9.0 - 2026-09-20
-*** 发布定位摘要
-- 将 Rust 治理从单一活动基线升级为可并存、不可变的精确版本基线。
-- 按 baseline 隔离 Cargo 安装工具，避免不同 Rust/Dioxus 工具版本相互覆盖。
+*** Release Summary
+- Replace a single active Rust baseline with coexisting, immutable exact-version baselines.
+- Isolate Cargo-installed tools by baseline to avoid overwriting different Rust/Dioxus tool versions.
 
-*** 变更内容
-- 以 =rust/baselines/1.97.1-r1.toml= 替换单一 =rust/baseline.toml=，并校验文件名、内部 ID、Rust 版本、修订号、发布日期和 toolchain channel 一致。
-- 业务项目按 =zeta-rust.toml= 中的精确 ID 选择基线；未知 ID 会列出可用基线，不提供隐式 current 或 =2026.09= 兼容别名。
-- Cargo 工具严格从 =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust/<baseline-id>/bin= 解析；缺失、不可执行或版本不匹配时给出隔离安装命令，不回退全局 =PATH=。
-- 扩展 Rust workspace 测试，覆盖多基线选择、元数据不一致、旧 ID 拒绝及 Cargo 工具隔离。
+*** Changes
+- Replace =rust/baseline.toml= with =rust/baselines/1.97.1-r1.toml= and validate agreement among the filename, internal ID, Rust version, revision, release date and toolchain channel.
+- Projects select a baseline by exact ID in =zeta-rust.toml=; unknown IDs list available baselines, without an implicit current or =2026.09= compatibility alias.
+- Resolve Cargo tools strictly from =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust/<baseline-id>/bin=; missing, non-executable or mismatched tools report isolated installation commands without a global =PATH= fallback.
+- Expand Rust workspace tests for multiple baseline selection, inconsistent metadata, rejection of old IDs and Cargo-tool isolation.
 
-*** 兼容性与升级说明
-- =zeta_trader= 和 =zeta_practice= 需在各自后续版本中把 baseline ID 迁移到 =1.97.1-r1=，本版本不修改下游仓库。
-- 使用 Dioxus 能力前，需要按 doctor 提示把固定版本 CLI 安装到所选 baseline 的专属目录。
+*** Compatibility and Upgrade Notes
+- =zeta_trader= and =zeta_practice= must migrate their baseline IDs to =1.97.1-r1= in subsequent releases; this release does not modify downstream repositories.
+- Before using Dioxus capabilities, install the pinned CLI in the selected baseline's dedicated directory as instructed by doctor.
 
 ** v0.8.0 - 2026-09-17
-*** 变更内容
-- 从 Conan OpenSSL 生成并验证原生依赖清单，为 Rust workspace 提供静态库路径，并拒绝冲突的环境变量覆盖。
-- 为 =zeta-rust.toml= 增加 =default-profile=，并让 Rust check、build、rebuild、test 与 run 统一使用显式 Cargo profile。
-- 增加 forge-managed Rust =build/rebuild=；rebuild 只清理指定 profile 的 workspace member，不清空整个 target tree 或 Cargo 下载缓存。
+*** Changes
+- Generate and validate a native-dependency manifest from Conan OpenSSL, provide Rust workspaces with static-library paths and reject conflicting environment overrides.
+- Add =default-profile= to =zeta-rust.toml= and use explicit Cargo profiles consistently for Rust check, build, rebuild, test and run.
+- Add Forge-managed Rust =build/rebuild=; rebuild cleans only workspace members for the selected profile, preserving the rest of the target tree and Cargo download cache.
 
 ** v0.7.0 - 2026-09-08
-*** 发布定位摘要
-- 将 zeta_forge 从 C++ 工具链框架升级为 C++/Rust 多语言工程治理层。
-- 新增 Rust toolchain、crate 依赖基线、workspace 检查和统一 Cargo 执行能力。
+*** Release Summary
+- Expand zeta_forge from a C++ toolchain framework to a C++/Rust multilanguage engineering-governance layer.
+- Add Rust toolchain and crate-dependency baselines, workspace checks and unified Cargo execution.
 
-*** 变更内容
-- 新增 =rust/baseline.toml=，统一管理 Rust 1.97.1、rustfmt、Clippy，以及 SDK、NNG 和 Dioxus 使用的直接 crate 声明。
-- 新增 =zeta_forge.rust_workspace= 公共模块，要求业务项目使用 =zeta-rust.toml=、单一 workspace lockfile 和 workspace 依赖继承。
-- 顶层 =./zbuild.py rust doctor/metadata/check/test --project-root <path>= 支持检查和执行外部 Rust 项目。
-- NNG Rust binding 强制复用 forge 安装的 native NNG，禁止 Cargo vendored build。
-- 更新中英文 README、架构文档并新增 Rust 工程治理说明，移除 zeta_forge 仅管理 C++ 项目的定位。
+*** Changes
+- Add =rust/baseline.toml= to manage Rust 1.97.1, rustfmt, Clippy and direct-crate declarations for SDK, NNG and Dioxus use.
+- Add the public =zeta_forge.rust_workspace= module, requiring projects to use =zeta-rust.toml=, a single workspace lockfile and workspace dependency inheritance.
+- Support checks and execution for external Rust projects through top-level =./zbuild.py rust doctor/metadata/check/test --project-root <path>=.
+- Require NNG Rust bindings to reuse Forge-installed native NNG and prohibit Cargo vendored builds.
+- Update English/Chinese READMEs and architecture documentation, add the Rust governance guide and remove the C++-only project description.
 
-*** 兼容性与升级说明
-- Rust 项目必须显式采用当前 forge 基线；旧的项目本地工具链和独立依赖治理入口不再受支持。
-- =rust check= 包含 rustfmt、Cargo check 和 Clippy；=rust test= 使用 committed lockfile 运行整个 workspace。
-- Rust 工具链通过 rustup 精确选择，不使用用户全局默认 Cargo 版本。
+*** Compatibility and Upgrade Notes
+- Rust projects must explicitly adopt the current Forge baseline; old project-local toolchain and independent dependency-governance entrypoints are no longer supported.
+- =rust check= includes rustfmt, Cargo check and Clippy; =rust test= runs the entire workspace with the committed lockfile.
+- Select the exact Rust toolchain through rustup instead of using the user's global default Cargo version.
 
 ** v0.6.1 - 2026-07-31
-*** 发布定位摘要
-- 统一仓库 C/C++ 格式化规则，并固定 HPX 使用的 stdexec 源码版本。
-- 补充 zpp 可选 HPX 模块的依赖兼容约束，zeta_forge 从 =v0.6.0= 升级到 =v0.6.1=。
+*** Release Summary
+- Unify repository C/C++ formatting rules and pin HPX's stdexec source revision.
+- Add compatibility requirements for zpp's optional HPX module; advance zeta_forge from =v0.6.0= to =v0.6.1=.
 
-*** 变更内容
-- 新增根目录 =.clang-format=，并通过 =.clang-format-ignore= 排除 =3rd/**= 第三方源码。
-- Git 忽略规则新增本地 =.vorg.db= 与 =.vscode/= 工作区文件。
-- HPX Builder 启用 =HPX_WITH_FETCH_STDEXEC=，并将 =HPX_WITH_STDEXEC_TAG= 固定为 commit =05e3f5ec59655fee2536fc3116e5ffb4927ae955=。
-- 更新中英文 README，说明 HPX stdexec 的固定版本，以及 zpp 可选 HPX 模块对已安装 HPX、forge Asio/Hwloc 兼容配置和 =HPX_GIT_COMMIT= 一致性的要求。
+*** Changes
+- Add root =.clang-format= and exclude =3rd/**= third-party sources through =.clang-format-ignore=.
+- Ignore local =.vorg.db= and =.vscode/= workspace files in Git.
+- Enable =HPX_WITH_FETCH_STDEXEC= in the HPX Builder and pin =HPX_WITH_STDEXEC_TAG= to commit =05e3f5ec59655fee2536fc3116e5ffb4927ae955=.
+- Update English/Chinese READMEs with the stdexec pin and zpp optional HPX requirements for installed HPX, Forge Asio/Hwloc compatibility configs and matching =HPX_GIT_COMMIT=.
 
-*** 兼容性与升级说明
-- 构建 HPX 时需要能够获取固定 commit 的 stdexec 源码；离线构建环境应提前准备对应源码缓存。
-- zpp 可选 HPX 模块要求已安装 HPX 的 =HPX_GIT_COMMIT= 与当前 =3rd/hpx= 源码一致，不匹配的安装需要重新构建。
-- 仓库格式化不处理 =3rd/**=，避免改写托管的第三方源码。
+*** Compatibility and Upgrade Notes
+- HPX builds must be able to fetch the pinned stdexec commit; offline environments should prepare the source cache beforehand.
+- zpp's optional HPX module requires the installed =HPX_GIT_COMMIT= to match current =3rd/hpx= source; rebuild mismatched installations.
+- Repository formatting excludes =3rd/**= to preserve managed third-party sources.
 
 ** v0.6.0 - 2026-07-31
-*** 发布定位摘要
-- 为共享 Conan 依赖环境增加 SQLite3 支持。
-- 按公共依赖能力升级，zeta_forge 从 =v0.5.0= 升级到 =v0.6.0=。
+*** Release Summary
+- Add SQLite3 to the shared Conan dependency environment.
+- Release the shared dependency capability upgrade, advancing zeta_forge from =v0.5.0= to =v0.6.0=.
 
-*** 变更内容
-- =common/zeta_forge/config.py= 新增 =ZETA_SQLITE_VERSION=，默认值为 =3.53.3=。
-- =builder/deps/conanfile.py= 新增 =sqlite3/{SQLITE_VERSION}= 依赖，并设置 =sqlite3/*:shared=False=，默认生成静态 SQLite3 package config。
-- 更新中英文 README，明确 =zeta_forge deps= 统一管理 =SQLite3= 等共享 Conan 依赖版本。
+*** Changes
+- Add =ZETA_SQLITE_VERSION= to =common/zeta_forge/config.py=, defaulting to =3.53.3=.
+- Add =sqlite3/{SQLITE_VERSION}= to =builder/deps/conanfile.py= with =sqlite3/*:shared=False=, generating a static SQLite3 package config by default.
+- Update English/Chinese READMEs to clarify that =zeta_forge deps= centrally manages shared Conan versions including =SQLite3=.
 
-*** 兼容性与升级说明
-- 需要 SQLite3 的外部项目应先运行 =./zbuild.py deps --BUILD_TYPE=<type> --install=，再通过安装前缀下的 =zeta_deps/<BUILD_TYPE>= package config 消费 =SQLite3=。
-- 如需临时切换 SQLite3 版本，可在运行 =deps= 目标前设置 =ZETA_SQLITE_VERSION=。
+*** Compatibility and Upgrade Notes
+- External projects requiring SQLite3 should first run =./zbuild.py deps --BUILD_TYPE=<type> --install=, then consume =SQLite3= through the installed =zeta_deps/<BUILD_TYPE>= package config.
+- Set =ZETA_SQLITE_VERSION= before running =deps= to temporarily select another SQLite3 version.
 
 ** v0.5.0 - 2026-07-05
-*** 发布定位摘要
-- 更新核心第三方源码版本，并收紧 Folly 与 HPX 的可安装库构建路径。
-- 改进公共 CMake Builder 的编译数据库入口，zeta_forge 从 =v0.4.0= 升级到 =v0.5.0=。
+*** Release Summary
+- Update core third-party source revisions and tighten the installable-library build paths for Folly and HPX.
+- Improve compilation-database access in the shared CMake Builder; advance zeta_forge from =v0.4.0= to =v0.5.0=.
 
-*** 变更内容
-- 更新 =3rd/folly=、=3rd/grpc=、=3rd/hpx=、=3rd/nng= 与 =3rd/taskflow= 的源码版本。
-- =builder/folly= 显式使用 =ZETA_OPENSSL_VERSION= 对应的 Conan OpenSSL 静态库，不再将混装有 gRPC BoringSSL 兼容文件的 =ZETA_INSTALL_PREFIX= 强制设为 =OPENSSL_ROOT_DIR=，避免 Folly 配置阶段的 OpenSSL 版本检测失败。
-- 第三方 Builder 默认关闭上游 examples 和 tests；HPX 显式设置 =BUILD_TESTING=OFF=、=HPX_WITH_TESTS=OFF=、=HPX_WITH_EXAMPLES=OFF=，同时保持 =HPX_WITH_TOOLS=ON= 以构建 =hpxdep=、=inspect= 并安装 =hpx_stat_viewer.py=。
-- HPX 新增 Conan Boost package config 兼容层，补齐 =Boost_<COMPONENT>_FOUND= 变量，使 =inspect= 能正确发现静态 =Boost.Regex=；兼容配置文件同时纳入 configure stamp 依赖。
-- =CMakeProjectBuilder= 在配置后刷新构建根目录的 =compile_commands.json= 入口：优先创建相对符号链接，不支持符号链接时回退为复制文件。
-- 更新中英文 README，说明托管第三方构建默认关闭 examples/tests，以及 HPX 保留的工具和安装内容。
+*** Changes
+- Update source revisions for =3rd/folly=, =3rd/grpc=, =3rd/hpx=, =3rd/nng= and =3rd/taskflow=.
+- Make =builder/folly= explicitly use the Conan OpenSSL static library selected by =ZETA_OPENSSL_VERSION=; stop forcing =ZETA_INSTALL_PREFIX= containing mixed gRPC BoringSSL compatibility files into =OPENSSL_ROOT_DIR=, avoiding OpenSSL version-detection failures during Folly configuration.
+- Disable upstream examples and tests by default in third-party Builders; explicitly set HPX =BUILD_TESTING=OFF=, =HPX_WITH_TESTS=OFF= and =HPX_WITH_EXAMPLES=OFF=, while keeping =HPX_WITH_TOOLS=ON= to build =hpxdep= and =inspect= and install =hpx_stat_viewer.py=.
+- Add a Conan Boost package-config compatibility layer for HPX, supplying =Boost_<COMPONENT>_FOUND= variables so =inspect= can find static =Boost.Regex=; include compatibility files in configure-stamp dependencies.
+- Refresh the build-root =compile_commands.json= entry after =CMakeProjectBuilder= configuration: prefer a relative symlink and fall back to a copy if symlinks are unsupported.
+- Update English/Chinese READMEs with disabled-by-default third-party examples/tests and retained HPX tools and installed outputs.
 
-*** 兼容性与升级说明
-- 依赖旧第三方源码行为的本地补丁需要基于本版本记录的 submodule revision 重新检查。
-- 编辑器和静态分析工具可统一读取目标构建根目录下的 =compile_commands.json=；各构建类型的原始文件仍保留在对应构建目录中。
-- HPX 与 Folly 的默认入口聚焦安装所需目标；需要上游 examples 或 tests 时，应在独立验证流程中显式启用。
+*** Compatibility and Upgrade Notes
+- Recheck local patches depending on old third-party behavior against this release's submodule revisions.
+- Editors and static-analysis tools can read =compile_commands.json= from the target build root; original per-build-type files remain in their respective build directories.
+- Default HPX and Folly entrypoints focus on installable targets; enable upstream examples or tests explicitly in a separate validation workflow.
 
 ** v0.4.0 - 2026-05-18
-*** 发布定位摘要
-- 新增 =deps= 目标，统一管理外部 ZetaX 项目消费的 Conan 依赖环境。
-- 按公共依赖管理能力发布，zeta_forge 从 =v0.3.0= 升级到 =v0.4.0=。
+*** Release Summary
+- Add the =deps= target to centrally manage the Conan dependency environment consumed by external ZetaX projects.
+- Release the public dependency-management capability, advancing zeta_forge from =v0.3.0= to =v0.4.0=.
 
-*** 变更内容
-- =common/zeta_forge/config.py= 新增 =ZETA_SPDLOG_VERSION=，与 =ZETA_FMT_VERSION= 等公共版本默认值同源管理；升级 =ZETA_BOOST_VERSION= 从 =1.90.0= 至 =1.91.0=（ConanCenter 已收录）。
-- =builder/deps= 集中声明 =spdlog=、=fmt=、=GTest= 等公共 Conan 依赖，新增 =boost/{BOOST_VERSION}= 依赖（默认 =1.91.0=，由 =ZETA_BOOST_VERSION= 控制）与 =openssl/{OPENSSL_VERSION}=，并将 CMake package config 安装到 =${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=。
-- =builder/deps= 新增 =boost/*:shared=False= 与 =openssl/*:shared=False= 选项，保证 folly-config.cmake 所需的 Boost context/filesystem/program_options/regex/thread 组件均被编译为静态库。
-- =builder/deps/zbuild.py= 新增 =install_boost_findboost_compat()= 方法，在 Conan 安装后对 =BoostConfig.cmake= 进行兼容性补丁，为 CMake 3.31+ 的 FindBoost 模块自动设置 =Boost_<COMPONENT>_FOUND= 变量。
-- =builder/folly/conanfile.py= 与 =builder/hpx/conanfile.py= 的 =ZETA_BOOST_VERSION= 默认值同步至 =1.91.0=。
-- =builder/deps= 同时从 =ZETA_RAPIDJSON_SRC_DIR=（默认 =zeta_forge/3rd/rapidjson=）生成 =RapidJSONConfig.cmake=，以 header-only package 形式统一提供 =rapidjson::rapidjson=，不通过 Conan 管理 RapidJSON。
-- =./zbuild.py list/all= 纳入 =deps=，=all= 会优先准备公共依赖环境。
-- =cmake_util/find_package/spdlog.cmake= 保留为非 Conan 备用路径，fallback 版本改由 =ZETA_SPDLOG_VERSION= 控制。
-- =cmake_util/common.cmake= 移除 =ZPP_USE_CONAN= 与 CPM bootstrap 逻辑，不再设置 =CPM_SOURCE_CACHE=、下载 =CPM.cmake= 或生成项目根目录下的 =cpm_cache*=。
-- =cmake_util/find_package= 中的 CPM fallback 模块仅作为历史兼容模块保留，并标记为不属于现代 ZetaX 公共入口。
+*** Changes
+- Add =ZETA_SPDLOG_VERSION= in =common/zeta_forge/config.py= alongside shared defaults such as =ZETA_FMT_VERSION=; upgrade =ZETA_BOOST_VERSION= from =1.90.0= to =1.91.0=, available in ConanCenter.
+- Centralize shared Conan dependencies such as =spdlog=, =fmt= and =GTest= in =builder/deps=; add =boost/{BOOST_VERSION}= (default =1.91.0=, controlled by =ZETA_BOOST_VERSION=) and =openssl/{OPENSSL_VERSION}=, installing CMake package configs under =${ZETA_INSTALL_PREFIX}/lib/cmake/zeta_deps/<BUILD_TYPE>=.
+- Add =boost/*:shared=False= and =openssl/*:shared=False= in =builder/deps= so the Boost context/filesystem/program_options/regex/thread components required by folly-config.cmake are static.
+- Add =install_boost_findboost_compat()= to =builder/deps/zbuild.py=, patching =BoostConfig.cmake= after Conan installation to set =Boost_<COMPONENT>_FOUND= automatically for CMake 3.31+ FindBoost.
+- Synchronize the default =ZETA_BOOST_VERSION= in =builder/folly/conanfile.py= and =builder/hpx/conanfile.py= to =1.91.0=.
+- Generate =RapidJSONConfig.cmake= from =ZETA_RAPIDJSON_SRC_DIR= (default =zeta_forge/3rd/rapidjson=) in =builder/deps=, exposing header-only =rapidjson::rapidjson= without managing RapidJSON through Conan.
+- Include =deps= in =./zbuild.py list/all=; =all= prepares the shared dependency environment first.
+- Retain =cmake_util/find_package/spdlog.cmake= as a non-Conan fallback, with its fallback version controlled by =ZETA_SPDLOG_VERSION=.
+- Remove =ZPP_USE_CONAN= and CPM bootstrap from =cmake_util/common.cmake=; stop setting =CPM_SOURCE_CACHE=, downloading =CPM.cmake= or generating root-level =cpm_cache*=.
+- Retain CPM fallback modules in =cmake_util/find_package= only for legacy compatibility, outside the modern ZetaX public entrypoint.
 
-*** 兼容性与升级说明
-- =zpp=、=zeta_trader= 等外部项目不应再维护自己的 Conan 依赖图；应先安装 =zeta_forge deps=，再通过 =find_package= 消费安装环境。
-- 找不到 =spdlog/fmt/GTest/RapidJSON/Boost/OpenSSL= package config 时，应重新运行 =./zbuild.py deps --BUILD_TYPE=<type> --install=。
-- 外部项目不应再通过 =ZPP_USE_CONAN= 或 CPM fallback 切换依赖来源；如果项目需要 Conan，应在项目 Builder 中显式接入 Conan 流程。
+*** Compatibility and Upgrade Notes
+- External projects such as =zpp= and =zeta_trader= should no longer maintain their own Conan dependency graphs; install =zeta_forge deps= first and consume the installed environment with =find_package=.
+- If package configs for =spdlog/fmt/GTest/RapidJSON/Boost/OpenSSL= are missing, rerun =./zbuild.py deps --BUILD_TYPE=<type> --install=.
+- External projects should no longer switch dependency sources through =ZPP_USE_CONAN= or CPM fallback; projects needing Conan should integrate it explicitly in their project Builder.
 
 ** v0.3.0 - 2026-05-13
-*** 发布定位摘要
-- 为外部 ZetaX 子项目新增 =add_run_target= 运行入口的公共 Python 复用接口。
-- 按公共接口新增版本发布，zeta_forge 从 =v0.2.0= 升级到 =v0.3.0=。
+*** Release Summary
+- Add a reusable public Python API for =add_run_target= entries used by external ZetaX projects.
+- Release the new public interface, advancing zeta_forge from =v0.2.0= to =v0.3.0=.
 
-*** 变更内容
-- 新增 =common/zeta_forge/run_targets.py=，支持扫描项目 =CMakeLists.txt= 中的 =add_run_target(...)= 调用，解析运行入口名称和预置参数，输出对应 CMake 运行命令，并可直接执行已编译可执行文件。
-- =zeta_forge.run_targets= 提供列出运行入口、查找指定入口和在已有 build tree 上直接执行已编译可执行文件的公共函数，便于 zpp 等子项目复用。
-- =cmake_util/add_run_target.cmake= 的 CMake 行为保持不变；Python 接口只读取项目源码中的调用信息，不承担 configure 或全量构建。
+*** Changes
+- Add =common/zeta_forge/run_targets.py= to scan =add_run_target(...)= in project =CMakeLists.txt= files, parse run-entry names and preset arguments, report matching CMake run commands and directly execute already built binaries with their preset arguments.
+- Expose public functions in =zeta_forge.run_targets= to list entries, find a named entry and execute binaries from an existing build tree, for reuse in project-owned zbuild.py commands.
+- Leave CMake behavior in =cmake_util/add_run_target.cmake= unchanged; the Python API reads project source without configuring CMake or performing a full build.
 
-*** 兼容性与升级说明
-- 外部项目可以继续只使用 CMake 层 =add_run_target=；需要统一 CLI 时，可在项目自己的 =zbuild.py= 中接入 =zeta_forge.run_targets=。
-- 执行运行入口前仍需要项目已有对应 =BUILD_TYPE= 的 CMake build tree 和已编译可执行文件。
+*** Compatibility and Upgrade Notes
+- External projects can keep using only the CMake =add_run_target= helper; projects needing a unified CLI can integrate =zeta_forge.run_targets= into their own =zbuild.py=.
+- Execution still requires a build tree for the project's selected =BUILD_TYPE= and an already compiled executable.
 
 ** v0.2.0 - 2026-05-11
-*** 发布定位摘要
-- zeta_forge 从单一仓库构建入口升级为 ZetaX 公共 C++ 工具链框架。
-- 公共路径契约统一为 =$ZETAX_ROOT/zeta_forge=，不再公开推荐额外的 forge/zpp 专用根变量。
-- zpp 从 zeta_forge 内置 target/submodule 迁出，作为独立项目复用 zeta_forge 的 Python 构建框架和 CMake helper。
-- 遗留独立 =cmake_util= 项目停止作为更新点，最新内容由 =zeta_forge/cmake_util= 接管维护。
+*** Release Summary
+- Expand zeta_forge from a single-repository build entrypoint to the shared ZetaX C++ toolchain framework.
+- Standardize the public path contract as =$ZETAX_ROOT/zeta_forge= without recommending additional Forge/zpp root variables.
+- Move zpp out of Forge's built-in targets/submodules into an independent project reusing Forge's Python framework and CMake helpers.
+- Retire the legacy standalone =cmake_util= project as an update point; maintain its current content in =zeta_forge/cmake_util=.
 
-*** 变更内容
-- 将工具链公共逻辑从顶层入口脚本抽象到 =common/zeta_forge= 库模块，提供根路径发现、环境注入、源码目录解析、CMake/Conan 构建生命周期和 dispatcher。
-- =./zbuild.py all= 继续调度 forge 管理的基础依赖，顺序为 =grpc -> hpx/nng -> folly=；=zpp= 不再是 forge 内置 target。
-- 新增 =cmake_util/=，保留公共 CMake helper、依赖查找脚本和 =add_run_target=，移除遗留 =cbuild*= 快捷入口。
-- =RepoConfig= 注入 =ZETAX_ROOT=、=ZETA_BUILDER_DIR=、=ZETA_3RD_DIR=、=ZETA_CMAKE_UTIL_DIR=、=ZETA_INSTALL_PREFIX= 等派生环境。
-- =common/prepare_debian.sh= 不再把私有 =zsa= 作为公共必需前置条件；缺少 =python3= 时提示公共用户需要先准备的基础 Debian/Ubuntu 构建环境。
-- 更新 README、架构设计文档和第三方系统接入说明，明确 zeta_forge 的三项职责：构建工具链、版本协调、外部系统复用框架。
+*** Changes
+- Extract shared toolchain logic from top-level scripts into =common/zeta_forge=, covering root discovery, environment injection, source resolution, CMake/Conan lifecycles and dispatch.
+- Keep =./zbuild.py all= dispatching Forge's base dependencies in =grpc -> hpx/nng -> folly= order; =zpp= is no longer a built-in Forge target.
+- Add =cmake_util/= with shared CMake helpers, package-discovery scripts and =add_run_target=; remove legacy =cbuild*= shortcuts.
+- Inject derived environment variables through =RepoConfig=: =ZETAX_ROOT=, =ZETA_BUILDER_DIR=, =ZETA_3RD_DIR=, =ZETA_CMAKE_UTIL_DIR= and =ZETA_INSTALL_PREFIX=.
+- Remove private =zsa= as a mandatory prerequisite for =common/prepare_debian.sh=; if =python3= is missing, report the minimal Debian/Ubuntu host dependencies to public users.
+- Update READMEs, architecture and external integration guides to clarify Forge's three roles: build toolchain, version coordination and a reusable framework for external systems.
 
-*** 兼容性与升级说明
-- 公共用户应使用 =ZETAX_ROOT=/path/to/workspace=，并保持 =$ZETAX_ROOT/zeta_forge= 的标准布局。
-- 旧的 =./zbuild.py zpp= 不再支持；zpp 应在 =$ZETAX_ROOT/zpp= 中使用自己的 =./zbuild.py=。
-- 外部项目可继续覆盖 =ZETA_<NAME>_SRC_DIR=、=ZETA_3RD_DIR=、=ZETA_INSTALL_PREFIX=，但不应依赖旧的 forge 专用根变量。
-- 项目级构建逻辑应留在项目仓库自己的 =builder/= 中，公共生命周期和 CMake helper 由 zeta_forge 提供。
+*** Compatibility and Upgrade Notes
+- Public users should set =ZETAX_ROOT=/path/to/workspace= and use the standard =$ZETAX_ROOT/zeta_forge= layout.
+- =./zbuild.py zpp= is no longer supported; invoke zpp's own =./zbuild.py= from =$ZETAX_ROOT/zpp=.
+- External projects can still override =ZETA_<NAME>_SRC_DIR=, =ZETA_3RD_DIR= and =ZETA_INSTALL_PREFIX=, but should not depend on old Forge-specific root variables.
+- Project-level build logic belongs in the project's own =builder/=; shared lifecycles and CMake helpers belong to zeta_forge.
 
-*** 验证
-- =python3 -m py_compile zbuild.py common/zeta_forge/*.py common/prepare_debian.py builder/*/zbuild.py= 通过。
-- =./zbuild.py list= 通过，目标列表不包含 =zpp=。
-- 独立 zpp 使用 =$ZETAX_ROOT/zeta_forge/cmake_util= 完成 =Debug --no-tests --no-examples --rebuild= 构建验证。
+*** Validation
+- =python3 -m py_compile zbuild.py common/zeta_forge/*.py common/prepare_debian.py builder/*/zbuild.py= passed.
+- =./zbuild.py list= passed; the target list excludes =zpp=.
+- The independent zpp checkout completed a =Debug --no-tests --no-examples --rebuild= build using =$ZETAX_ROOT/zeta_forge/cmake_util=.
 
-*** 版本更新规则
-- 修改公共构建入口、CLI 参数或环境变量语义时，需要同步更新 =VERSION= 和本文件。
-- 修改 =common/zeta_forge= 中可被项目复用的公共接口时，需要记录兼容性影响。
-- 修改 Conan 依赖版本、默认 C++ 标准、安装前缀策略或构建默认值时，需要记录升级说明。
-- 修改 submodule revision、=3rd/*= 管理策略或 =cmake_util/= 公共 helper 行为时，需要记录变更内容。
-- 新增面向外部项目的接入方式、兼容性约束或迁移要求时，需要记录接入说明。
+*** Version Update Rules
+- Update =VERSION= and this file when public build entrypoints, CLI parameters or environment-variable semantics change.
+- Record compatibility impact for changes to reusable public interfaces in =common/zeta_forge=.
+- Record upgrade guidance for Conan dependency versions, the default C++ standard, installation-prefix policy or build defaults.
+- Record changes to submodule revisions, =3rd/*= management or public =cmake_util/= helpers.
+- Document new external integration methods, compatibility constraints and migration requirements.
 
 ** v0.1.0 - 2026-05-11
-*** 发布定位摘要
-- 首次明确 zeta_forge 作为通用工具链框架的版本基线。
-- 定义 zeta_forge 的用途：=3rd/*= 共享编译工具链、外部项目可复用的工具链框架、工作区版本协调层。
-- 该版本未作为独立 release 发布，后续结构调整并入 v0.2.0。
+*** Release Summary
+- Establish the initial version baseline for zeta_forge as a general-purpose toolchain framework.
+- Define its roles: the shared =3rd/*= build toolchain, a reusable framework for external projects and workspace version coordination.
+- This version was not published as an independent release; later structural changes were included in v0.2.0.
 
-*** 变更内容
-- 建立 =VERSION= 与版本记录文件。
-- 初步建立架构设计文档和第三方系统使用说明。
-- 明确版本协调范围包括 submodule revision、Conan 依赖版本、共享构建默认值和项目级构建配方。
+*** Changes
+- Establish =VERSION= and the release-history file.
+- Add initial architecture and third-party usage documentation.
+- Define version coordination for submodule revisions, Conan dependencies, shared build defaults and project-level recipes.

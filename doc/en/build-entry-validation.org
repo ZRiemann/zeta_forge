@@ -1,7 +1,12 @@
 #+TITLE: Unified build-entry validation
 #+DATE: 2026-09-22
 
+[[file:readme.org][Back to Documentation]] | [[file:../zh-CN/build-entry-validation.org][Chinese Version]]
+
 * Scope
+
+Historical record dated 2026-09-22; see [[file:../../BUILD.org][the current build contract]].
+This migration and translation do not rerun the recorded verification.
 
 This is a working-tree implementation record, not a release or an all-platform
 acceptance claim. No versions, tags or commits were created. Existing practice

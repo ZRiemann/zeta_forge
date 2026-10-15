@@ -1,0 +1,146 @@
+* zeta_forge Multilanguage Engineering Governance Architecture
+
+[[file:readme.org][Back to Documentation]] | [[file:../zh-CN/architecture.org][Chinese Version]]
+
+This document describes =zeta_forge= as the ZetaX C++/Rust engineering-governance
+and shared toolchain framework. See [[file:../../VERSION][VERSION]] for the current
+version and [[file:../../release_history.org][release_history.org]] for release history.
+
+* Design Goals
+
+zeta_forge provides a stable toolchain and version-coordination layer:
+
+1. Provide unified, reproducible build entrypoints for =3rd/*= and a reusable build framework for external projects such as =zpp=.
+2. Centralize third-party dependency versions, submodule revisions, Conan recipes and build parameters.
+3. Let external projects reuse the toolchain through a thin =zbuild.py= to reduce duplicated maintenance.
+4. Unify Rust toolchains, the approved direct-dependency catalog, Cargo execution and native-library integration.
+
+* Ownership Boundaries
+
+zeta_forge owns:
+
+- Preparation of Debian/Ubuntu build dependencies and tools such as Python/uv/Conan 2.
+- Source locations, default versions and build order for =3rd/*=.
+- The =common/zeta_forge= Python library for configuration discovery, process execution, CMake builds, workspace dispatch and project-level build implementations.
+- Shared =cmake_util/= modules, continuing maintenance of the legacy standalone =cmake_util= project.
+- Shared installation prefixes, C++ standards, Conan dependency versions and CMake configuration parameters.
+- Rust toolchains, managed crate declarations, workspace checks and Cargo lifecycle operations.
+
+zeta_forge does not own:
+
+- Business source code of external projects.
+- Submodule pointers for frequently changing projects such as =zpp=.
+- A mandatory repository layout for external projects.
+- External projects' release, test or deployment systems.
+
+Forge tests cover its own entrypoint and shared tooling contracts. External
+projects test their project-level =zbuild.py= in their own repository; Forge tests
+do not require a sibling checkout to exist or be on a particular branch.
+
+External projects reuse the framework and maintain their project-specific
+Builders, Conan recipes and business source locally.
+
+* Directory Layers
+
+- =zbuild.py=: a thin entrypoint calling the shared action CLI and project definition; host preparation has a separate entrypoint.
+- =common/zeta_forge/=: shared Python toolchain library and the primary API for external projects.
+- =cmake_util/=: shared CMake build options, package discovery and helpers such as =add_run_target=; the maintained successor to the legacy standalone project.
+- =rust/=: Rust toolchains and the catalog of approved dependency versions and sources.
+- =builder/<project>/=: Forge's internal build workspaces, with project entrypoints, Conan recipes, CMake helpers and build output.
+- =3rd/*=: managed source submodules for gRPC, HPX, Folly, NNG, Taskflow and RapidJSON.
+- =doc/en/=: primary English documentation; =doc/zh-CN/=: Simplified Chinese translations.
+
+=zpp= lives at =$ZETAX_ROOT/zpp= and is no longer a Forge submodule or a carrier
+of a =cmake_util= submodule. It injects project-specific build logic through
+=builder/zpp.py= and reuses the =common/zeta_forge= lifecycle and =cmake_util/= helpers.
+
+* Root Discovery
+
+The public path meanings are:
+
+- =ZETAX_ROOT=: top-level ZetaX workspace directory, for example =~/git=.
+- =ZETA_INSTALL_PREFIX=: dependency installation prefix, defaulting to =~/.local=.
+- =ZETA_3RD_DIR=: third-party source root, defaulting to =$ZETAX_ROOT/zeta_forge/3rd=.
+
+A project entrypoint locates the shared library in this order:
+
+1. =$ZETAX_ROOT/zeta_forge= when =ZETAX_ROOT= is set.
+2. The sibling =zeta_forge= checkout beside the project.
+
+=ZETAX_ROOT= is the only public top-level workspace variable. =zsa= can export it;
+public users can set it manually without =zsa=. Project scripts do not need an
+additional Forge-specific root variable.
+
+* Build Data Flow
+
+A typical build proceeds as follows:
+
+1. The user invokes a top-level or project-level =zbuild.py=.
+2. The entrypoint adds =zeta_forge/common= to the Python import path.
+3. =load_repo_config= discovers the Forge root, derives =ZETAX_ROOT=, injects shared environment variables and resolves source directories.
+4. The project Builder validates sources, Conan recipes and required dependency paths.
+5. Conan install generates the toolchain and package configurations when needed.
+6. CMake configure writes the build stamp.
+7. CMake build produces outputs; the explicit =install= action runs CMake install.
+
+The default order is =deps grpc hpx folly nng=; Folly consumes gRPC dependencies
+from project-local staging.
+
+* Shared Library Modules
+
+=common/zeta_forge= is the core framework:
+
+- =config.py=: Forge root discovery, environment injection, source paths and installation prefix.
+- =process.py=: shared process execution, logging and error handling.
+- =cmake_builder.py=: Conan/CMake/Ninja lifecycle, stamp checks, rebuild and install.
+- =build_cli.py=: public actions, selection, profiles, preflight and exit-code contracts.
+- =cmake_engine.py/rust_engine.py/gradle_engine.py=: native-stack adapters without a duplicate native dependency graph.
+- =debian_prep.py=: Debian/Ubuntu build dependency and Conan toolchain preparation.
+- =rust_workspace.py=: toolchain, dependency catalog and project descriptor loading, workspace validation and pinned-toolchain Cargo execution.
+
+External project entrypoints stay thin: locate the library, set project source
+defaults and invoke the project's own Builder.
+
+=cmake_util/= is shared CMake infrastructure. Builders can inject
+=-DZETA_CMAKE_UTIL_DIR=$ZETAX_ROOT/zeta_forge/cmake_util= into external projects.
+Projects should not copy the helpers or retain the old repository as a submodule.
+=common.cmake= no longer bootstraps CPM or downloads third-party dependencies.
+Modern projects consume package configs prepared by =zeta_forge deps= through an
+explicit =CMAKE_PREFIX_PATH=. CPM fallback modules in =cmake_util/find_package=
+remain legacy compatibility assets outside the modern public entrypoint.
+
+=common/zeta_forge/run_targets.py= provides Python reuse of =add_run_target(...)=.
+External projects can scan their =CMakeLists.txt= for configured run entries, list
+the corresponding =cmake --build ... --target run_<name>= commands, or execute
+already built binaries with their preset arguments. This API does not configure
+CMake or build automatically; the project's =zbuild.py= prepares its build tree.
+
+* External Project Extension
+
+External integration uses the following structure:
+
+1. A thin project-owned =zbuild.py= locates =zeta_forge/common=.
+2. Project Builders live under the project's own =builder/=, for example =$ZETAX_ROOT/zpp/builder/zpp.py=.
+3. Builders derive from =CMakeProjectBuilder= in =common/zeta_forge= and inject project-specific parameters, Conan recipes and CMake options.
+
+Placement rules:
+
+- Logic belonging to an external project stays in that repository.
+- Shared build flows, root discovery, process execution and environment management belong in =zeta_forge= only when they are reusable.
+
+* Version Coordination
+
+Version coordination includes:
+
+- Submodule sources configured in =.gitmodules= and their revisions.
+- Third-party versions in =builder/deps/conanfile.py= and Forge's internal Conan recipes; external projects do not duplicate the shared Conan graph.
+- Shared defaults in =common/zeta_forge/config.py=, such as the C++ standard and base-library versions.
+- CMake configuration switches in Forge project definitions or Builders.
+
+Changes to public toolchain behavior, dependency versions or external integration
+contracts must update [[file:../../VERSION][VERSION]] and [[file:../../release_history.org][release_history.org]].
+
+* Current Build Contract
+
+See [[file:../../BUILD.org][BUILD.org]] for the authoritative engineering-unit cleanup,
+installation, read-only operation and test scope.

@@ -18,6 +18,7 @@ Zeta Forge 有三个明确用途：
 - [[file:third_party_usage.org][外部项目接入]]
 - [[file:rust_workspace.org][Rust 工程治理]]
 - [[file:nng_upgrade.org][NNG 升级与下游适配]]
+- [[file:hpx_upgrade.org][HPX 主线升级与下游适配]]
 - [[file:build.org][构建契约]]
 - [[file:build-entry-validation.org][历史构建入口验证]]
 - [[file:cmake_util.org][CMake 辅助模块]]
@@ -220,7 +221,7 @@ cd "$ZETAX_ROOT/zpp"
 
 - gRPC 是工作区内核心 RPC 依赖族的统一来源：Abseil、Protobuf、zlib、TLS/BoringSSL、c-ares、RE2、upb、utf8_range、xxhash 和 address_sorting。
 - HPX 默认关闭 examples、tests 及性能测试目标；保留 =hpxdep=、=inspect= 工具，并继续安装 =hpx_stat_viewer.py=。
-- HPX 通过 =HPX_WITH_FETCH_STDEXEC=ON= 固定获取 commit =05e3f5ec59655fee2536fc3116e5ffb4927ae955= 的 stdexec，使安装后的 execution API 与托管的 =3rd/hpx= 源码修订保持一致。
+- HPX 通过 =HPX_WITH_FETCH_STDEXEC=ON= 固定获取 commit =04de75de5807e73a229acf047c6976575e313359= 的 stdexec，使安装后的 execution API 与托管的 =3rd/hpx= 源码修订保持一致。
 - gRPC 的测试/工具生态依赖，例如 benchmark、bloaty、googletest、googleapis、xDS、Envoy API、protoc-gen-validate 和 OpenTelemetry C++，默认不作为 Zeta Forge 开发依赖安装。
 - 外部 zpp 构建默认使用 =3rd/taskflow= 和 =3rd/rapidjson=。
 - RapidJSON 通过 =RAPIDJSON_ROOT= 传递给 zpp。

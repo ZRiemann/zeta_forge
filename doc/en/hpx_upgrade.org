@@ -1,0 +1,107 @@
+#+STARTUP: indent
+#+TITLE: HPX Master Upgrade and Downstream Adaptation
+
+[[file:readme.org][Back to Documentation]] | [[file:../zh-CN/hpx_upgrade.org][Chinese Version]]
+
+* Source and dependency baseline
+
+HPX is managed by the =3rd/hpx= submodule. The 2026-10-15 upgrade advances
+upstream =master= from =41bf79c56fc9df3190efbf146e6cbd444fa3b6b0= to
+=6e97afa18a1a189d0147397ecb3400917aef2b94= without local upstream patches.
+The source reports =2.0.0=; this is a pinned development snapshot, not a release tag.
+
+The HPX builder pins fetched stdexec to the matching upstream baseline
+=04de75de5807e73a229acf047c6976575e313359=. Upgrade these together: leaving
+the previous Forge override in place would select the old stdexec even after
+updating HPX. C++20, static linking, jemalloc, networking and the MPI parcelport
+remain enabled. Upstream examples/tests remain disabled and tools remain enabled.
+
+Source overrides (=ZETA_HPX_SRC_DIR= / =ZETA_3RD_DIR=) must select the intended
+checkout. The installation prefix remains =ZETA_INSTALL_PREFIX=, defaulting to
+=~/.local=. No proxy, application JSON or HPX INI settings are rewritten.
+
+* Consumer compatibility
+
+HPX retains =as_sender=, =make_future= and =thread_pool_scheduler=. The future
+sender implementation and completion environment have changed; =make_future=
+now uses direct overloads and scheduler queries instead of tag-invoke customization.
+zpp exposes the same =from_future=, =into_future= and scheduler interfaces.
+
+zpp's =HPX_GIT_COMMIT= check verifies source/install provenance, not API
+compatibility. Rebuild and reinstall HPX before configuring zpp, then reinstall
+=zpp_hpx= so its exported package records the same revision. Rebuild statically
+linked consumers against the new installation; do not reuse old binaries as
+upgrade evidence. A scheduler-aware future conversion is required by the
+single-worker cooperative-wait regression, rather than an OS-blocking wait.
+
+Forge explicitly passes =HPX_WITH_GIT_COMMIT= and its short form from
+=git rev-parse HEAD=. Upstream's path-filtered =git log= can skip a merge
+commit and report its parent instead; recording that parent would incorrectly
+fail zpp's exact-revision gate. This override also makes a source revision
+change invalidate the configure arguments even when no watched CMake file changed.
+
+* Release delivery and validation
+
+Run each command only after the previous one succeeds. Shared Release
+dependencies are prerequisites. Forge =build= stages locally; its =install=
+publishes the selected successful build without rebuilding.
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zeta_forge"
+./zbuild.py test
+./zbuild.py doctor hpx --profile release
+./zbuild.py build hpx --profile release --jobs 4
+./zbuild.py install hpx --profile release
+
+cd "$ZETAX_ROOT/zpp"
+./zbuild.py test zpp_hpx --profile release --jobs 4
+./zbuild.py build example_hpx_basic zpp_hpx_basic zpp_hpx_exec_pipeline zpp_hpx_exec_scheduler --profile release --jobs 4
+./zbuild.py run zpp_hpx_exec_pipeline --profile release
+./zbuild.py run zpp_hpx_exec_scheduler --profile release
+./zbuild.py install zpp_hpx --profile release --jobs 4
+
+cd "$ZETAX_ROOT/zeta_trader"
+./zbuild.py build zeta_trader_hpx --profile release --jobs 4
+./zbuild.py test zeta_trader_hpx --profile release --jobs 4
+#+end_src
+
+The zpp entrypoint runs the configured core and HPX CTest correctness suite.
+The execution tests cover shared-future reuse, values/void/move-only values,
+exceptions, scheduler-aware pending futures and sender-to-future conversion.
+Runtime tests run with two workers and one worker, each with a 15-second timeout.
+The Trader test entrypoint runs its configured shared correctness suite; it is
+broader than the selected service target and does not start a production stack.
+
+Also configure and run a separate temporary CMake consumer of
+=find_package(zpp_hpx CONFIG REQUIRED)= and =zpp::hpx=. Verify that an incorrect
+expected HPX revision is rejected, and that the source, installed HPX package and
+zpp export all record the same commit and the selected stdexec checkout matches
+the builder pin.
+
+These commands describe the acceptance procedure, not evidence that a run has
+passed. Record actual results separately. Debug, sanitizers, performance/RSS
+benchmarks, long stress runs and real Provider/HPX integration are outside this
+Release acceptance. No trading connections, production restarts or frontend
+rebuilds are required by this HPX-only upgrade.
+
+* Verification record: 2026-10-15
+
+Linux x86_64, GCC 15.2.0, C++20, Release, installation prefix =~/.local=:
+
+| Gate | Result |
+|-
+| Forge tooling regression | 41 tests passed |
+| HPX doctor, build/staging and install | Passed; installed revision matches source HEAD |
+| zpp core and HPX CTest suite | 94/94 passed, including one/two-worker runtime processes |
+| Four HPX examples | Built; both execution examples printed 42 and exited successfully |
+| Installed standalone CMake consumer | Configured, compiled and ran successfully |
+| Stale zpp HPX export | Rejected with the exact-revision diagnostic |
+| Trader HPX service | Built successfully without application source/configuration changes |
+| Trader shared CTest suite | 43/43 passed |
+
+Local logs are under =build/hpx-upgrade/= (generated, not versioned).
+The Forge fix records the actual source HEAD instead of the parent selected by
+upstream's path-filtered log. zpp required regression/documentation updates but
+no public adapter implementation changes; its stopped-completion restriction
+remains enforced. The unverified configurations and integration limits above
+still apply.

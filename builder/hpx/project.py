@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 from zeta_forge.cmake_builder import CMakeProjectBuilder
@@ -17,6 +18,23 @@ class HpxBuilder(CMakeProjectBuilder):
     @property
     def missing_source_hint(self) -> str:
         return "Set ZETA_HPX_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd/hpx"
+
+    @property
+    def source_git_commit(self) -> str:
+        """Read HEAD exactly; HPX's path-filtered log can skip merge commits."""
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(self.source_dir), "rev-parse", "HEAD"],
+                check=True,
+                capture_output=True,
+                text=True,
+                env=self.repo_config.env,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            raise RuntimeError(
+                f"Unable to read the HPX source commit from {self.source_dir}"
+            ) from exc
+        return result.stdout.strip()
 
     @property
     def user_toolchain(self) -> Path:
@@ -50,6 +68,7 @@ class HpxBuilder(CMakeProjectBuilder):
         ]
 
     def configure_command(self) -> list[object]:
+        source_commit = self.source_git_commit
         return [
             "cmake",
             "-S",
@@ -68,7 +87,9 @@ class HpxBuilder(CMakeProjectBuilder):
             "-DHPX_WITH_FETCH_BOOST=OFF",
             "-DHPX_WITH_FETCH_HWLOC=OFF",
             "-DHPX_WITH_FETCH_STDEXEC=ON",
-            "-DHPX_WITH_STDEXEC_TAG=05e3f5ec59655fee2536fc3116e5ffb4927ae955",
+            "-DHPX_WITH_STDEXEC_TAG=04de75de5807e73a229acf047c6976575e313359",
+            f"-DHPX_WITH_GIT_COMMIT={source_commit}",
+            f"-DHPX_WITH_GIT_COMMIT_SHORT={source_commit[:7]}",
             "-DHPX_WITH_PKGCONFIG=OFF",
             "-DBUILD_TESTING=OFF",
             "-DBUILD_SHARED_LIBS=OFF",

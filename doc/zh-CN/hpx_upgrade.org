@@ -1,0 +1,96 @@
+#+STARTUP: indent
+#+TITLE: HPX 主线升级与下游适配
+
+[[file:readme.org][返回文档首页]] | [[file:../en/hpx_upgrade.org][English Version]]
+
+* 源码与依赖基线
+
+HPX 由 =3rd/hpx= submodule 管理。2026-10-15 的升级将上游 =master= 从
+=41bf79c56fc9df3190efbf146e6cbd444fa3b6b0= 快进到
+=6e97afa18a1a189d0147397ecb3400917aef2b94=，不添加上游源码补丁。
+源码版本号为 =2.0.0=，这是固定的开发快照，不是正式发布 tag。
+
+HPX Builder 同步固定 stdexec 为该上游快照采用的
+=04de75de5807e73a229acf047c6976575e313359=。二者必须配套升级：如果保留
+Forge 原来的覆盖配置，即使更新 HPX，仍会选中旧 stdexec。
+保留 C++20、静态链接、jemalloc、networking 和 MPI parcelport；
+上游 examples/tests 继续关闭，tools 继续开启。
+
+源码覆盖变量 =ZETA_HPX_SRC_DIR= / =ZETA_3RD_DIR= 必须指向预期 checkout。
+安装前缀沿用 =ZETA_INSTALL_PREFIX=，默认 =~/.local=。
+不修改代理环境、应用 JSON 或 HPX INI 配置。
+
+* 消费端兼容性
+
+HPX 保留 =as_sender=、=make_future= 和 =thread_pool_scheduler=。
+Future sender 的内部实现和完成环境发生变化；=make_future= 从 tag-invoke
+定制改为直接重载与 scheduler query。zpp 继续提供原有 =from_future=、
+=into_future= 和 scheduler 接口。
+
+zpp 的 =HPX_GIT_COMMIT= 检查用于确认源码与安装库来源一致，不代表 API
+兼容检查。配置 zpp 前先构建、安装 HPX，再安装 =zpp_hpx=，使导出的 package
+记录相同版本。静态链接消费者需要重新构建，旧二进制不能作为升级验收证据。
+单 worker 协作等待回归使用携带 scheduler 的 Future 转换，避免阻塞 OS worker。
+
+Forge 从 =git rev-parse HEAD= 显式传入 =HPX_WITH_GIT_COMMIT= 及其短格式。
+上游带路径过滤的 =git log= 可能跳过 merge commit 而记录父提交，造成 zpp
+精确版本检查误拒绝。显式传入还会使源码提交变化反映到 configure 参数中，
+即使受监测的 CMake 文件没有变化，也会重新配置。
+
+* Release 交付与验证
+
+逐步执行，每一步成功后再继续。已安装的共享 Release 依赖是前置条件。
+Forge 的 =build= 先完成项目内 staging；=install= 只发布选定的成功构建，不重复编译。
+
+#+begin_src bash
+cd "$ZETAX_ROOT/zeta_forge"
+./zbuild.py test
+./zbuild.py doctor hpx --profile release
+./zbuild.py build hpx --profile release --jobs 4
+./zbuild.py install hpx --profile release
+
+cd "$ZETAX_ROOT/zpp"
+./zbuild.py test zpp_hpx --profile release --jobs 4
+./zbuild.py build example_hpx_basic zpp_hpx_basic zpp_hpx_exec_pipeline zpp_hpx_exec_scheduler --profile release --jobs 4
+./zbuild.py run zpp_hpx_exec_pipeline --profile release
+./zbuild.py run zpp_hpx_exec_scheduler --profile release
+./zbuild.py install zpp_hpx --profile release --jobs 4
+
+cd "$ZETAX_ROOT/zeta_trader"
+./zbuild.py build zeta_trader_hpx --profile release --jobs 4
+./zbuild.py test zeta_trader_hpx --profile release --jobs 4
+#+end_src
+
+zpp 入口运行配置的 core 和 HPX CTest 正确性套件。execution 回归覆盖
+shared_future 复用、值/void/移动专用值、异常、带 scheduler 的未完成 Future
+及 sender-to-future 转换。runtime 测试分别使用双 worker 和单 worker，
+每个用例设置 15 秒超时。Trader 测试入口运行其配置的共享正确性套件，
+范围大于选定的服务目标，不启动生产服务栈。
+
+另用临时独立 CMake 消费者验证 =find_package(zpp_hpx CONFIG REQUIRED)=
+和 =zpp::hpx=；确认错误的 HPX 预期提交会被拒绝，并核对源码、安装的 HPX
+和 zpp 导出记录的 commit 一致，stdexec checkout 与 Builder 固定版本一致。
+
+以上是验收流程，不代表命令已经执行通过，实际结果需单独记录。
+Debug、sanitizer、性能/RSS 基准、长时间压力测试和真实 Provider/HPX 联调
+不在本次 Release 验收范围。此次 HPX 升级不需要交易连接、生产重启或前端重建。
+
+* 验证记录：2026-10-15
+
+Linux x86_64、GCC 15.2.0、C++20、Release，安装前缀 =~/.local=：
+
+| 检查项 | 结果 |
+|-
+| Forge 构建工具回归 | 41 项通过 |
+| HPX doctor、build/staging 与 install | 通过；安装提交与源码 HEAD 一致 |
+| zpp core 与 HPX CTest 套件 | 94/94 通过，包含单/双 worker runtime 进程 |
+| 四个 HPX 示例 | 构建通过；两个 execution 示例均输出 42 并正常退出 |
+| 安装后的独立 CMake 消费者 | 配置、编译与运行通过 |
+| 旧提交的 zpp HPX 导出包 | 被精确版本检查明确拒绝 |
+| Trader HPX 服务 | 构建通过，无需修改应用源码或配置 |
+| Trader 共享 CTest 套件 | 43/43 通过 |
+
+本机日志位于 =build/hpx-upgrade/=，属于不纳入版本控制的生成结果。
+Forge 修复了上游带路径过滤的 log 将源码 HEAD 记为父提交的问题。
+zpp 只需补充回归和文档，无需修改公开适配实现；原有 stopped completion
+限制继续生效。前述未验证配置和联调范围限制仍然适用。

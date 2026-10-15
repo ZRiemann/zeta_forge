@@ -18,6 +18,7 @@ Zeta Forge has three explicit roles:
 - [[file:third_party_usage.org][External Project Integration]]
 - [[file:rust_workspace.org][Rust Workspace Governance]]
 - [[file:nng_upgrade.org][NNG Upgrade and Downstream Adaptation]]
+- [[file:hpx_upgrade.org][HPX Master Upgrade and Downstream Adaptation]]
 - [[file:build.org][Build Contract]]
 - [[file:build-entry-validation.org][Historical Build-Entry Validation]]
 - [[file:cmake_util.org][CMake Helpers]]
@@ -241,7 +242,7 @@ The shared Conan dependency versions, including =spdlog=, =fmt=, and =SQLite3=, 
 
 - gRPC is the workspace source for the core RPC dependency family: Abseil, Protobuf, zlib, TLS/BoringSSL, c-ares, RE2, upb, utf8_range, xxhash, and address_sorting.
 - HPX examples and tests, including performance-test targets, are disabled by default; the =hpxdep= and =inspect= tools remain enabled and =hpx_stat_viewer.py= remains installable.
-- HPX always fetches stdexec at commit =05e3f5ec59655fee2536fc3116e5ffb4927ae955= through =HPX_WITH_FETCH_STDEXEC=ON=; this keeps the installed execution API aligned with the managed =3rd/hpx= source revision.
+- HPX always fetches stdexec at commit =04de75de5807e73a229acf047c6976575e313359= through =HPX_WITH_FETCH_STDEXEC=ON=; this keeps the installed execution API aligned with the managed =3rd/hpx= source revision.
 - gRPC test/tooling ecosystem dependencies such as benchmark, bloaty, googletest, googleapis, xDS, Envoy API, protoc-gen-validate, and OpenTelemetry C++ are not installed as default Zeta Forge development dependencies.
 - External zpp builds use Taskflow and RapidJSON from =3rd/= by default.
 - RapidJSON is passed to zpp through =RAPIDJSON_ROOT=.

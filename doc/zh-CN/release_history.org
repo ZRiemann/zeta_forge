@@ -5,6 +5,20 @@
 
 * 发布历史
 
+** v1.7.0 - 2026-10-15
+*** 变更内容
+- 将 HPX master 更新到 =6e97afa18a1a189d0147397ecb3400917aef2b94=，同步固定配套 stdexec 为 =04de75de5807e73a229acf047c6976575e313359=。
+- 在 HPX 配置中显式传入源码 HEAD 及短提交号，避免带路径过滤的 Git 历史误识别 merge commit；新增源码版本记录回归测试。
+- 新增中英文升级流程和带日期的 Release 验证记录，同步依赖文档。
+
+*** 兼容性与升级说明
+- 此 HPX 源码版本号为 2.0.0，但属于固定的 master 快照，并非正式发布 tag。需构建、安装 HPX 和 zpp_hpx，再重建静态链接消费者；保留精确提交一致性检查。
+- 保持 C++20、静态链接、jemalloc、networking/MPI 和原有上游 examples/tests/tools 设置。zpp 公开适配接口保持不变；单 worker 协作等待要求 HPX completion domain。
+
+*** 验证
+- 此前实现阶段已在 GCC 15.2.0、C++20、Release 下通过：Forge 构建工具测试 41 项、zpp CTest 94 项和 Trader CTest 43 项；HPX 构建安装、四个示例构建、两个 execution 示例运行、独立包消费及旧提交导出包拒绝检查也已通过。
+- 本次提交仅检查暂存差异与版本记录，未额外运行构建或测试。Debug、sanitizer、性能/压力测量及真实 Provider 联调仍未验证。
+
 ** v1.6.0 - 2026-10-15
 *** 变更内容
 - 建立 =doc/en/= 英文主文档和 =doc/zh-CN/= 简体中文辅助翻译，统一主题文件名、语言链接及同步维护规则。

@@ -5,6 +5,20 @@
 
 * Release History
 
+** v1.7.0 - 2026-10-15
+*** Changes
+- Advance HPX master to =6e97afa18a1a189d0147397ecb3400917aef2b94= and pin its matching stdexec revision =04de75de5807e73a229acf047c6976575e313359=.
+- Pass the exact source HEAD and short revision to HPX configuration so path-filtered Git history cannot misidentify a merge commit; add source-provenance regression tests.
+- Add English and Chinese upgrade procedures and dated Release verification records, and synchronize dependency documentation.
+
+*** Compatibility and Upgrade Notes
+- This HPX source reports 2.0.0 but is a pinned master snapshot, not a release tag. Rebuild/install HPX and zpp_hpx, then rebuild statically linked consumers; retain the exact-commit consistency check.
+- Preserve C++20, static linking, jemalloc, networking/MPI and existing upstream examples/tests/tools settings. zpp public adapters remain unchanged; single-worker cooperative waiting requires an HPX completion domain.
+
+*** Validation
+- Prior implementation verification passed with GCC 15.2.0, C++20 and Release: 41 Forge tooling tests, 94 zpp CTest cases and 43 Trader CTest cases; HPX build/install, four examples, two execution runs, standalone package consumption and stale-export rejection also passed.
+- This commit checks the staged diff and version records only; no additional builds or tests were run. Debug, sanitizers, performance/stress measurements and real Provider integration remain unverified.
+
 ** v1.6.0 - 2026-10-15
 *** Changes
 - Establish primary English documentation in =doc/en/= and Simplified Chinese translations in =doc/zh-CN/=, with shared topic names, language links and synchronized maintenance rules.

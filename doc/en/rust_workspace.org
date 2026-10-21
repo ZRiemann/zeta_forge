@@ -102,3 +102,37 @@ when upgrading Rust. Approve new exact catalog entries for crate additions or
 upgrades; projects adopt them explicitly, leaving other consumers unaffected.
 Remove old entries only after every consumer has migrated. Forge no longer reads
 the old =rN= whole-baseline format or the former Cargo-tool installation directory.
+
+* Cargo Library Deliverables
+
+For a plain Cargo target, =RustTarget.artifact_name= may name the final library
+artifact (for example =libz.rlib=); it must be a single filename. When omitted,
+the existing package-named executable path is preserved. =RustTarget.features=
+is an optional tuple passed to Cargo build/check/Clippy/test. Both additions
+require a plain Cargo target without Dioxus platform selection. Descriptions
+show each target's selected features and artifact path. Projects remain
+responsible for registering only supported library actions: no artificial
+run/dev/install action is implied. Cargo still owns dependency compilation.
+
+* Explicit Cargo Examples
+
+Register a normal Cargo example with
+=RustTarget("zust", root, features=("log",), example="logging")= and a separate
+project deliverable. =example= is optional, appended to the target fields for
+existing-call compatibility. It requires a nonempty target name without path
+components, a plain Cargo target, no Dioxus platforms and no =artifact_name=.
+
+Build/check/Clippy/test use =--example <name>= with the declared package,
+features, locked resolution and toolchain/profile. Example checks/tests omit
+=--all-targets=; check still checks workspace formatting without rewriting.
+The output is =<target_dir>/<debug|release>/examples/<name>=, with =.exe= on
+Windows. Examples run with =RustTarget.directory= as their working directory;
+existing binary and Dioxus working directories are unchanged.
+
+=run= requires existing output; =dev= builds then runs once. Arguments after
+=--= are forwarded without build-log disclosure using the shared foreground
+process management. Projects explicitly choose example capabilities and keep
+examples outside library defaults. Metadata/dry-run show =examples=, =features=,
+=artifacts= and example =run_directories=. Clean/rebuild still share the
+workspace/profile scope and show =affected_artifacts= for all registered
+siblings; selecting an example does not isolate its cleanup from libraries.

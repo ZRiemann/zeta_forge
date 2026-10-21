@@ -30,6 +30,9 @@ class RustTarget:
     kind: str = "cargo"
     platforms: tuple[str, ...] = ()
     web_release_debug_symbols: bool | None = None
+    artifact_name: str | None = None
+    features: tuple[str, ...] = ()
+    example: str | None = None
 
 
 class RustEngine:
@@ -67,16 +70,41 @@ class RustEngine:
     def artifact(self, request: Request, name: str) -> Path:
         target = self.targets[name]
         platform = self.platform(request, target)
+        if target.example is not None:
+            suffix = ".exe" if sys.platform == "win32" else ""
+            return self.target_dir / request.profile / "examples" / f"{target.example}{suffix}"
         if target.kind == "fullstack":
             return self.target_dir / "dx" / target.package / request.profile / "web" / "server"
         if platform and platform != "desktop":
             return self.target_dir / "dx" / target.package / request.profile / platform / "public"
-        return self.target_dir / request.profile / target.package
+        return self.target_dir / request.profile / (target.artifact_name or target.package)
 
     def validate_request(self, request: Request, names: tuple[str, ...]) -> None:
         platform = getattr(request.options, "platform", None)
         for name in names:
             target = self.targets[name]
+            if target.example is not None:
+                if (
+                    not target.example.strip()
+                    or Path(target.example).name != target.example
+                    or target.example in {".", ".."}
+                    or "\\" in target.example
+                    or ":" in target.example
+                ):
+                    raise ValueError("example must be a nonempty Cargo target name, not a path")
+                if target.kind != "cargo" or target.platforms or target.artifact_name is not None:
+                    raise ValueError("example requires a plain Cargo target without artifact_name")
+            if target.artifact_name is not None and (
+                not target.artifact_name
+                or Path(target.artifact_name).name != target.artifact_name
+                or target.artifact_name in {".", ".."}
+                or "\\" in target.artifact_name
+            ):
+                raise ValueError("artifact_name must be a single output filename")
+            if (target.kind != "cargo" or target.platforms) and (target.artifact_name or target.features):
+                raise ValueError("artifact_name and features require a plain Cargo target")
+            if any(not feature or feature.startswith("-") for feature in target.features):
+                raise ValueError("Cargo target features must be nonempty feature names")
             if platform is not None and platform not in target.platforms:
                 raise ValueError(f"platform {platform} is not supported by {name}")
             if (
@@ -94,6 +122,15 @@ class RustEngine:
             "target_dir": str(self.target_dir),
             "native_profile": request.cargo_profile,
             "artifacts": {name: str(self.artifact(request, name)) for name in names},
+            "features": {name: list(self.targets[name].features) for name in names},
+            "examples": {
+                name: self.targets[name].example
+                for name in names if self.targets[name].example is not None
+            },
+            "run_directories": {
+                name: str(self.targets[name].directory)
+                for name in names if self.targets[name].example is not None
+            },
         }
         if request.action == "metadata":
             project = self.manager().project
@@ -113,6 +150,9 @@ class RustEngine:
             result.update(
                 clean_scope="workspace/profile (including Dioxus output)",
                 affected=list(self.targets),
+                affected_artifacts={
+                    name: str(self.artifact(request, name)) for name in self.targets
+                },
                 clean_paths=[str(path) for path in self.cleanup_paths(request)],
             )
         if request.action in {"check", "test"}:
@@ -271,6 +311,9 @@ class RustEngine:
                     if platform == "desktop"
                     else ()
                 )
+                if target.features:
+                    features += ("--features", ",".join(target.features))
+                selector = ("--example", target.example) if target.example is not None else ()
                 self.cargo(
                     manager,
                     request,
@@ -280,6 +323,7 @@ class RustEngine:
                     request.cargo_profile,
                     "-p",
                     target.package,
+                    *selector,
                     *features,
                 )
 
@@ -293,7 +337,13 @@ class RustEngine:
             (name, None) for name in self.support_packages if name not in {p for p, _ in selected}
         )
         for package, target in selected:
+            selector = (
+                ("--example", target.example)
+                if target and target.example is not None else ("--all-targets",)
+            )
             variants: tuple[tuple[str, ...], ...] = ((),)
+            if target and target.features:
+                variants = (("--features", ",".join(target.features)),)
             if target and target.kind == "fullstack":
                 variants = (("--no-default-features", "--features", "server"),)
                 if request.action == "check":
@@ -326,7 +376,7 @@ class RustEngine:
                         "--locked",
                         "--profile",
                         request.cargo_profile,
-                        "--all-targets",
+                        *selector,
                         "-p",
                         package,
                         *variant,
@@ -389,4 +439,6 @@ class RustEngine:
                     env=environment,
                 )
             else:
-                run_program([artifact, *request.arguments], cwd=artifact.parent, env=environment)
+                target = self.targets[name]
+                directory = target.directory if target.example is not None else artifact.parent
+                run_program([artifact, *request.arguments], cwd=directory, env=environment)

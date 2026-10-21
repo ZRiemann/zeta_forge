@@ -5,6 +5,18 @@
 
 * 发布历史
 
+** v1.8.0 - 2026-10-21T03:00:24Z
+:PROPERTIES:
+:CUSTOM_ID: v1.8.0
+:END:
+*** 变更内容
+- 支持显式 Cargo 库产物文件名、目标级 features 及具名 Cargo example，使用对应构建/检查/测试选择器，并在项目目录运行示例。
+- 展示示例产物、features、运行目录及共享 profile 清理影响；新增构建契约回归测试和双语使用文档。
+- 在 Rust 依赖目录中批准 spdlog-rs、chrono、wry、tao、gtk 和 webkit2gtk 的精确版本。
+
+*** 验证
+- 本次提交仅检查暂存差异与版本记录，未额外运行测试或构建。
+
 ** v1.7.0 - 2026-10-15
 *** 变更内容
 - 将 HPX master 更新到 =6e97afa18a1a189d0147397ecb3400917aef2b94=，同步固定配套 stdexec 为 =04de75de5807e73a229acf047c6976575e313359=。

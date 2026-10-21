@@ -5,6 +5,18 @@
 
 * Release History
 
+** v1.8.0 - 2026-10-21T03:00:24Z
+:PROPERTIES:
+:CUSTOM_ID: v1.8.0
+:END:
+*** Changes
+- Support explicit Cargo library artifact filenames and per-target features, plus named Cargo examples with matching build/check/test selectors and project-directory execution.
+- Describe example artifacts, features, run directories and shared profile cleanup effects; add build-contract regression coverage and bilingual usage documentation.
+- Approve exact spdlog-rs, chrono, wry, tao, gtk and webkit2gtk versions in the Rust dependency catalog.
+
+*** Validation
+- This commit checks staged diffs and version records only; no additional tests or builds were run.
+
 ** v1.7.0 - 2026-10-15
 *** Changes
 - Advance HPX master to =6e97afa18a1a189d0147397ecb3400917aef2b94= and pin its matching stdexec revision =04de75de5807e73a229acf047c6976575e313359=.

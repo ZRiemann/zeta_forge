@@ -1,6 +1,30 @@
 schema = 1
 
 [[dependencies]]
+name = "spdlog-rs"
+version = "=0.5.3"
+
+[[dependencies]]
+name = "chrono"
+version = "=0.4.45"
+
+[[dependencies]]
+name = "wry"
+version = "=0.53.5"
+
+[[dependencies]]
+name = "tao"
+version = "=0.34.8"
+
+[[dependencies]]
+name = "gtk"
+version = "=0.18.2"
+
+[[dependencies]]
+name = "webkit2gtk"
+version = "=2.0.1"
+
+[[dependencies]]
 name = "thiserror"
 version = "=2.0.20"
 

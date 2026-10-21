@@ -64,3 +64,31 @@ cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
 项目通过自己的 =./zbuild.py doctor=、=metadata=、=check=、=build=、=test= 调用 Forge 公共引擎。公共 CLI 默认 release；=--profile debug= 映射 Cargo dev。=doctor= 只读检查工具链、能力工具和原生库；=run= 只使用既有工具与产物；=metadata= 不修改锁文件。构建与检查使用项目已提交的锁文件。
 
 升级工具链时新增相应工具链定义并同步项目 =rust-toolchain.toml=。升级或新增直接 crate 时在目录中批准新精确条目，并由需要它的项目显式采用；未采用的项目不受影响。旧版本条目只有在所有消费者迁出后才可删除。Forge 不读取旧的 =rN= 整套基线格式，也不读取旧的 Cargo 工具安装目录。
+
+* Cargo 库交付项
+
+普通 Cargo 目标可使用 =RustTarget.artifact_name= 指定最终库产物名（例如
+=libz.rlib=），只允许单个文件名。未设置时保留既有按 package 名称查找可执行文件的
+行为。可选元组 =RustTarget.features= 传给 Cargo build/check/Clippy/test。
+这两个设置要求普通 Cargo 目标，不能与 Dioxus platform 选择混用。目标描述会展示
+feature 选择和产物路径。项目只注册库实际支持的动作，不隐含 run/dev/install；
+依赖编译仍由 Cargo 负责。
+
+* 显式 Cargo 示例
+
+使用 =RustTarget("zust", root, features=("log",), example="logging")=
+注册原生 Cargo example，并单独声明项目交付目标。可选字段 =example= 追加在
+RustTarget 末尾，兼容既有调用；名称必须非空且不含路径，只允许普通 Cargo 目标，
+不能与 Dioxus platform 或 =artifact_name= 混用。
+
+build/check/Clippy/test 使用 =--example <name>=，保留 package、feature、固定
+工具链、锁文件及 profile 选择。示例检查/测试不同时使用 =--all-targets=；check
+仍执行 workspace 格式只读检查。产物为
+=<target_dir>/<debug|release>/examples/<name>=，Windows 加 =.exe=。
+示例的运行目录为 =RustTarget.directory=，既有二进制及 Dioxus 工作目录保持不变。
+
+=run= 要求已有产物；=dev= 先构建再运行一次。=--= 后参数由共享前台进程管理
+完整透传，构建日志不打印。项目显式选择示例能力，默认库目标不纳入示例。
+metadata/dry-run 展示 =examples=、=features=、=artifacts= 和示例的
+=run_directories=。clean/rebuild 仍共享 workspace/profile 清理范围，并通过
+=affected_artifacts= 列出全部已注册兄弟产物；选中示例不隔离同 profile 的库产物。

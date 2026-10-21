@@ -204,6 +204,42 @@ class AdapterTests(unittest.TestCase):
             self.assertEqual(cargo.call_count, 1)
             self.assertNotIn("wasm32-unknown-unknown", cargo.call_args.args)
 
+    def test_cargo_library_artifact_and_features(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            engine = RustEngine(
+                root, mock.Mock(),
+                {"lib": RustTarget("zust", root, artifact_name="libz.rlib", features=("log",)),
+                 "app": RustTarget("app", root)},
+                root / "target",
+            )
+            engine.validate_request(request("check"), ("lib", "app"))
+            self.assertEqual(engine.artifact(request("build"), "lib"), root / "target/release/libz.rlib")
+            self.assertEqual(engine.artifact(request("build", "debug"), "app"), root / "target/debug/app")
+            manager = mock.Mock()
+            with mock.patch.object(engine, "cargo") as cargo:
+                engine.build(manager, request("build"), ("lib", "app"))
+                commands = [call.args[2:] for call in cargo.call_args_list]
+                self.assertEqual(commands[0][-2:], ("--features", "log"))
+                self.assertNotIn("--features", commands[1])
+            for action in ("check", "test"):
+                with mock.patch.object(engine, "cargo") as cargo:
+                    engine.validate_code(manager, request(action), ("lib",))
+                for call in cargo.call_args_list:
+                    command = call.args[2:]
+                    if command[0] != "fmt":
+                        self.assertEqual(command[command.index("--features") + 1], "log")
+                        self.assertIn("--locked", command)
+            description = engine.describe(request("build"), ("lib",))
+            self.assertEqual(description["features"], {"lib": ["log"]})
+            for filename in ("", "..", "../bad", "/tmp/bad", "bad\\path"):
+                engine.targets = {"lib": RustTarget("zust", root, artifact_name=filename)}
+                with self.assertRaisesRegex(ValueError, "single output filename"):
+                    engine.validate_request(request("build"), ("lib",))
+            engine.targets = {"lib": RustTarget("app", root, "fullstack", features=("log",))}
+            with self.assertRaisesRegex(ValueError, "plain Cargo"):
+                engine.validate_request(request("build"), ("lib",))
+
     def test_dioxus_web_release_can_disable_debug_symbols(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -231,6 +267,145 @@ class AdapterTests(unittest.TestCase):
                 release_command[release_command.index("--debug-symbols") + 1], "false"
             )
             self.assertNotIn("--debug-symbols", debug_command)
+
+    def test_cargo_example_selectors_features_and_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            engine = RustEngine(
+                root, mock.Mock(),
+                {"logging": RustTarget("zust", root, features=("log",), example="logging")},
+                root / "build/cargo",
+            )
+            manager = mock.Mock()
+            for profile, cargo_profile in (("debug", "dev"), ("release", "release")):
+                with self.subTest(profile=profile), mock.patch.object(engine, "cargo") as cargo:
+                    engine.build(manager, request("build", profile), ("logging",))
+                    engine.validate_code(manager, request("check", profile), ("logging",))
+                    engine.validate_code(manager, request("test", profile), ("logging",))
+                    commands = [call.args[2:] for call in cargo.call_args_list]
+                    self.assertEqual(
+                        [cmd[0] for cmd in commands], ["build", "fmt", "check", "clippy", "test"]
+                    )
+                    for command in commands:
+                        if command[0] == "fmt":
+                            continue
+                        self.assertIn("--locked", command)
+                        self.assertNotIn("--all-targets", command)
+                        for flag, value in (
+                            ("--example", "logging"), ("--features", "log"),
+                            ("-p", "zust"), ("--profile", cargo_profile),
+                        ):
+                            self.assertEqual(command[command.index(flag) + 1], value)
+                    with mock.patch("zeta_forge.rust_engine.sys.platform", "linux"):
+                        self.assertEqual(
+                            engine.artifact(request("build", profile), "logging"),
+                            root / "build/cargo" / profile / "examples/logging",
+                        )
+                    with mock.patch("zeta_forge.rust_engine.sys.platform", "win32"):
+                        self.assertEqual(
+                            engine.artifact(request("build", profile), "logging"),
+                            root / "build/cargo" / profile / "examples/logging.exe",
+                        )
+            description = engine.describe(request("build"), ("logging",))
+            self.assertEqual(description["examples"], {"logging": "logging"})
+            self.assertEqual(description["features"], {"logging": ["log"]})
+            self.assertEqual(description["run_directories"], {"logging": str(root)})
+
+    def test_cargo_example_rejects_invalid_names_and_conflicts(self) -> None:
+        root = Path("/project")
+        for example in (
+            "", " ", ".", "..", "../logging", "examples/logging", "/logging", "a\\b", "C:logging",
+        ):
+            engine = RustEngine(
+                root, mock.Mock(), {"example": RustTarget("app", root, example=example)},
+                root / "build",
+            )
+            with self.subTest(example=example), self.assertRaisesRegex(ValueError, "not a path"):
+                engine.validate_request(request("build"), ("example",))
+        for options in (
+            {"artifact_name": "app"}, {"artifact_name": ""},
+            {"kind": "fullstack"}, {"platforms": ("desktop",)},
+        ):
+            engine = RustEngine(
+                root, mock.Mock(),
+                {"example": RustTarget("app", root, example="logging", **options)}, root / "build",
+            )
+            with self.subTest(options=options), self.assertRaisesRegex(
+                ValueError, "plain Cargo target without artifact_name"
+            ):
+                engine.validate_request(request("build"), ("example",))
+
+    def test_cargo_example_run_and_dev_preserve_arguments_and_working_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            engine = RustEngine(
+                root, mock.Mock(), {"logging": RustTarget("zust", root, example="logging")},
+                root / "build/cargo",
+            )
+            manager = mock.Mock()
+            order: list[str] = []
+            with (
+                mock.patch.object(engine, "manager", return_value=manager),
+                mock.patch.object(engine, "environment", return_value={}),
+                mock.patch.object(
+                    engine, "build", side_effect=lambda *_: order.append("build")
+                ) as build,
+                mock.patch(
+                    "zeta_forge.rust_engine.run_program",
+                    side_effect=lambda *a, **kw: order.append("run"),
+                ) as run,
+            ):
+                with self.assertRaisesRegex(RuntimeError, "built artifact is missing"):
+                    engine.preflight(request("run"), ("logging",))
+                build.assert_not_called()
+                run.assert_not_called()
+                artifact = engine.artifact(request("run"), "logging")
+                artifact.parent.mkdir(parents=True)
+                artifact.touch()
+                engine.preflight(request("run"), ("logging",))
+                manager.doctor.assert_not_called()
+                for action, expected in (("run", ["run"]), ("dev", ["build", "run"])):
+                    order.clear()
+                    req = Request(
+                        action, "release", 2, argparse.Namespace(),
+                        ("doc/config with spaces.json", "example", "--token=secret"),
+                    )
+                    engine.execute(req, ("logging",))
+                    self.assertEqual(order, expected)
+                    self.assertEqual(run.call_args.args[0], [artifact, *req.arguments])
+                    self.assertEqual(run.call_args.kwargs["cwd"], root)
+                run.reset_mock()
+                build.side_effect = RuntimeError("build failed")
+                with self.assertRaisesRegex(RuntimeError, "build failed"):
+                    engine.execute(request("dev"), ("logging",))
+                run.assert_not_called()
+
+    def test_cargo_example_cleanup_shares_profile_and_rebuilds_only_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            engine = RustEngine(root, mock.Mock(), {
+                "lib": RustTarget("zust", root, artifact_name="libz.rlib"),
+                "app": RustTarget("app", root),
+                "logging": RustTarget("zust", root, example="logging"),
+            }, root / "build/cargo")
+            for profile in ("debug", "release"):
+                for name in engine.targets:
+                    artifact = engine.artifact(request("build", profile), name)
+                    artifact.parent.mkdir(parents=True, exist_ok=True)
+                    artifact.touch()
+            req = request("rebuild", "debug")
+            description = engine.describe(req, ("logging",))
+            self.assertEqual(description["affected"], ["lib", "app", "logging"])
+            self.assertEqual(
+                description["affected_artifacts"]["logging"],
+                str(root / "build/cargo/debug/examples/logging"),
+            )
+            with mock.patch.object(engine, "manager"), mock.patch.object(engine, "build") as build:
+                engine.execute(req, ("logging",))
+                self.assertEqual(build.call_args.args[2], ("logging",))
+            for name in engine.targets:
+                self.assertFalse(engine.artifact(req, name).exists())
+                self.assertTrue(engine.artifact(request("build"), name).is_file())
 
     def test_dioxus_target_requires_matching_capability(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -1,0 +1,30 @@
+#+TITLE: 共享 Zig 构建支持
+
+[[file:readme.org][目录]] | [[file:../en/zig_workspace.org][English]]
+
+=common/zeta_forge/zig_engine.py= 提供原生 Zig 工程的 =ZigEngine= 和
+=ZigTarget=。当前工具链精确锁定 =0.17.0=，消费项目原生构建定义须与此
+基线一致。适配器不安装或升级 Zig，也不引入外部包依赖图。
+
+项目通过薄启动器登记原生 step 及可选可执行文件名；=build.zig= 负责模块
+导入、编译选项、测试和原生依赖。Debug/release 分别映射 Debug/ReleaseFast。
+输出和本地缓存归 =build/zig/<profile>/=；clean/rebuild 声明影响同一原生
+单元/profile 的全部兄弟输出，并保留另一个 profile。
+
+支持 doctor/check/build/rebuild/test/clean，可执行产物另支持 run/dev。
+项目明确声明能力，不应声明不可用动作。check/test 执行共享原生验证 step；
+run 要求已有产物，dev 先构建一次。执行继承环境及代理路由，复用 Forge
+前台进程管理，不打印应用参数。help/list/metadata/dry-run 不调用 Zig。
+
+首个消费项目为 zzg，包括库模块及显式选择的日志、基准示例。模块交付通过
+真实消费端/测试程序的编译验证，不意味着 C ABI 静态库或全局安装。
+
+适配器聚焦验证：
+
+#+begin_src sh
+python3 -m unittest discover -s tests -p test_zig_engine.py -v
+#+end_src
+
+这些测试使用隔离文件系统夹具及模拟编译器，验证 CLI 契约；实际原生
+Debug/ReleaseFast 结果由 zzg 验证文档记录。适配器测试和下游结果均不代表
+Forge 已完成版本化发布。

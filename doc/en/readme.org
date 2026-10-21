@@ -247,3 +247,8 @@ The shared Conan dependency versions, including =spdlog=, =fmt=, and =SQLite3=, 
 - External zpp builds use Taskflow and RapidJSON from =3rd/= by default.
 - RapidJSON is passed to zpp through =RAPIDJSON_ROOT=.
 - zpp's optional HPX module consumes the installed HPX package together with the forge Asio/Hwloc compatibility configs and rejects an installation whose =HPX_GIT_COMMIT= differs from the current =3rd/hpx= source.
+
+* Zig projects
+
+See [[file:zig_workspace.org][shared Zig toolchain and native build adapter]] for
+Zig 0.17.0 projects, profile isolation and validation ownership.

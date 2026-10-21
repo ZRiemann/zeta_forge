@@ -5,6 +5,17 @@
 
 * Release History
 
+** v1.9.0 - 2026-10-21T12:44:40Z
+:PROPERTIES:
+:CUSTOM_ID: v1.9.0
+:END:
+*** Changes
+- Add a native Zig build adapter pinned to Zig 0.17.0, with Debug/ReleaseFast profile isolation, project-owned native steps, and executable run/dev support.
+- Describe shared verification and cleanup scope, preserve inherited execution environments, and add mocked adapter contract tests and bilingual usage documentation.
+
+*** Validation
+- This commit checks staged diffs and version records only; no additional tests or builds were run.
+
 ** v1.8.0 - 2026-10-21T03:00:24Z
 :PROPERTIES:
 :CUSTOM_ID: v1.8.0

@@ -1,0 +1,36 @@
+#+TITLE: Shared Zig build support
+
+[[file:readme.org][Index]] | [[file:../zh-CN/zig_workspace.org][中文]]
+
+=common/zeta_forge/zig_engine.py= provides =ZigEngine= and =ZigTarget= for
+native Zig projects. The current approved toolchain is exactly =0.17.0=;
+projects must agree with this baseline in their native build definition.
+The adapter never installs or upgrades Zig and has no external package graph.
+
+A project registers native step names and optional executable names through its
+thin launcher. =build.zig= owns module imports, compiler options, test cases and
+native dependencies. Debug/release map to Debug/ReleaseFast. Outputs and local
+caches belong to =build/zig/<profile>/=; clean/rebuild announce that they affect
+all sibling outputs in that native unit/profile and preserve another profile.
+
+Supported actions are doctor/check/build/rebuild/test/clean, plus run/dev for
+executables. The project explicitly declares capabilities; unavailable actions
+must not be advertised. Check/test select the project's shared native verification
+steps. Run requires existing output; dev builds once first. Execution inherits
+environment/proxy routing and uses Forge's foreground process manager without
+printing application arguments. Help/list/metadata/dry-run never run Zig.
+
+The initial consumer is =zzg=, with library modules and explicit logging and
+benchmark examples. Module delivery compiles real consumer/test executables; it
+does not imply a C ABI archive or global installation.
+
+Focused adapter verification:
+
+#+begin_src sh
+python3 -m unittest discover -s tests -p test_zig_engine.py -v
+#+end_src
+
+This checks CLI contracts with isolated filesystem fixtures and mocked compiler
+execution. Actual native Debug/ReleaseFast evidence belongs to zzg's verification
+document. Neither adapter tests nor downstream evidence constitute a Forge
+versioned release.

@@ -226,3 +226,8 @@ cd "$ZETAX_ROOT/zpp"
 - 外部 zpp 构建默认使用 =3rd/taskflow= 和 =3rd/rapidjson=。
 - RapidJSON 通过 =RAPIDJSON_ROOT= 传递给 zpp。
 - zpp 可选 HPX 模块会同时消费已安装 HPX 与 forge 的 Asio/Hwloc 兼容配置，并拒绝 =HPX_GIT_COMMIT= 与当前 =3rd/hpx= 源码不一致的安装。
+
+* Zig 项目
+
+参见[[file:zig_workspace.org][共享 Zig 工具链与原生构建适配器]]，了解 Zig
+0.17.0 工程、profile 隔离及验证归属。

@@ -8,16 +8,17 @@
 =zeta_forge= approves Rust toolchains, exact third-party direct-crate versions and
 sources, and Cargo tools required by application capabilities. Projects own their
 source, workspace members, ordinary Cargo feature composition and committed
-=Cargo.lock=. Cargo resolves the full graph; Forge validates direct dependencies
-against the approved catalog. Conan manages only C/C++ packages.
+=Cargo.lock=. Cargo resolves the full graph; Forge validates direct declarations and locked
+identities against its single-version catalog. Conan manages only C/C++ packages.
 
 * Toolchains and Dependency Catalog
 
 =rust/toolchains/<channel>.toml= pins the Rust channel, profile and components.
 The project's =rust-toolchain.toml= must exactly match the selected Forge file.
-Each entry in =rust/catalog.toml= approves an exact registry version or an HTTPS
-Git URL with a full commit. Multiple versions of a crate may coexist. Projects
-select one approved version; ordinary extra features do not need another entry.
+=rust/catalog.toml= uses schema 2. Each crate name has exactly one approved
+registry version or HTTPS Git URL with a full commit; duplicate names and old
+catalog schemas fail. Projects must select that identity. Ordinary extra
+features do not need another entry.
 =required-features= and =default-features= apply only to explicit requirements,
 such as =rusqlite/bundled= and the native NNG binding.
 
@@ -29,6 +30,8 @@ required-features = ["bundled"]
 
 [[dependencies]]
 name = "anng"
+release-manifest = "anng/Cargo.toml"
+release-tag-prefix = "anng-v"
 git = "https://github.com/nanomsg/nng-rs"
 rev = "a474ee0272d18f20c360837e2f602dc53ae3b9ec"
 default-features = false
@@ -98,9 +101,9 @@ and native libraries without mutation; =run= uses existing tools and outputs;
 =metadata= does not change lockfiles. Builds and checks use committed lockfiles.
 
 Add a toolchain definition and synchronize the project's =rust-toolchain.toml=
-when upgrading Rust. Approve new exact catalog entries for crate additions or
-upgrades; projects adopt them explicitly, leaving other consumers unaffected.
-Remove old entries only after every consumer has migrated. Forge no longer reads
+when upgrading Rust. Add a unique catalog entry for a new crate; replace that
+entry on upgrade and migrate every registered consumer in one coordinated
+change. Do not retain a second approved version. Forge no longer reads
 the old =rN= whole-baseline format or the former Cargo-tool installation directory.
 
 * Cargo Library Deliverables
@@ -136,3 +139,169 @@ examples outside library defaults. Metadata/dry-run show =examples=, =features=,
 =artifacts= and example =run_directories=. Clean/rebuild still share the
 workspace/profile scope and show =affected_artifacts= for all registered
 siblings; selecting an example does not isolate its cleanup from libraries.
+
+* Single-Version Audits and Coordinated Upgrades
+
+This Forge revision pins direct Serde to =1.0.229= and Tokio to =1.54.0=;
+builds never query or adopt latest automatically. The catalog expresses direct
+ownership only. Currently indirect-only =serde_core= and =serde_derive= were
+removed from it; lockfiles are unchanged. Registry crates use the crates.io
+identity; Git crates require the approved full revision. Root packages, members,
+and target/dev/build dependencies inherit workspace declarations. Aliases are
+checked by actual package identity. Cargo =[patch]= / =[replace]= overrides and
+local crates shadowing catalog packages are rejected.
+
+Preflight runs before tool installation, rebuild cleanup and compilation. It
+checks each own consumer's actual dependency identity, including direct drift
+across compatibility series. Own code consists of registered workspace members
+and recursively referenced own path crates within the owning repository.
+Downloaded registry/Git packages and =3rd/=, =third_party/=, =external/= and
+=vendor/= directories do not automatically become own consumers. Offline checks
+resolve dependency references from the consumer's lockfile record; ambiguous
+references fail explicitly instead of scanning all packages with that name.
+Full audits follow =resolve.nodes[].deps[].pkg=, retaining aliases, kinds and
+target conditions. Inactive optional declarations are still checked; no resolved
+edge is invented for them.
+
+The dependency report has =schema_version = 2= and fields =direct_edges=,
+=transitive_versions=, =coexisting= and =errors=. Third-party dependencies may
+have the same name with different versions or sources. Transitive information
+causes neither warnings nor nonzero status; Cargo resolution failures and direct
+violations fail. There are no old field aliases. =clean= remains available during
+drift; help/list/dry-run do not execute audits. Ordinary project commands inspect
+only their own workspace; project =locked_dependencies= uses this same report.
+
+=rust/projects.toml= registers sibling project paths and optional
+=additional-manifests= relative to each project root. It includes zust, Trader,
+Cat, Practice and zust's standalone consumer. Full audits reject missing or
+duplicate registrations and unregistered sibling projects with =zeta-rust.toml=.
+Additional consumers share their owning project's toolchain and catalog, without
+application capabilities or native-tool requirements.
+
+#+begin_src sh
+./zbuild.py metadata rust-deps
+./zbuild.py doctor rust-deps
+./zbuild.py check rust-deps
+python3 tests/check_rust_consumer.py
+#+end_src
+
+Metadata produces a JSON inventory with declarations, locked identities and
+errors; it can describe version drift without fixing it. Doctor performs static
+offline validation. Check additionally runs full =cargo metadata --locked --offline=
+for every registered manifest and reports one shortest workspace-to-dependency
+chain for reachable packages. Missing caches fail with preparation guidance;
+audit commands never fetch, rewrite lockfiles, compile or install tools.
+The explicit consumer test creates a disposable workspace using real zust with
+=log= and Trader's Serde/JSON/Tokio declarations, seeds its lockfile from Trader,
+then resolves offline and runs a minimal serialization/runtime test. It writes
+only temporary files and =build/rust-consumer=, and checks registered inputs
+remain unchanged. This does not enable production cross-repository path imports.
+
+The adoption workflow is: discover candidates → adapt every direct consumer →
+perform real Cargo resolution → build affected deliverables and test → release
+Forge. Replace unique catalog entries and coordinate consumer declarations;
+update lockfiles through targeted Cargo operations. Explicitly prepare caches
+with owning project =fetch= or pinned Cargo =fetch --locked=, and run the full
+audit and real consumer fixture. Avoid unbounded =cargo update=. Cargo continues
+to resolve transitives without forced downgrades. Discover both compatible and
+breaking updates proactively; deliver incompatible adaptations separately.
+This round validates governance and discovery only, adopts no candidates, and
+does not trigger full application-delivery builds.
+
+* Read-Only Upgrade Discovery
+
+#+begin_src sh
+./zbuild.py check rust-updates
+./zbuild.py metadata rust-updates
+./zbuild.py list rust-updates
+./zbuild.py check rust-updates --dry-run
+#+end_src
+
+Only execution of =check rust-updates= connects to upstreams. Metadata, list,
+help and dry-run only describe the scope and start neither Cargo nor Git.
+=rust-deps= remains an offline consistency audit. Discovery first reads the
+current =--locked --offline= graph; missing caches report preparation through
+the owning project's =./zbuild.py fetch=, without downloading source implicitly.
+No governance input, repository or global proxy configuration is rewritten.
+
+Standard-library HTTP and existing Git inherit process proxies. Each request or
+subprocess has a 20-second timeout, with at most four packages queried concurrently.
+JSON and summaries include current version/commit, direct consumers, toolchains,
+latest stable release, compatible and breaking updates, candidates satisfying all
+direct consumers' toolchains, MSRV status, known constraints and source links.
+Without direct consumers, registered toolchains are explicitly a reference basis.
+Absent MSRV is =needs_verification=, never a compatibility claim. Satisfying MSRV
+does not establish graph compatibility or release readiness. Exact requirements
+from the locked graph include introduction chains; complex ranges are marked
+=needs_cargo_resolution=. Updates are successful findings. Network, rate-limit,
+response parsing or offline graph errors retain other results but fail the final
+command. No stale results substitute for current queries; incomplete graphs
+suppress recommendations.
+
+Registry discovery uses the official crates.io sparse index and SemVer ordering,
+excluding yanked and prerelease versions. Git =release-manifest= and
+=release-tag-prefix= are discovery metadata, not version identity. GitHub tags
+are filtered by the target crate prefix and annotated tags are peeled by Git to
+full commits. Each candidate's commit manifest must match package name/version
+and MSRV; root =workspace.package= inheritance is supported. GitHub release flags
+are checked by tag; draft/prerelease releases are excluded. A verified stable tag
+is allowed without a Release. Unmappable tags are listed for review. Repository
+HEAD and sibling-crate releases are never stable candidates. Prerelease tags are
+informational and downgrades are not recommended.
+
+A live query on 2026-10-22 inspected 25 catalog packages without query errors and
+found stable updates for six packages. Serde latest remains =1.0.229=; Tokio latest
+is =1.54.1= while the catalog remains =1.54.0=. anng's highest stable tag
+=anng-v0.1.3= is behind current =0.2.0-v2pre.3=: =current_ahead_of_stable=, with no
+downgrade recommendation. Newer =v2pre.4= is information only. WebKit2GTK =2.0.2=
+has no declared MSRV and needs verification; the report also shows Wry =0.53.5='s
+exact =2.0.1= requirement. These are dated findings, not adoption acceptance.
+
+See [[file:rust_governance.org][the Phase 1 Rust governance record]] for stages and acceptance boundaries.
+
+Each Forge release has one dependency set. Stable applications use their
+matching old Forge release/tag checkout; there are no in-process A/B baselines
+or automatic checkout switches. Release records must identify the application
+commit, Forge release and commit, Rust toolchain, and committed Cargo.lock.
+Rebuilding also requires matching native dependencies and available sources and
+tools. Existing deployed binaries are unaffected by development-line upgrades.
+
+* Dependency Refresh (2026-10-21)
+
+The compatible-series refresh also adopts =libc 0.2.191=, =bytes 1.12.1=,
+=anyhow 1.0.104=, =serde_json 1.0.154=, =thiserror 2.0.21=, =clap 4.6.7=,
+=futures 0.3.34=, =rustls 0.23.46=, =time 0.3.55= and =tokio-rustls 0.26.6=,
+with =webkit2gtk 2.0.1= retained for Wry compatibility. The registry declares
+Rust requirements compatible with
+Forge's =1.97.1= where supplied; actual checks remain the acceptance gate.
+Wry =0.57=, Tao =0.37=, GTK =0.19= and TOML =0.9= are outside their currently
+selected compatibility series and are deferred to separate migrations.
+
+=webkit2gtk 2.0.2= is published, but Wry =0.53.5= requires exactly =2.0.1=.
+The WebKit update is therefore deferred with the incompatible Wry migration;
+the catalog selects the newest version compatible with the supported graph.
+
+* Validation Evidence (2026-10-22)
+
+- Forge Python regression suite: =python3 -m unittest discover -s tests=.
+- Static and full locked/offline audits: =./zbuild.py doctor rust-deps= and
+  =./zbuild.py check rust-deps=; five registered manifests pass.
+- Real composition: =python3 tests/check_rust_consumer.py= passes its single
+  serialization/runtime test against real zust and Trader's declarations.
+- zust: =./zbuild.py test zust zust-log --profile debug= passes.
+- Cat: =./zbuild.py check server linux --profile debug= passes workspace formatting,
+  target/support-package checking and Clippy with =-D warnings=. The TUN wrapper
+  uses Tokio 1.54's explicit unsafe =AsyncFd::register= contract for its privately
+  owned File; no live TUN operations were performed.
+- Trader: pinned Rust =cargo test --locked --offline -p zti_protocol -p zti_state=
+  passes. This is not a full SDK, NNG or desktop acceptance run.
+- Practice: pinned Rust =cargo check --locked --offline -p zeta-practice
+  --no-default-features --features server= passes.
+- Read-only CLI validation hashes registered root/member manifests, lockfiles,
+  toolchains, project configs, catalog and registry around help/list/metadata,
+  doctor, dry-run and full dependency check.
+
+No complete application build, Release-profile compiler/test pass, desktop/Web
+artifact generation, live service/TUN/trading acceptance, commit, push or release
+was performed. The fixture may compile its small test executable; Forge's tool
+regressions use isolated temporary build fixtures.

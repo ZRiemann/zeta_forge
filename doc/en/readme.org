@@ -17,6 +17,7 @@ Zeta Forge has three explicit roles:
 - [[file:architecture.org][Architecture]]
 - [[file:third_party_usage.org][External Project Integration]]
 - [[file:rust_workspace.org][Rust Workspace Governance]]
+- [[file:rust_governance.org][Phase 1 Rust dependency governance]]
 - [[file:nng_upgrade.org][NNG Upgrade and Downstream Adaptation]]
 - [[file:hpx_upgrade.org][HPX Master Upgrade and Downstream Adaptation]]
 - [[file:build.org][Build Contract]]
@@ -112,7 +113,9 @@ Rust governance lives under =rust/= and =common/zeta_forge/rust_workspace.py=. E
 
 Forge approves exact toolchains under =rust/toolchains/= and direct crate versions,
 Git revisions, Cargo tools and application capabilities in =rust/catalog.toml=.
-The catalog may approve multiple exact versions of one crate. A project's
+Each Forge release approves one exact identity per direct crate; third-party
+transitives remain Cargo-owned. Explicit =check rust-updates= discovers release
+candidates without adopting them; =rust-deps= audits consistency offline. A project's
 =zeta-rust.toml= (schema 2) records its workspace, toolchain file, capabilities
 and native-library requirements. Its =[workspace.dependencies]= selects approved
 versions; =Cargo.lock= retains the resolved graph. Project-owned Cargo features

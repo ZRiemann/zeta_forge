@@ -16,6 +16,7 @@ from .rust_workspace import (
     _native_environment,
     load_rust_project,
     validate_rust_project,
+    locked_dependency_report,
     workspace_dependencies,
 )
 
@@ -145,6 +146,7 @@ class RustEngine:
                     for name, value in workspace_dependencies(project).items()
                     if not isinstance(value, dict) or "path" not in value
                 },
+                locked_dependencies=locked_dependency_report(project),
             )
         if request.action in {"clean", "rebuild"}:
             result.update(

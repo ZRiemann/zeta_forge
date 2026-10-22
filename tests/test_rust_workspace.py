@@ -36,7 +36,7 @@ class RustWorkspaceTests(unittest.TestCase):
         (root / "rust" / "Cargo.toml").write_text(
             '[workspace]\nmembers = ["crate"]\nresolver = "2"\n'
             '[workspace.dependencies]\n'
-            'tokio = { version = "=1.53.1", features = ["macros"] }\n'
+            'tokio = { version = "=1.54.0", features = ["macros"] }\n'
             'dioxus = { version = "=0.7.10", default-features = false, features = ["lib"] }\n'
             'anng = { git = "https://github.com/nanomsg/nng-rs", '
             'rev = "a474ee0272d18f20c360837e2f602dc53ae3b9ec", '
@@ -49,7 +49,11 @@ class RustWorkspaceTests(unittest.TestCase):
             '[dependencies]\ntokio.workspace = true\n', encoding="utf-8"
         )
         (crate / "src" / "lib.rs").write_text("", encoding="utf-8")
-        (root / "rust" / "Cargo.lock").write_text("version = 4\n", encoding="utf-8")
+        (root / "rust" / "Cargo.lock").write_text(
+            'version = 4\n[[package]]\nname = "sample"\nversion = "0.1.0"\ndependencies = ["tokio"]\n'
+            '[[package]]\nname = "tokio"\nversion = "1.54.0"\n'
+            'source = "registry+https://github.com/rust-lang/crates.io-index"\n', encoding="utf-8"
+        )
 
     def manager(self, root: Path) -> RustWorkspaceManager:
         config = mock.Mock()
@@ -61,18 +65,19 @@ class RustWorkspaceTests(unittest.TestCase):
         manifest = root / "rust" / "Cargo.toml"
         manifest.write_text(manifest.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
 
-    def test_parallel_approved_versions(self) -> None:
+    def test_single_approved_version(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             self.create_project(root)
             validate_rust_project(load_rust_project(root, FORGE_ROOT))
-            self.assertEqual(len(load_catalog(FORGE_ROOT).dependencies["tokio"]), 2)
-            self.replace(root, "=1.53.1", "=1.52.1")
-            validate_rust_project(load_rust_project(root, FORGE_ROOT))
+            self.assertEqual(load_catalog(FORGE_ROOT).dependencies["tokio"]["version"], "=1.54.0")
+            self.replace(root, "=1.54.0", "=1.52.1")
+            with self.assertRaisesRegex(RuntimeError, "not approved"):
+                validate_rust_project(load_rust_project(root, FORGE_ROOT))
 
     def test_unapproved_version_git_source_and_revision(self) -> None:
         cases = (
-            ("=1.53.1", "=1.54.0"),
+            ("=1.54.0", "=1.55.0"),
             ("a474ee0272d18f20c360837e2f602dc53ae3b9ec", "0" * 40),
             ("https://github.com/nanomsg/nng-rs", "https://example.com/other"),
         )
@@ -104,7 +109,7 @@ class RustWorkspaceTests(unittest.TestCase):
             self.create_project(root)
             member = root / "rust" / "crate" / "Cargo.toml"
             member.write_text(member.read_text(encoding="utf-8").replace(
-                "tokio.workspace = true", 'tokio = "=1.53.1"'
+                "tokio.workspace = true", 'tokio = "=1.54.0"'
             ), encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "must inherit"):
                 validate_rust_project(load_rust_project(root, FORGE_ROOT))
@@ -135,7 +140,7 @@ class RustWorkspaceTests(unittest.TestCase):
             (root / "rust").mkdir()
             source = (FORGE_ROOT / "rust" / "catalog.toml").read_text(encoding="utf-8")
             catalog = root / "rust" / "catalog.toml"
-            catalog.write_text(source + '\n[[dependencies]]\nname = "tokio"\nversion = "=1.53.1"\n', encoding="utf-8")
+            catalog.write_text(source + '\n[[dependencies]]\nname = "tokio"\nversion = "=1.54.0"\n', encoding="utf-8")
             with self.assertRaisesRegex(RuntimeError, "Duplicate"):
                 load_catalog(root)
             catalog.write_text(source.replace("a474ee0272d18f20c360837e2f602dc53ae3b9ec", "short"), encoding="utf-8")

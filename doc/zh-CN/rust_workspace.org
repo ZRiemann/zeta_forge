@@ -5,11 +5,11 @@
 
 * 目标与归属
 
-=zeta_forge= 统一批准 Rust 工具链、第三方直接 crate 的精确版本与来源，以及应用能力所需的 Cargo 工具。业务仓库拥有源码、workspace 成员、普通 Cargo feature 组合和提交的 =Cargo.lock=。Cargo 解析完整依赖图；Forge 校验直接依赖是否在批准目录内。Conan 只管理 C/C++ package。
+=zeta_forge= 统一批准 Rust 工具链、第三方直接 crate 的精确版本与来源，以及应用能力所需的 Cargo 工具。业务仓库拥有源码、workspace 成员、普通 Cargo feature 组合和提交的 =Cargo.lock=。Cargo 解析完整依赖图；Forge 校验直接依赖声明与锁定身份是否匹配唯一版本目录。Conan 只管理 C/C++ package。
 
 * 工具链与依赖目录
 
-=rust/toolchains/<channel>.toml= 固定 Rust channel、profile 和 component。项目的 =rust-toolchain.toml= 必须与选中的 Forge 文件完全一致。=rust/catalog.toml= 的每个依赖条目批准一个 crate 的精确 registry 版本或 HTTPS Git URL 加完整 commit；同一 crate 可以有多个已批准版本。项目可选择其中一个版本，增加普通 feature 不需要新增目录条目。目录中的 =required-features= 与 =default-features= 仅用于明确必需的约束，例如 =rusqlite/bundled= 和原生 NNG binding。
+=rust/toolchains/<channel>.toml= 固定 Rust channel、profile 和 component。项目的 =rust-toolchain.toml= 必须与选中的 Forge 文件完全一致。=rust/catalog.toml= 使用 schema 2；每个 crate 名称只能批准一个精确 registry 版本或 HTTPS Git URL 加完整 commit，重复名称和旧目录 schema 均报错。项目必须匹配该身份，增加普通 feature 不需要新增目录条目。目录中的 =required-features= 与 =default-features= 仅用于明确必需的约束，例如 =rusqlite/bundled= 和原生 NNG binding。
 
 #+begin_src toml
 [[dependencies]]
@@ -19,6 +19,8 @@ required-features = ["bundled"]
 
 [[dependencies]]
 name = "anng"
+release-manifest = "anng/Cargo.toml"
+release-tag-prefix = "anng-v"
 git = "https://github.com/nanomsg/nng-rs"
 rev = "a474ee0272d18f20c360837e2f602dc53ae3b9ec"
 default-features = false
@@ -63,7 +65,7 @@ cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
 
 项目通过自己的 =./zbuild.py doctor=、=metadata=、=check=、=build=、=test= 调用 Forge 公共引擎。公共 CLI 默认 release；=--profile debug= 映射 Cargo dev。=doctor= 只读检查工具链、能力工具和原生库；=run= 只使用既有工具与产物；=metadata= 不修改锁文件。构建与检查使用项目已提交的锁文件。
 
-升级工具链时新增相应工具链定义并同步项目 =rust-toolchain.toml=。升级或新增直接 crate 时在目录中批准新精确条目，并由需要它的项目显式采用；未采用的项目不受影响。旧版本条目只有在所有消费者迁出后才可删除。Forge 不读取旧的 =rN= 整套基线格式，也不读取旧的 Cargo 工具安装目录。
+升级工具链时新增相应工具链定义并同步项目 =rust-toolchain.toml=。新增 crate 时添加唯一条目；升级时替换唯一条目，并在同一协调变更中迁移所有登记消费者及独立测试 workspace，不保留第二个批准版本。Forge 不读取旧的 =rN= 整套基线格式，也不读取旧的 Cargo 工具安装目录。
 
 * Cargo 库交付项
 
@@ -92,3 +94,131 @@ build/check/Clippy/test 使用 =--example <name>=，保留 package、feature、�
 metadata/dry-run 展示 =examples=、=features=、=artifacts= 和示例的
 =run_directories=。clean/rebuild 仍共享 workspace/profile 清理范围，并通过
 =affected_artifacts= 列出全部已注册兄弟产物；选中示例不隔离同 profile 的库产物。
+
+* 单版本审计与协调升级
+
+本次固定直接依赖 Serde 为 =1.0.229=，Tokio 为 =1.54.0=；构建不会自动查询或采用
+latest。目录只表达直接治理责任，当前仅间接使用的 =serde_core=、=serde_derive=
+已移出目录，锁文件记录保持不变。Registry 依赖采用 crates.io 身份；Git 依赖匹配
+批准的完整 revision。根 package、成员以及 target/dev/build 依赖均继承 workspace
+声明；别名按实际 package 身份检查。禁止 Cargo =[patch]= / =[replace]= 绕过目录，
+也禁止本地 crate 冒充目录中的第三方包。
+
+预检在工具安装、rebuild 清理和编译之前检查 Cargo.lock，按“自有消费方 → 实际
+依赖身份”校验直接版本和来源，跨兼容系列的直接漂移也失败。自有代码限定为登记
+workspace 成员及所属仓库内递归引用的自有 path crate；下载的 registry/Git 包、
+=3rd/=、=third_party/=、=external/=、=vendor/= 不自动成为自有消费方。
+离线预检从消费方的锁文件记录解析依赖引用；同名引用无法唯一定位时明确报错，
+不扩大到所有同名包。完整审计跟随 =resolve.nodes[].deps[].pkg=，保留别名、依赖
+种类和 target 条件。未激活的可选依赖仍校验声明，不虚构解析边。
+
+报告 =schema_version = 2=，包含 =direct_edges=、=transitive_versions=、=coexisting=
+和 =errors=。第三方之间同名不同版本、来源的实例可并存，间接信息只展示，不产生
+警告或非零退出码；Cargo 解析失败及直接依赖违规才失败。无旧字段兼容别名。
+=clean= 仍可用于依赖漂移场景；help/list/dry-run 不执行审计。日常命令只检查当前
+workspace，项目 metadata 的 =locked_dependencies= 使用同一报告结构。
+
+=rust/projects.toml= 登记同级项目及相对项目根目录的 =additional-manifests=，当前包含
+zust、Trader、Cat、Practice 和 zust 独立消费者。全量审计拒绝项目缺失、重复登记及
+未登记但带有 =zeta-rust.toml= 的同级项目。附加 workspace 使用所属项目的工具链与
+目录，不要求应用能力或原生工具。
+
+#+begin_src sh
+./zbuild.py metadata rust-deps
+./zbuild.py doctor rust-deps
+./zbuild.py check rust-deps
+python3 tests/check_rust_consumer.py
+#+end_src
+
+metadata 输出声明、锁定身份和错误的 JSON 清单，可描述漂移但不修复；doctor 离线
+静态检查；check 对所有登记 manifest 运行完整 =cargo metadata --locked --offline=，
+为可达包报告一条从 workspace 出发的最短引入链。缓存缺失时给出准备方法，审计不
+下载依赖、不改锁文件、不编译、不安装工具。显式组合测试在临时 workspace 中引用
+真实 zust 的 =log= feature 和 Trader 的 Serde/JSON/Tokio 声明，以 Trader 锁文件为
+种子，离线解析并执行最小序列化/runtime 测试。只写临时文件及 =build/rust-consumer=，
+同时验证登记输入未改变；不开放生产项目跨仓库 path 权限。
+
+升级流程是“发现候选 → 适配全部直接消费者 → 真实 Cargo 解析 → 构建受影响的
+交付目标并测试 → 发布 Forge”。实际采用时替换目录唯一条目，协调消费者声明，
+用 Cargo 定向更新锁文件；通过项目 =fetch= 或固定工具链 =cargo fetch --locked=
+显式准备缓存，运行全量审计和真实组合测试。避免无范围的 =cargo update=。
+纯间接依赖继续由 Cargo 解析，不为统一直接版本强制降级。兼容更新和不兼容更新
+都应主动发现；不兼容系列适配单独交付。本轮仅验收治理及候选检查能力，未采用新
+候选，因此不触发应用交付目标的完整构建。
+
+* 只读升级候选检查
+
+#+begin_src sh
+./zbuild.py check rust-updates
+./zbuild.py metadata rust-updates
+./zbuild.py list rust-updates
+./zbuild.py check rust-updates --dry-run
+#+end_src
+
+只有 =check rust-updates= 的执行阶段联网。metadata/list/help/dry-run 只描述范围，
+不联网、不启动 Cargo 或 Git；=rust-deps= 始终承担离线一致性审计。候选检查先用
+=--locked --offline= 读取当前依赖图；缓存缺失时报告所属项目 =./zbuild.py fetch=
+准备方法，不隐式下载源码。治理输入、仓库和全局代理配置均不改写。
+
+查询使用标准库 HTTP 和现有 Git，继承进程代理，每次请求/子进程超时 20 秒，最多
+四个包并发。输出 JSON 与摘要，包括当前版本/提交、直接消费者、工具链、最新稳定版、
+兼容/不兼容更新、满足所有直接消费者工具链的候选、MSRV 状态、已知约束和来源链接。
+没有直接消费者时，标明以登记工具链作为参考。未声明 MSRV 的版本标记
+=needs_verification=，不宣称工具链兼容；MSRV 满足也不代表组合可解析或可以发布。
+已锁定图中的精确版本约束附引入链；复杂范围标记 =needs_cargo_resolution=。
+有新版不导致失败；网络、限流、响应解析或离线图错误保留其他结果，但最终失败，
+不使用旧缓存冒充本次查询结果，图不完整时不推荐候选。
+
+Registry 从 crates.io 官方 sparse index 查询，按 SemVer 排序，排除撤回版和预发布版。
+Git 条目的 =release-manifest= 和 =release-tag-prefix= 仅用于发布发现，不改变版本
+身份。GitHub tag 按目标 crate 前缀筛选，通过 Git 剥离 annotated tag 至完整 commit，
+在该 commit 读取 manifest 核验包名、版本和 MSRV，并支持根 =workspace.package=
+字段继承。按 tag 核对正式 GitHub release，排除 draft/prerelease；没有 Release 时
+允许经核验的稳定 tag。无法对应目标 crate 的 tag 列为待核查，不采用 HEAD 或其他
+同仓库 crate 的发布。预发布 tag 仅作信息，不推荐降级。
+
+2026-10-22 真实查询 25 个目录包，无查询错误；发现 6 个包有稳定更新。Serde 最新
+稳定版仍为 =1.0.229=；Tokio 为 =1.54.1=，当前目录仍为 =1.54.0=。anng 最高稳定
+=anng-v0.1.3= 低于当前 =0.2.0-v2pre.3=，状态 =current_ahead_of_stable=，不推荐回退；
+较新 =v2pre.4= 仅展示信息。WebKit2GTK =2.0.2= 未声明 MSRV，需要验证，同时报告
+当前 Wry =0.53.5= 对 =2.0.1= 的精确要求。查询结果是带日期的发现记录，不是升级验收。
+
+后续 Stage 与验收边界见 [[file:rust_governance.org][Phase 1 Rust 依赖治理记录]]。
+
+每个 Forge 发布版本只有一套依赖。稳定应用使用匹配的旧 Forge release/tag checkout，
+不引入 A/B 基线或自动切换器。发布记录须注明应用提交、Forge 发布版本及提交、Rust
+工具链，并提交 Cargo.lock。旧版本重建仍依赖匹配的原生依赖、可获取的源码和工具。
+已经部署的二进制不会因开发线依赖升级而变化。
+
+* 依赖更新记录（2026-10-21）
+
+本次兼容系列更新还采用 =libc 0.2.191=、=bytes 1.12.1=、=anyhow 1.0.104=、
+=serde_json 1.0.154=、=thiserror 2.0.21=、=clap 4.6.7=、=futures 0.3.34=、
+=rustls 0.23.46=、=time 0.3.55=、=tokio-rustls 0.26.6=；
+=webkit2gtk= 保持 =2.0.1= 以兼容 Wry。
+Registry 已声明的最低 Rust 要求均兼容 Forge =1.97.1=；实际检查仍是验收门槛。
+Wry =0.57=、Tao =0.37=、GTK =0.19=、TOML =0.9= 超出当前兼容系列，留待单独迁移。
+
+=webkit2gtk 2.0.2= 已发布，但 Wry =0.53.5= 精确要求 =2.0.1=，因此 WebKit
+更新随不兼容 Wry 迁移另行处理；目录采用受支持依赖图能够解析的最新兼容版本。
+
+* 验证记录（2026-10-22）
+
+- Forge Python 回归：=python3 -m unittest discover -s tests=。
+- 静态与完整 locked/offline 审计：=./zbuild.py doctor rust-deps= 和
+  =./zbuild.py check rust-deps=，五个登记 manifest 均通过。
+- 真实组合：=python3 tests/check_rust_consumer.py= 的单个序列化/runtime 测试通过，
+  使用真实 zust 和 Trader 依赖声明。
+- zust：=./zbuild.py test zust zust-log --profile debug= 通过。
+- Cat：=./zbuild.py check server linux --profile debug= 通过 workspace 格式检查、
+  目标/支持 package 检查及 =-D warnings= Clippy。TUN wrapper 按 Tokio 1.54 的
+  =AsyncFd::register= 安全契约显式注册私有持有的 File，未执行真实 TUN 操作。
+- Trader：固定工具链运行 =cargo test --locked --offline -p zti_protocol -p zti_state=
+  通过；不代表完整 SDK、NNG 或桌面验收。
+- Practice：固定工具链运行 =cargo check --locked --offline -p zeta-practice
+  --no-default-features --features server= 通过。
+- 只读 CLI 检查在 help/list/metadata、doctor、dry-run、完整依赖检查前后核对登记根/
+  成员 manifest、锁文件、工具链、项目配置、目录和登记表的文件摘要。
+
+未执行完整应用构建、Release 编译/测试、桌面/Web 产物生成、真实服务/TUN/交易验收、
+commit、push 或发布。组合夹具会编译小型测试程序；Forge 工具回归使用隔离临时构建夹具。

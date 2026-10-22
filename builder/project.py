@@ -17,6 +17,8 @@ from zeta_forge.build_ops import (
 from zeta_forge.cmake_builder import CommonBuildArgs
 from zeta_forge.config import load_repo_config
 from zeta_forge.process import require_command, run_command
+from zeta_forge.rust_audit import RustDependencyAudit
+from zeta_forge.rust_updates import RustUpdates
 
 from builder.deps.project import DepsBuilder
 from builder.folly.project import FollyBuilder
@@ -188,10 +190,14 @@ def project(script_path: Path) -> Project:
         for name in ORDER
     )
     products += (Product("build-tools", "tools", "Forge tooling regression tests", ("test",)),)
+    products += (Product("rust-deps", "rust-deps", "Rust dependency governance audit", ("doctor", "check")),)
+    products += (Product("rust-updates", "rust-updates", "Read-only upstream Rust upgrade candidates", ("check",)),)
     return Project(
         "zeta_forge",
         products,
-        {"native": ForgeEngine(script_path), "tools": ToolTests(script_path.parent)},
+        {"native": ForgeEngine(script_path), "tools": ToolTests(script_path.parent),
+         "rust-deps": RustDependencyAudit(load_repo_config(script_path)),
+         "rust-updates": RustUpdates(load_repo_config(script_path))},
         ORDER,
         action_defaults={"test": ("build-tools",), "install": ()},
     )

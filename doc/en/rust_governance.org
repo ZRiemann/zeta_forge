@@ -1,0 +1,73 @@
+#+TITLE: Phase 1 — Rust Direct Dependency Governance
+
+[[file:readme.org][Back to Documentation]] | [[file:rust_workspace.org][Operations]] | [[file:../zh-CN/rust_governance.org][Chinese Version]]
+
+* Phase 1: Direct Consistency, Cargo-Owned Transitives and Discovery
+
+Forge owns this capability for zust, Trader, Cat, Practice and zust's standalone
+consumer workspace. Each Forge release contains one effective set of direct
+identities. Stable projects use matching old Forge releases/tags, without A/B
+catalogs or automatic checkout switching. Phase numbers do not determine releases;
+this delivery has no assigned version and remains uncommitted and unpublished.
+
+Stages 1.1–1.3 established the unique catalog, registry, offline full audits,
+coordinated consumer migration and real composition fixture. This increment
+follows the stages below without adopting dependency upgrades.
+
+** Stage 1.4: Actual Dependency Edges
+
+- Depends on Stage 1.3; owned by =rust_dependencies.py=, =rust_workspace.py= and =rust_audit.py=.
+- Identify own consumers through registered workspaces and own repository path
+  crates, excluding automatic ownership of downloaded and third-party source.
+  Lock references must resolve uniquely; full audits follow Cargo package IDs.
+- Preserve root/member, alias, normal/dev/build, target and optional declaration
+  checks. Enforce catalog identities only on actual direct edges; allow other
+  same-name identities used transitively.
+- Acceptance: fail wrong direct sources and ambiguous lock references; do not
+  reject third-party same-name versions/sources; preserve preflight before tool
+  installation, cleanup and compilation.
+
+** Stage 1.5: Reporting and Catalog Responsibility
+
+- Depends on Stage 1.4; report schema 2 contains =direct_edges=,
+  =transitive_versions=, =coexisting= and =errors=.
+- Remove currently indirect-only Serde companions from the catalog while keeping
+  lockfiles. No legacy report aliases.
+- Acceptance: all callers and the composition fixture use the new structure;
+  transitive information produces neither warnings nor failure status; consumer
+  manifests and lockfiles remain unchanged.
+
+** Stage 1.6: Read-Only Upgrade Candidates
+
+- Depends on Stage 1.5. =rust_releases.py= owns SemVer, upstream I/O and Git
+  manifest verification; =rust_updates.py= owns locked graph constraints,
+  cross-consumer MSRV analysis and explicit command orchestration.
+- Only =check rust-updates= connects upstream. Bound requests/subprocesses to
+  20 seconds and at most four concurrent packages, inheriting proxies.
+  Descriptive commands do not execute. Failures preserve partial results and
+  fail the command; no stale fallback.
+- Filter yanked/prerelease registry versions. Git discovery checks crate prefixes,
+  formal release flags, peeled commits and manifests. Unknown MSRV and complex
+  constraints remain unverified; never recommend a downgrade.
+- Acceptance: deterministic mocked tests, static and full offline audits of five
+  workspaces, real composition test, live upstream query and unchanged input
+  hashes. Record anng ahead of stable and Wry's exact version constraint.
+
+* Verification and Future Adoption Gate
+
+Current acceptance covers governance and discovery. Future adoption follows:
+discover candidates → adapt all direct consumers → perform real Cargo resolution →
+build affected deliverables and test → release Forge. Address APIs, features,
+native ABI and toolchains before adopting breaking versions. Successful discovery
+does not establish application delivery readiness.
+
+This round runs Forge Python regressions, five-workspace doctor/check, the real
+minimal zust/Trader test and a live query. It does not run full application builds,
+desktop UI or production/trading acceptance, upgrade dependencies, commit, push,
+release or switch checkouts. Commands and dated findings are in the operations guide.
+
+Verification on 2026-10-22: all 90 Forge regressions, five-workspace doctor/check
+and the real composition fixture passed. All 25 live queries succeeded, with six
+stable updates found. Hashes of 40 governance inputs matched before/after nine
+CLI command groups; all 10 consumer root manifests/lockfiles saved at the start
+of this increment also matched.

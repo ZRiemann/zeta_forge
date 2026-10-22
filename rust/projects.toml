@@ -1,0 +1,14 @@
+schema = 1
+
+[[projects]]
+path = "zust"
+additional-manifests = ["tests/consumer/Cargo.toml"]
+
+[[projects]]
+path = "zeta_trader"
+
+[[projects]]
+path = "zeta_cat"
+
+[[projects]]
+path = "zeta_practice"

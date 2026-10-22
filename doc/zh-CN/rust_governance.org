@@ -1,0 +1,55 @@
+#+TITLE: Phase 1 — Rust 直接依赖治理
+
+[[file:readme.org][返回文档首页]] | [[file:rust_workspace.org][治理操作说明]] | [[file:../en/rust_governance.org][English Version]]
+
+* Phase 1：直接一致、间接自治与升级发现
+
+归属 Forge；消费者为 zust、Trader、Cat、Practice 及 zust 独立消费者 workspace。
+每个 Forge release 保留一套有效直接依赖身份。稳定项目使用对应旧 Forge release/tag，
+不引入 A/B 版本目录或自动 checkout。Phase 编号不代表发布版本；本轮交付版本未指定，
+当前成果尚未提交或发布。
+
+前置 Stage 1.1–1.3 已建立唯一目录、登记表、离线全量审计、消费者协调迁移和真实
+组合测试。本轮增量遵循下面的 Stage 顺序，不进行实际依赖升级。
+
+** Stage 1.4：实际依赖边
+
+- 依赖 Stage 1.3；实现归属 =rust_dependencies.py=、=rust_workspace.py=、=rust_audit.py=。
+- 自有消费方按登记 workspace 和仓库内自有 path crate 识别；下载包和第三方目录
+  不自动拥有治理权。静态锁文件引用须唯一解析；完整审计使用 Cargo package ID。
+- 根/成员、别名、normal/dev/build、target 和可选声明继续验证。只有实际直接边
+  才执行目录身份约束，同名间接身份可并存。
+- 验收：直接错误来源必须失败；第三方同名不同来源/版本不得误报；歧义引用失败；
+  预检仍早于工具安装、清理及编译。
+
+** Stage 1.5：报告与目录责任
+
+- 依赖 Stage 1.4；报告 schema 2：=direct_edges=、=transitive_versions=、=coexisting=、=errors=。
+- 移除当前仅间接使用的 Serde 配套目录条目，保留锁文件。不提供旧报告字段别名。
+- 验收：全部调用与组合夹具使用新结构；间接版本信息不产生警告和失败退出；
+  消费者 manifest/lockfile 不改写。
+
+** Stage 1.6：只读升级候选
+
+- 依赖 Stage 1.5；=rust_releases.py= 负责 SemVer、上游 I/O 和 Git manifest 核验；
+  =rust_updates.py= 负责当前图约束、跨消费者 MSRV 与显式命令编排。
+- 仅 =check rust-updates= 联网；查询有界、最多四包并发、20 秒请求/子进程超时，
+  继承代理；其他描述命令不执行。网络失败保留部分结果并失败，无旧数据回填。
+- 官方 registry 排除撤回和预发布；Git 按 crate 前缀、正式 release 标志、剥离后的
+  commit 和 manifest 核验。未知 MSRV 和复杂约束明确保留待验证状态，不推荐降级。
+- 验收：确定性 mock 回归、五个 workspace 静态/完整离线审计、真实组合测试、一次
+  真实联网查询、治理输入摘要不变。记录 anng 领先稳定系列及 Wry 精确版本阻碍。
+
+* 验证与后续采用门槛
+
+当前验收限于治理与候选检查；实际升级另行执行：发现候选 → 适配全部直接消费者 →
+真实 Cargo 解析 → 构建受影响交付目标并测试 → 发布 Forge。采用大版本前处理 API、
+feature、原生 ABI 和工具链适配。不得用候选查询成功替代应用交付验收。
+
+本轮运行 Forge Python 回归、五个 workspace doctor/check、真实 zust/Trader 最小
+测试及联网查询；没有运行完整应用构建、桌面 UI、生产/交易验收，没有升级依赖、
+自动提交、推送、发布或切换 checkout。详细命令与带日期的查询结果见治理操作说明。
+
+2026-10-22 验证：90 项 Forge 回归通过；五个 workspace 的 doctor/check 及真实组合
+夹具通过；25 项联网查询无错误，6 项发现稳定更新。九组 CLI 命令前后 40 个治理
+输入摘要一致，本轮开始时保存的 10 个消费者根 manifest/lockfile 亦保持一致。

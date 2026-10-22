@@ -21,7 +21,11 @@ CMake 和 pkg-config 元数据会调整为发布前缀。
 =clean/rebuild= 仅影响一个 profile 下指定的原生构建目录及目标 staging，
 不影响安装内容或共享 Conan/Cargo 缓存。=rebuild= 随后重建所选产物及必要依赖。
 
-Forge =check= 配置并编译所选库。=test= 默认选择 =build-tools=，运行 Python 工具测试，
+Forge =check= 配置并编译所选原生库。显式 =doctor rust-deps= 离线静态审计，
+=check rust-deps= 另外完整执行固定工具链的 =--locked --offline= 解析，不编译。
+=check rust-updates= 读取当前锁定图后显式查询 crates.io/GitHub 升级候选，不采用更新；
+其 metadata/list/help/dry-run 只描述范围且不联网。报告及失败语义见
+[[file:rust_workspace.org][Rust 治理说明]]。=test= 默认选择 =build-tools=，运行 Python 工具测试，
 而非上游第三方测试套件。测试覆盖 Forge 公共入口及共享适配器；
 各消费项目在自身仓库测试自己的 =zbuild.py=。
 不支持的上游测试、运行及 fetch 能力会报错。

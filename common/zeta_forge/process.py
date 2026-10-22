@@ -27,6 +27,7 @@ def run_command(
     env: dict[str, str] | None = None,
     check: bool = True,
     capture_output: bool = False,
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     stringified = _stringify_args(args)
     print(f"==> {shell_join(stringified)}")
@@ -37,6 +38,7 @@ def run_command(
         text=True,
         capture_output=capture_output,
         check=False,
+        timeout=timeout,
     )
     if check and completed.returncode != 0:
         raise CommandError(f"Command failed with exit code {completed.returncode}: {shell_join(stringified)}")

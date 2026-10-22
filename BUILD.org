@@ -21,7 +21,14 @@ the publication prefix. =clean/rebuild= affect the named native
 build directories and target staging for one profile, not installations or shared
 Conan/Cargo caches. =rebuild= then rebuilds selected outputs and required dependencies.
 
-Forge =check= configures and compiles selected libraries. =test= defaults to
+Forge =check= configures and compiles selected native libraries.
+Explicit =doctor rust-deps= performs static offline dependency governance;
+=check rust-deps= additionally resolves all registered Rust consumers with
+=--locked --offline= and does not compile. =check rust-updates= explicitly queries
+crates.io/GitHub for read-only upgrade candidates after loading locked offline
+graphs; it does not adopt updates. =metadata/list/help/dry-run= for this target
+only describe scope and never connect upstream. See
+[[file:doc/en/rust_workspace.org][Rust governance]] for report schemas and failure semantics. =test= defaults to
 =build-tools= and runs Python tooling tests, not upstream third-party test suites.
 These tests cover Forge's public entrypoint and shared adapters; each consuming
 project tests its own =zbuild.py= in its repository.

@@ -5,6 +5,21 @@
 
 * Release History
 
+** v1.10.0 - 2026-10-22T03:11:12Z
+:PROPERTIES:
+:CUSTOM_ID: v1.10.0
+:END:
+*** Changes
+- Establish a unique direct-dependency catalog and registered Rust consumers, with static and locked offline audits that distinguish owned direct edges from Cargo-managed transitive identities.
+- Add explicit read-only upstream upgrade discovery with MSRV and dependency-constraint reporting, bounded network requests and partial-failure results.
+- Update approved dependency pins, add governance and composition regression coverage, and document operations and adoption gates in English and Chinese.
+
+*** Compatibility and Upgrade Notes
+- The repository-owned catalog and dependency reports use schema 2. Consumers must match the release's direct dependency identities; retain an older Forge release for older pins and coordinate manifest/lockfile migrations explicitly.
+
+*** Validation
+- This commit checks staged diffs and version records only; no additional tests or builds were run. Earlier verification is recorded in the Rust governance documentation.
+
 ** v1.9.0 - 2026-10-21T12:44:40Z
 :PROPERTIES:
 :CUSTOM_ID: v1.9.0

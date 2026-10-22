@@ -17,6 +17,7 @@ Zeta Forge 有三个明确用途：
 - [[file:architecture.org][架构设计]]
 - [[file:third_party_usage.org][外部项目接入]]
 - [[file:rust_workspace.org][Rust 工程治理]]
+- [[file:rust_governance.org][Phase 1 Rust 依赖治理记录]]
 - [[file:nng_upgrade.org][NNG 升级与下游适配]]
 - [[file:hpx_upgrade.org][HPX 主线升级与下游适配]]
 - [[file:build.org][构建契约]]
@@ -107,7 +108,7 @@ Rust 治理配置位于 =rust/=，公共实现位于 =common/zeta_forge/rust_wor
 
 * Rust 项目管理
 
-=rust/toolchains/= 管理精确 Rust 工具链；=rust/catalog.toml= 批准可并存的 crate 精确版本、
+=rust/toolchains/= 管理精确 Rust 工具链；=rust/catalog.toml= 为每个直接 crate 批准唯一精确版本、
 Git revision、Cargo 工具和应用能力。业务仓库通过 schema 2 的 =zeta-rust.toml= 声明
 workspace、toolchain 文件、能力和原生库需求，通过 =[workspace.dependencies]= 选择
 已批准版本，=Cargo.lock= 保留解析后的依赖图。项目拥有普通 Cargo feature 组合，

@@ -13,6 +13,7 @@ import tomllib
 from .conan_openssl import read_openssl_manifest
 from .config import RepoConfig
 from .process import run_command
+from .rust_dependencies import DependencyReport, dependency_report, owned_manifest, package_identity
 
 PROJECT_CONFIG_NAME = "zeta-rust.toml"
 TOOLCHAIN_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -27,7 +28,7 @@ class CargoToolUnavailable(RuntimeError):
 
 @dataclass(frozen=True)
 class RustCatalog:
-    dependencies: Mapping[str, tuple[Mapping[str, object], ...]]
+    dependencies: Mapping[str, Mapping[str, object]]
     capabilities: Mapping[str, Mapping[str, object]]
     cargo_tools: Mapping[str, tuple[Mapping[str, object], ...]]
 
@@ -115,12 +116,11 @@ def _catalog_records(
 def load_catalog(forge_root: Path) -> RustCatalog:
     path = forge_root / "rust" / "catalog.toml"
     document = _read_toml(path)
-    if document.get("schema") != 1:
+    if document.get("schema") != 2:
         raise RuntimeError(f"Unsupported Rust catalog schema in {path}")
     if set(document) != {"schema", "dependencies", "cargo-tools", "capabilities"}:
         raise RuntimeError(f"Invalid Rust catalog sections in {path}")
-    dependencies: dict[str, list[Mapping[str, object]]] = {}
-    seen: set[tuple[str, str, str]] = set()
+    dependencies: dict[str, Mapping[str, object]] = {}
     for record in _catalog_records(document, "dependencies", path):
         name = record.get("name")
         version = record.get("version")
@@ -136,7 +136,6 @@ def load_catalog(forge_root: Path) -> RustCatalog:
                 or rev is not None
             ):
                 raise RuntimeError(f"Invalid exact version or source for {name!r} in {path}")
-            identity = (name, "registry", version)
         else:
             if (
                 not isinstance(git, str)
@@ -145,19 +144,28 @@ def load_catalog(forge_root: Path) -> RustCatalog:
                 or not GIT_REV_PATTERN.fullmatch(rev)
             ):
                 raise RuntimeError(f"Invalid Git source or full revision for {name!r} in {path}")
-            identity = (name, git, rev)
         allowed_fields = {
-            "name", "version", "git", "rev", "required-features", "default-features"
+            "name", "version", "git", "rev", "required-features", "default-features",
+            "release-manifest", "release-tag-prefix"
         }
         if set(record) - allowed_fields:
             raise RuntimeError(f"Unknown Rust catalog dependency field for {name!r} in {path}")
+        for field in ("release-manifest", "release-tag-prefix"):
+            value = record.get(field)
+            if value is not None and (git is None or not isinstance(value, str) or not value):
+                raise RuntimeError(f"Invalid {field} for {name!r} in {path}")
+        release_manifest = record.get("release-manifest")
+        if release_manifest is not None and (
+            Path(release_manifest).is_absolute() or ".." in Path(release_manifest).parts
+            or Path(release_manifest).name != "Cargo.toml"
+        ):
+            raise RuntimeError(f"Invalid release-manifest for {name!r} in {path}")
         _string_list(record.get("required-features", []), f"{name}.required-features", path)
         if "default-features" in record and type(record["default-features"]) is not bool:
             raise RuntimeError(f"Invalid default-features constraint for {name!r} in {path}")
-        if identity in seen:
-            raise RuntimeError(f"Duplicate Rust catalog dependency {identity!r}")
-        seen.add(identity)
-        dependencies.setdefault(name, []).append(record)
+        if name in dependencies:
+            raise RuntimeError(f"Duplicate Rust catalog dependency {name!r} in {path}")
+        dependencies[name] = record
 
     cargo_tools: dict[str, list[Mapping[str, object]]] = {}
     for record in _catalog_records(document, "cargo-tools", path):
@@ -180,7 +188,7 @@ def load_catalog(forge_root: Path) -> RustCatalog:
             raise RuntimeError(f"Invalid Cargo tool record in {path}")
         if set(record) != {"name", "version", "executable", "crate", "crate-version"}:
             raise RuntimeError(f"Unknown Cargo tool field in {path}")
-        if not any(item.get("version") == crate_version for item in dependencies.get(crate, ())):
+        if dependencies.get(crate, {}).get("version") != crate_version:
             raise RuntimeError(f"Cargo tool {name!r} references an unapproved crate version")
         if any(item["crate-version"] == crate_version for item in cargo_tools.get(name, ())):
             raise RuntimeError(f"Duplicate Cargo tool {name!r} for {crate_version}")
@@ -202,7 +210,7 @@ def load_catalog(forge_root: Path) -> RustCatalog:
             raise RuntimeError(f"Invalid Rust capability {name!r} in {path}")
         _string_list(capability.get("rust-targets", []), f"capabilities.{name}.rust-targets", path)
     return RustCatalog(
-        dependencies={name: tuple(records) for name, records in dependencies.items()},
+        dependencies=dependencies,
         capabilities={name: _mapping(value, name, path) for name, value in capabilities.items()},
         cargo_tools={name: tuple(records) for name, records in cargo_tools.items()},
     )
@@ -246,10 +254,14 @@ def _validate_local_dependency(
         raise RuntimeError(f"Local Rust dependency {name!r} mixes path and external source")
     if not (base / local_path).resolve().is_relative_to(project.root):
         raise RuntimeError(f"Local Rust dependency {name!r} escapes project root")
+    manifest = (base / local_path).resolve() / "Cargo.toml"
+    package = _table(_read_toml(manifest), "package", manifest)
+    if package.get("name") in project.catalog.dependencies:
+        raise RuntimeError(f"Local Rust dependency {name!r} in {manifest} shadows a Forge crate")
 
 
 def _member_manifests(project: RustProject, workspace: Mapping[str, object]) -> list[Path]:
-    members = _string_list(workspace.get("members"), "workspace.members", project.manifest)
+    members = _string_list(workspace.get("members", []), "workspace.members", project.manifest)
     manifests: list[Path] = []
     for member in members:
         if any(character in member for character in "*?["):
@@ -289,19 +301,21 @@ def _member_dependency_tables(
 
 def workspace_dependencies(project: RustProject) -> Mapping[str, object]:
     workspace = _table(_read_toml(project.manifest), "workspace", project.manifest)
-    return _table(workspace, "dependencies", project.manifest)
+    return _mapping(workspace.get("dependencies", {}), "workspace.dependencies", project.manifest)
 
 
 def _project_cargo_tool(project: RustProject, name: str) -> Mapping[str, object]:
     declarations = workspace_dependencies(project)
     matching = []
     for specification in project.catalog.cargo_tools.get(name, ()):
-        declaration = declarations.get(str(specification["crate"]))
-        version = declaration if isinstance(declaration, str) else (
-            declaration.get("version") if isinstance(declaration, dict) else None
-        )
-        if version == specification["crate-version"]:
-            matching.append(specification)
+        for alias, declaration in declarations.items():
+            package = declaration.get("package", alias) if isinstance(declaration, dict) else alias
+            version = declaration if isinstance(declaration, str) else (
+                declaration.get("version") if isinstance(declaration, dict) else None
+            )
+            if package == specification["crate"] and version == specification["crate-version"]:
+                matching.append(specification)
+                break
     if len(matching) != 1:
         raise RuntimeError(
             f"Cargo tool {name!r} has no unique approved version for this workspace"
@@ -316,27 +330,25 @@ def _approved_dependency(name: str, value: object, catalog: RustCatalog) -> bool
         declaration = value
     else:
         return False
-    if set(declaration) - {"version", "git", "rev", "features", "default-features"}:
+    if set(declaration) - {"package", "version", "git", "rev", "features", "default-features"}:
         return False
     features = declaration.get("features", [])
     if not isinstance(features, list) or any(not isinstance(feature, str) for feature in features):
         return False
     if "default-features" in declaration and type(declaration["default-features"]) is not bool:
         return False
-    for approved in catalog.dependencies.get(name, ()):
-        source_fields = ("version", "git", "rev")
-        if any(declaration.get(field) != approved.get(field) for field in source_fields):
-            continue
-        required = approved.get("required-features", [])
-        if not set(required).issubset(features):
-            continue
-        if (
-            "default-features" in approved
-            and declaration.get("default-features", True) != approved["default-features"]
-        ):
-            continue
-        return True
-    return False
+    package = declaration.get("package", name)
+    approved = catalog.dependencies.get(package) if isinstance(package, str) else None
+    if approved is None:
+        return False
+    if any(declaration.get(field) != approved.get(field) for field in ("version", "git", "rev")):
+        return False
+    if not set(approved.get("required-features", [])).issubset(features):
+        return False
+    return (
+        "default-features" not in approved
+        or declaration.get("default-features", True) == approved["default-features"]
+    )
 
 
 def validate_rust_project(project: RustProject) -> None:
@@ -351,43 +363,179 @@ def validate_rust_project(project: RustProject) -> None:
     metadata = workspace.get("metadata", {})
     if isinstance(metadata, dict) and "zeta-forge" in metadata:
         raise RuntimeError(f"Obsolete Zeta Forge workspace metadata in {project.manifest}")
-    workspace_dependencies = _table(workspace, "dependencies", project.manifest)
+    workspace_dependencies = _mapping(
+        workspace.get("dependencies", {}), "workspace.dependencies", project.manifest
+    )
     for name, value in workspace_dependencies.items():
         if _is_local_dependency(value):
             _validate_local_dependency(project, name, value, project.workspace_dir)
             continue
         if not _approved_dependency(name, value, project.catalog):
-            raise RuntimeError(f"Rust dependency {name!r} is not approved by Forge catalog")
+            package = value.get("package", name) if isinstance(value, dict) else name
+            expected = (
+                project.catalog.dependencies.get(package, "no approved entry")
+                if isinstance(package, str) else "valid package name required"
+            )
+            raise RuntimeError(
+                f"Rust dependency {name!r} in {project.manifest} is not approved by Forge catalog: "
+                f"actual={value!r}; required={expected!r}"
+            )
     if len(set(project.capabilities)) != len(project.capabilities):
         raise RuntimeError("Duplicate Rust capability")
+    declared_packages = {
+        value.get("package", name) if isinstance(value, dict) else name
+        for name, value in workspace_dependencies.items()
+    }
     for name in project.capabilities:
         capability = project.catalog.capabilities.get(name)
         if capability is None:
             raise RuntimeError(f"Unknown Rust capability {name!r}")
-        if capability["crate"] not in workspace_dependencies:
+        if capability["crate"] not in declared_packages:
             raise RuntimeError(f"Rust capability {name!r} requires {capability['crate']!r}")
         _project_cargo_tool(project, str(capability["cargo-tool"]))
 
-    for member_manifest in _member_manifests(project, workspace):
+    for member_manifest, workspace_manifest in own_manifests(project):
         member = _read_toml(member_manifest)
+        declarations = _read_toml(workspace_manifest).get("workspace", {}).get("dependencies", {})
+        for candidate in dict.fromkeys([member_manifest, workspace_manifest]):
+            if set(_read_toml(candidate)) & {"patch", "replace"}:
+                raise RuntimeError(f"Cargo patch/replace overrides are forbidden in {candidate}")
+        for name, value in declarations.items():
+            if _is_local_dependency(value):
+                _validate_local_dependency(project, name, value, workspace_manifest.parent)
+            elif not _approved_dependency(name, value, project.catalog):
+                package = value.get("package", name) if isinstance(value, dict) else name
+                raise RuntimeError(
+                    f"Rust dependency {name!r} in {workspace_manifest} is not approved: "
+                    f"actual={value!r}; required={project.catalog.dependencies.get(package)!r}"
+                )
         for section, dependencies in _member_dependency_tables(member, member_manifest):
             for name, value in dependencies.items():
                 if _is_local_dependency(value):
                     _validate_local_dependency(project, name, value, member_manifest.parent)
                     continue
-                if (
-                    not isinstance(value, dict)
-                    or value.get("workspace") is not True
+                if (not isinstance(value, dict) or value.get("workspace") is not True
                     or set(value) - {"workspace", "features", "optional", "default-features"}
-                    or name not in workspace_dependencies
-                ):
+                    or name not in declarations):
                     raise RuntimeError(
-                        f"Dependency {name!r} in {member_manifest} must inherit from [workspace.dependencies]"
+                        f"Dependency {name!r} in {member_manifest} [{section}] must inherit "
+                        f"from [workspace.dependencies]; actual={value!r}"
                     )
 
     lockfile = project.workspace_dir / "Cargo.lock"
     if not lockfile.is_file():
         raise RuntimeError(f"Committed Cargo lockfile is required: {lockfile}")
+    report = locked_dependency_report(project)
+    if report["errors"]:
+        raise RuntimeError(f"Rust dependency drift in {lockfile}: " + "; ".join(report["errors"]))
+
+
+def _own_workspace(project: RustProject, manifest: Path) -> Path:
+    document = _read_toml(manifest)
+    explicit = document.get("package", {}).get("workspace")
+    if explicit is not None:
+        if not isinstance(explicit, str) or not explicit:
+            raise RuntimeError(f"Invalid package.workspace in {manifest}: {explicit!r}")
+        return _project_path(project.root, str(manifest.parent.relative_to(project.root) / explicit / "Cargo.toml"),
+                             "package.workspace", manifest)
+    for parent in (manifest.parent, *manifest.parent.parents):
+        if not parent.is_relative_to(project.root):
+            break
+        candidate = parent / "Cargo.toml"
+        if candidate.is_file() and "workspace" in _read_toml(candidate):
+            return candidate
+    raise RuntimeError(f"Own Rust crate has no workspace: {manifest}")
+
+
+def own_manifests(project: RustProject) -> list[tuple[Path, Path]]:
+    """Visit only registered members and their own in-repository path crates."""
+    document = _read_toml(project.manifest)
+    pending = [project.manifest, *_member_manifests(project, document["workspace"])]
+    visited: dict[Path, Path] = {}
+    while pending:
+        manifest = pending.pop(0).resolve()
+        if manifest in visited or not owned_manifest(manifest, [project.root]):
+            continue
+        workspace = _own_workspace(project, manifest)
+        visited[manifest] = workspace
+        declarations = _read_toml(workspace)["workspace"].get("dependencies", {})
+        for _, dependencies in _member_dependency_tables(_read_toml(manifest), manifest):
+            for name, value in dependencies.items():
+                base = manifest.parent
+                if isinstance(value, dict) and value.get("workspace") is True:
+                    value = declarations.get(name)
+                    base = workspace.parent
+                if _is_local_dependency(value):
+                    _validate_local_dependency(project, name, value, base)
+                    pending.append((base / value["path"] / "Cargo.toml").resolve())
+    return list(visited.items())
+
+
+def _lock_reference(reference: str, packages: list[Mapping[str, object]]) -> Mapping[str, object]:
+    match = re.fullmatch(r"([^ ]+)(?: ([^ ]+))?(?: \((.*)\))?", reference)
+    if match is None:
+        raise RuntimeError(f"Invalid Cargo lock dependency reference: {reference!r}")
+    name, version, source = match.groups()
+    matches = [p for p in packages if p["name"] == name
+               and (version is None or p["version"] == version)
+               and (source is None or p.get("source") == source)]
+    if len(matches) != 1:
+        raise RuntimeError(f"Cargo lock dependency reference {reference!r} resolves to {len(matches)} identities")
+    return matches[0]
+
+
+def locked_dependency_report(project: RustProject) -> DependencyReport:
+    lockfile = project.workspace_dir / "Cargo.lock"
+    document = _read_toml(lockfile)
+    packages = document.get("package", [])
+    if document.get("version") not in (3, 4) or not isinstance(packages, list):
+        raise RuntimeError(f"Invalid Cargo lockfile: {lockfile}")
+    for package in packages:
+        package_identity(package)
+    edges, errors, owned = [], [], []
+    workspace = _read_toml(project.manifest)["workspace"]
+    required = {project.manifest, *_member_manifests(project, workspace)}
+    for manifest, workspace_manifest in own_manifests(project):
+        member = _read_toml(manifest)
+        if "package" not in member:
+            continue
+        package = member["package"]
+        workspace = _read_toml(workspace_manifest)["workspace"]
+        version = package.get("version")
+        if isinstance(version, dict) and version.get("workspace") is True:
+            version = workspace.get("package", {}).get("version")
+        owners = [p for p in packages if p["name"] == package["name"]
+                  and p["version"] == version and p.get("source") is None]
+        if len(owners) != 1:
+            if manifest in required:
+                errors.append(f"{manifest}: lockfile has {len(owners)} consumer identities for {package['name']}@{version}")
+            continue
+        owner = owners[0]
+        owned.append(package_identity(owner)["id"])
+        references = owner.get("dependencies", [])
+        for section, dependencies in _member_dependency_tables(member, manifest):
+            for alias, value in dependencies.items():
+                optional = isinstance(value, dict) and value.get("optional") is True
+                if isinstance(value, dict) and value.get("workspace") is True:
+                    value = workspace.get("dependencies", {}).get(alias)
+                if _is_local_dependency(value):
+                    continue
+                name = value.get("package", alias) if isinstance(value, dict) else alias
+                found = [r for r in references if isinstance(r, str) and r.split(" ", 1)[0] == name]
+                if not found and (optional or (manifest not in required and section.endswith("dev-dependencies"))):
+                    continue
+                if len(found) != 1:
+                    errors.append(f"{manifest} [{section}] {name}: expected one lock dependency reference, actual={found!r}")
+                    continue
+                try:
+                    dependency = _lock_reference(found[0], packages)
+                except RuntimeError as error:
+                    errors.append(f"{manifest} [{section}] {name}: {error}")
+                    continue
+                edges.append({"consumer": package_identity(owner), "manifest": str(manifest),
+                              "dependency": package_identity(dependency), "alias": alias, "section": section})
+    return dependency_report(packages, project.catalog.dependencies, direct_edges=edges,
+                             owned_ids=owned, errors=errors)
 
 
 def _native_environment(project: RustProject, repo_config: RepoConfig) -> dict[str, str]:

@@ -35,7 +35,7 @@ def registered_projects(config: RepoConfig) -> list[RustProject]:
     roots: set[Path] = set()
     manifests: set[Path] = set()
     for record in records:
-        if not isinstance(record, dict) or set(record) - {"path", "additional-manifests"}:
+        if not isinstance(record, dict) or set(record) - {"path", "additional-manifests", "local-dependencies"}:
             raise RuntimeError(f"Invalid Rust consumer entry in {path}: {record!r}")
         relative = record.get("path")
         if not isinstance(relative, str) or Path(relative).is_absolute() or len(Path(relative).parts) != 1:
@@ -124,7 +124,7 @@ def resolved_metadata(project: RustProject, config: RepoConfig, *, timeout: floa
 
 def resolved_project(project: RustProject, config: RepoConfig) -> DependencyReport:
     return resolved_dependency_report(resolved_metadata(project, config),
-                                      project.catalog.dependencies, [project.root])
+                                      project.catalog.dependencies, project.source_roots)
 
 
 class RustDependencyAudit:

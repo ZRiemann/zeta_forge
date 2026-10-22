@@ -6,6 +6,7 @@ additional-manifests = ["tests/consumer/Cargo.toml"]
 
 [[projects]]
 path = "zeta_trader"
+local-dependencies = ["zust"]
 
 [[projects]]
 path = "zeta_cat"

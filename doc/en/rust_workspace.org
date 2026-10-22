@@ -154,7 +154,7 @@ local crates shadowing catalog packages are rejected.
 Preflight runs before tool installation, rebuild cleanup and compilation. It
 checks each own consumer's actual dependency identity, including direct drift
 across compatibility series. Own code consists of registered workspace members
-and recursively referenced own path crates within the owning repository.
+and recursively referenced own path crates within the owning repository or an explicitly authorized registered sibling.
 Downloaded registry/Git packages and =3rd/=, =third_party/=, =external/= and
 =vendor/= directories do not automatically become own consumers. Offline checks
 resolve dependency references from the consumer's lockfile record; ambiguous
@@ -195,7 +195,7 @@ The explicit consumer test creates a disposable workspace using real zust with
 =log= and Trader's Serde/JSON/Tokio declarations, seeds its lockfile from Trader,
 then resolves offline and runs a minimal serialization/runtime test. It writes
 only temporary files and =build/rust-consumer=, and checks registered inputs
-remain unchanged. This does not enable production cross-repository path imports.
+remain unchanged. This fixture grants no production path permissions; those require the explicit registry authorization below.
 
 The adoption workflow is: discover candidates → adapt every direct consumer →
 perform real Cargo resolution → build affected deliverables and test → release
@@ -305,3 +305,18 @@ No complete application build, Release-profile compiler/test pass, desktop/Web
 artifact generation, live service/TUN/trading acceptance, commit, push or release
 was performed. The fixture may compile its small test executable; Forge's tool
 regressions use isolated temporary build fixtures.
+
+* Authorized local Rust dependencies
+
+An entry in =rust/projects.toml= may declare =local-dependencies = ["zust"]=.
+Only zeta_trader is currently authorized to consume zust. The target must be a
+registered sibling's workspace package, with matching package identity and an
+exact =version= constraint; aliases use Cargo's =package= field. Unregistered
+paths, symlink escapes, third-party directories and catalog shadowing remain
+forbidden. Both locked and resolved audits include the sibling's direct edges;
+upgrade discovery recognizes these owned source roots as well.
+
+Trader uses the sibling zust v0.4.0 checkout. Reproduce a release with the exact
+Forge/zust commits recorded by Trader, not only matching version strings.
+The catalog approves tracing 0.1.44 and tracing-subscriber 0.3.23; applications
+own feature selection. Native and browser logging need not share features.

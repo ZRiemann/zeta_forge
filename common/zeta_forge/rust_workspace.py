@@ -42,6 +42,11 @@ class RustProject:
     native_dependencies: tuple[str, ...]
     toolchain_spec: Mapping[str, object]
     catalog: RustCatalog
+    local_roots: tuple[Path, ...] = ()
+
+    @property
+    def source_roots(self) -> tuple[Path, ...]:
+        return (self.root, *self.local_roots)
 
     @property
     def workspace_dir(self) -> Path:
@@ -216,6 +221,43 @@ def load_catalog(forge_root: Path) -> RustCatalog:
     )
 
 
+def _authorized_local_roots(root: Path, forge_root: Path) -> tuple[Path, ...]:
+    registry = forge_root / "rust/projects.toml"
+    if not registry.is_file():
+        return ()
+    document = _read_toml(registry)
+    records = document.get("projects")
+    if document.get("schema") != 1 or set(document) != {"schema", "projects"} or not isinstance(records, list):
+        raise RuntimeError(f"Invalid Rust consumer registry: {registry}")
+    for record in records:
+        if not isinstance(record, dict) or set(record) - {"path", "additional-manifests", "local-dependencies"}:
+            raise RuntimeError(f"Invalid Rust consumer entry in {registry}")
+        name = record.get("path")
+        if not isinstance(name, str) or Path(name).is_absolute() or len(Path(name).parts) != 1:
+            raise RuntimeError(f"Rust consumer must name a workspace sibling: {name!r}")
+    names = {record["path"] for record in records}
+    selected = [record for record in records if record.get("path") == root.name]
+    if not selected:
+        return ()
+    if len(selected) != 1:
+        raise RuntimeError(f"Duplicate Rust consumer: {root.name}")
+    dependencies = _string_list(selected[0].get("local-dependencies", []), "local-dependencies", registry)
+    if len(set(dependencies)) != len(dependencies):
+        raise RuntimeError("Duplicate local Rust dependency authorization")
+    workspace_root = forge_root.resolve().parent
+    if dependencies and root != (workspace_root / root.name).resolve():
+        raise RuntimeError("Local Rust dependencies require the registered workspace checkout")
+    result = []
+    for name in dependencies:
+        if name not in names or name == root.name or Path(name).name != name:
+            raise RuntimeError(f"Unregistered local Rust dependency: {name!r}")
+        sibling = (workspace_root / name).resolve()
+        if sibling.parent != workspace_root or not (sibling / PROJECT_CONFIG_NAME).is_file():
+            raise RuntimeError(f"Local Rust dependency must be a registered workspace sibling: {name}")
+        result.append(sibling)
+    return tuple(result)
+
+
 def load_rust_project(project_root: Path, forge_root: Path) -> RustProject:
     root = project_root.resolve()
     config_path = root / PROJECT_CONFIG_NAME
@@ -237,6 +279,7 @@ def load_rust_project(project_root: Path, forge_root: Path) -> RustProject:
         ),
         toolchain_spec=load_toolchain(forge_root, toolchain.get("channel")),
         catalog=load_catalog(forge_root),
+        local_roots=_authorized_local_roots(root, forge_root),
     )
 
 
@@ -252,22 +295,39 @@ def _validate_local_dependency(
         raise RuntimeError(f"Invalid local Rust dependency path for {name!r}")
     if set(value) & {"git", "rev", "branch", "tag", "registry"}:
         raise RuntimeError(f"Local Rust dependency {name!r} mixes path and external source")
-    if not (base / local_path).resolve().is_relative_to(project.root):
-        raise RuntimeError(f"Local Rust dependency {name!r} escapes project root")
-    manifest = (base / local_path).resolve() / "Cargo.toml"
+    target = (base / local_path).resolve()
+    if not owned_manifest(target / "Cargo.toml", project.source_roots):
+        raise RuntimeError(f"Local Rust dependency {name!r} escapes project root or authorized siblings")
+    manifest = target / "Cargo.toml"
     package = _table(_read_toml(manifest), "package", manifest)
     if package.get("name") in project.catalog.dependencies:
         raise RuntimeError(f"Local Rust dependency {name!r} in {manifest} shadows a Forge crate")
+    if value.get("package", name) != package.get("name"):
+        raise RuntimeError(f"Local Rust dependency {name!r} has the wrong package name")
+    owner = next(root for root in project.source_roots if target.is_relative_to(root))
+    if owner != project.root:
+        configuration = _read_toml(owner / PROJECT_CONFIG_NAME)
+        workspace_manifest = _project_path(owner, configuration["manifest"], "manifest", owner / PROJECT_CONFIG_NAME)
+        workspace = _table(_read_toml(workspace_manifest), "workspace", workspace_manifest)
+        members = {workspace_manifest, *_member_manifests(project, workspace, workspace_manifest.parent)}
+        if manifest not in members:
+            raise RuntimeError(f"Local Rust dependency is not a registered workspace package: {manifest}")
+        version = package.get("version")
+        if isinstance(version, dict) and version.get("workspace") is True:
+            version = workspace.get("package", {}).get("version")
+        if not isinstance(version, str) or value.get("version") != "=" + version:
+            raise RuntimeError(f"Local Rust dependency {name!r} requires exact package version ={version}")
 
 
-def _member_manifests(project: RustProject, workspace: Mapping[str, object]) -> list[Path]:
+def _member_manifests(project: RustProject, workspace: Mapping[str, object], base: Path | None = None) -> list[Path]:
+    base = base or project.workspace_dir
     members = _string_list(workspace.get("members", []), "workspace.members", project.manifest)
     manifests: list[Path] = []
     for member in members:
         if any(character in member for character in "*?["):
             raise RuntimeError(f"Rust workspace members must be explicit paths: {member}")
         manifest = _project_path(
-            project.workspace_dir, f"{member}/Cargo.toml", "workspace member", project.manifest
+            base, f"{member}/Cargo.toml", "workspace member", project.manifest
         )
         if not manifest.is_file():
             raise RuntimeError(f"Rust workspace member manifest is missing: {manifest}")
@@ -431,15 +491,16 @@ def validate_rust_project(project: RustProject) -> None:
 
 
 def _own_workspace(project: RustProject, manifest: Path) -> Path:
+    owner = next(root for root in project.source_roots if manifest.is_relative_to(root))
     document = _read_toml(manifest)
     explicit = document.get("package", {}).get("workspace")
     if explicit is not None:
         if not isinstance(explicit, str) or not explicit:
             raise RuntimeError(f"Invalid package.workspace in {manifest}: {explicit!r}")
-        return _project_path(project.root, str(manifest.parent.relative_to(project.root) / explicit / "Cargo.toml"),
+        return _project_path(owner, str(manifest.parent.relative_to(owner) / explicit / "Cargo.toml"),
                              "package.workspace", manifest)
     for parent in (manifest.parent, *manifest.parent.parents):
-        if not parent.is_relative_to(project.root):
+        if not parent.is_relative_to(owner):
             break
         candidate = parent / "Cargo.toml"
         if candidate.is_file() and "workspace" in _read_toml(candidate):
@@ -454,7 +515,7 @@ def own_manifests(project: RustProject) -> list[tuple[Path, Path]]:
     visited: dict[Path, Path] = {}
     while pending:
         manifest = pending.pop(0).resolve()
-        if manifest in visited or not owned_manifest(manifest, [project.root]):
+        if manifest in visited or not owned_manifest(manifest, project.source_roots):
             continue
         workspace = _own_workspace(project, manifest)
         visited[manifest] = workspace
@@ -507,7 +568,7 @@ def locked_dependency_report(project: RustProject) -> DependencyReport:
         owners = [p for p in packages if p["name"] == package["name"]
                   and p["version"] == version and p.get("source") is None]
         if len(owners) != 1:
-            if manifest in required:
+            if manifest in required or not manifest.is_relative_to(project.root):
                 errors.append(f"{manifest}: lockfile has {len(owners)} consumer identities for {package['name']}@{version}")
             continue
         owner = owners[0]

@@ -48,7 +48,7 @@ def _edge_declarations(
 
 def graph_context(project: RustProject, metadata: Mapping[str, object]) -> dict[str, dict[str, list]]:
     """Keep actual identities and incoming requirements from the current locked graph."""
-    report = resolved_dependency_report(metadata, project.catalog.dependencies, [project.root])
+    report = resolved_dependency_report(metadata, project.catalog.dependencies, project.source_roots)
     if report["errors"]:
         raise RuntimeError("Direct dependency drift: " + "; ".join(report["errors"]))
     packages = {p["id"]: p for p in metadata["packages"]}
@@ -64,7 +64,7 @@ def graph_context(project: RustProject, metadata: Mapping[str, object]) -> dict[
         })
     for node in metadata["resolve"]["nodes"]:
         owner = packages[node["id"]]
-        own = owner.get("source") is None and owned_manifest(owner["manifest_path"], [project.root])
+        own = owner.get("source") is None and owned_manifest(owner["manifest_path"], project.source_roots)
         for edge in node["deps"]:
             target = packages[edge["pkg"]]
             approved = project.catalog.dependencies.get(target["name"])

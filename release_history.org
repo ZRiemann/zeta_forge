@@ -5,6 +5,23 @@
 
 * Release History
 
+** v1.12.0 - 2026-10-22T07:18:45Z
+:PROPERTIES:
+:CUSTOM_ID: v1.12.0
+:END:
+
+Authorize registered Rust sibling dependencies and approve tracing versions.
+
+*** Changes
+- Authorize Trader to consume registered zust workspace packages using exact versions and checked source paths.
+- Include sibling direct edges in static, locked, resolved and upgrade-discovery audits; reject unregistered paths, package/version mismatches and escapes.
+- Approve tracing 0.1.44 and tracing-subscriber 0.3.23 and document production adoption.
+
+*** Verification
+- 52 focused Rust governance/workspace/edge/update tests passed.
+- Registered-consumer doctor and locked offline check passed; the Trader graph includes six zust-log direct edges.
+- No native library build, installation, deployment or push was performed.
+
 ** v1.11.0 - 2026-10-22T06:32:19Z
 :PROPERTIES:
 :CUSTOM_ID: v1.11.0

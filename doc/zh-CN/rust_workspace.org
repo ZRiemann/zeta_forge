@@ -106,7 +106,7 @@ latest。目录只表达直接治理责任，当前仅间接使用的 =serde_cor
 
 预检在工具安装、rebuild 清理和编译之前检查 Cargo.lock，按“自有消费方 → 实际
 依赖身份”校验直接版本和来源，跨兼容系列的直接漂移也失败。自有代码限定为登记
-workspace 成员及所属仓库内递归引用的自有 path crate；下载的 registry/Git 包、
+workspace 成员及所属仓库内或显式授权的登记兄弟仓库内递归引用的自有 path crate；下载的 registry/Git 包、
 =3rd/=、=third_party/=、=external/=、=vendor/= 不自动成为自有消费方。
 离线预检从消费方的锁文件记录解析依赖引用；同名引用无法唯一定位时明确报错，
 不扩大到所有同名包。完整审计跟随 =resolve.nodes[].deps[].pkg=，保留别名、依赖
@@ -136,7 +136,7 @@ metadata 输出声明、锁定身份和错误的 JSON 清单，可描述漂移�
 下载依赖、不改锁文件、不编译、不安装工具。显式组合测试在临时 workspace 中引用
 真实 zust 的 =log= feature 和 Trader 的 Serde/JSON/Tokio 声明，以 Trader 锁文件为
 种子，离线解析并执行最小序列化/runtime 测试。只写临时文件及 =build/rust-consumer=，
-同时验证登记输入未改变；不开放生产项目跨仓库 path 权限。
+同时验证登记输入未改变；夹具本身不授予生产跨仓库权限，权限须由下述登记表显式授权。
 
 升级流程是“发现候选 → 适配全部直接消费者 → 真实 Cargo 解析 → 构建受影响的
 交付目标并测试 → 发布 Forge”。实际采用时替换目录唯一条目，协调消费者声明，
@@ -222,3 +222,15 @@ Wry =0.57=、Tao =0.37=、GTK =0.19=、TOML =0.9= 超出当前兼容系列，留
 
 未执行完整应用构建、Release 编译/测试、桌面/Web 产物生成、真实服务/TUN/交易验收、
 commit、push 或发布。组合夹具会编译小型测试程序；Forge 工具回归使用隔离临时构建夹具。
+
+* 显式授权的 Rust 本地依赖
+
+=rust/projects.toml= 条目可声明 =local-dependencies = ["zust"]=，当前仅授权
+zeta_trader 消费 zust。目标必须是登记兄弟仓库的 workspace 包，包名匹配并声明精确
+=version=；别名使用 Cargo 的 =package=。仍拒绝未授权路径、符号链接逃逸、第三方
+目录及本地包冒充目录依赖。锁文件与解析审计均检查兄弟仓库的直接依赖，升级发现也
+识别这些自有源码根。
+
+Trader 使用 zust v0.4.0 兄弟检出；重现发布应使用 Trader 记录的精确 Forge/zust
+提交，不仅匹配版本号。目录批准 tracing 0.1.44、tracing-subscriber 0.3.23，应用
+负责 feature 选择；原生与浏览器日志可保留各自的接入方式。

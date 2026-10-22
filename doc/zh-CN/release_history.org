@@ -5,6 +5,23 @@
 
 * 发布历史
 
+** v1.12.0 - 2026-10-22T07:18:45Z
+:PROPERTIES:
+:CUSTOM_ID: v1.12.0
+:END:
+
+显式授权 Rust 兄弟依赖并批准 tracing 版本。
+
+*** 变更
+- 授权 Trader 按精确版本和受检源码路径消费已登记的 zust workspace 包。
+- 静态、锁文件、解析与升级发现审计覆盖兄弟仓库直接依赖；拒绝未授权路径、包名/版本错配及路径逃逸。
+- 批准 tracing 0.1.44、tracing-subscriber 0.3.23，并更新生产接入说明。
+
+*** 验证
+- 52 项 Rust 治理、workspace、依赖边与升级发现聚焦测试通过。
+- 登记消费者 doctor 与锁定离线 check 通过；Trader 图包含 zust-log 的六条直接依赖。
+- 未执行原生库构建、安装、部署或推送。
+
 ** v1.11.0 - 2026-10-22T06:32:19Z
 :PROPERTIES:
 :CUSTOM_ID: v1.11.0

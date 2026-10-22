@@ -61,7 +61,7 @@ The pinned =nng-sys= generates FFI from installed headers when using an external
 library. After updating NNG at the same prefix, use the project's =rebuild= to
 regenerate bindings and relink the static library instead of reusing old outputs.
 Rust =rebuild= clears shared Cargo/Dioxus outputs for the selected profile, so
-explicitly select every deliverable that must be restored. The NNG =v2.0.0-rc.1=
+explicitly select every deliverable that must be restored. The NNG =v2.0.0=
 upgrade preserves the approved =anng= commit and project lockfiles.
 See [[file:nng_upgrade.org][NNG Upgrade and Downstream Adaptation]] for the full sequence
 and validation boundaries.

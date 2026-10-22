@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "common"))
 
 from builder.deps.project import DepsBuilder
+from builder.grpc.project import GrpcBuilder
 from builder.project import ForgeEngine, project as forge_project
 from zeta_forge.build_cli import Product, Project, cli
 from zeta_forge.build_ops import relocate_installed_metadata
@@ -49,6 +50,32 @@ class FixtureBuilder(CMakeProjectBuilder):
 
 
 class NativeDeliveryTests(unittest.TestCase):
+    def test_grpc_requires_external_proto_submodule(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="grpc-source-") as directory:
+            source = Path(directory)
+            for dependency in (
+                "abseil-cpp", "boringssl-with-bazel", "cares/cares",
+                "protobuf", "re2", "zlib",
+            ):
+                (source / "third_party" / dependency).mkdir(parents=True)
+            engine = ForgeEngine(ROOT / "zbuild.py")
+            config = replace(
+                engine.config,
+                source_dirs={**engine.config.source_dirs, "ZETA_GRPC_SRC_DIR": source},
+            )
+            builder = GrpcBuilder(
+                script_path=ROOT / "builder/grpc/project.py",
+                repo_config=config,
+                args=CommonBuildArgs("Release"),
+            )
+
+            with self.assertRaisesRegex(RuntimeError, "third_party/grpc-proto") as error:
+                builder.validate()
+            self.assertIn("git submodule update --init --recursive 3rd/grpc", str(error.exception))
+
+            (source / "third_party/grpc-proto").mkdir()
+            builder.validate()
+
     @unittest.skipUnless(
         all(shutil.which(tool) for tool in ("cmake", "ninja", "cc")),
         "native fixture tools unavailable",

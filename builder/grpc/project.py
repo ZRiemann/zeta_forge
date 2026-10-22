@@ -30,6 +30,7 @@ class GrpcBuilder(CMakeProjectBuilder):
             "third_party/abseil-cpp",
             "third_party/boringssl-with-bazel",
             "third_party/cares/cares",
+            "third_party/grpc-proto",
             "third_party/protobuf",
             "third_party/re2",
             "third_party/zlib",

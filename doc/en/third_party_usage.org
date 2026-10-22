@@ -129,8 +129,65 @@ export ZETA_TASKFLOW_SRC_DIR=$HOME/git/taskflow
 
 * Versions and Updates
 
-NNG is pinned to =v2.0.0-rc.1=. See [[file:nng_upgrade.org][NNG Upgrade and Downstream Adaptation]]
-for the source commit, zpp API migration, Rust FFI rebuilds and Release build/install order.
+** Source baseline: 2026-10-22
+
+| Library | Version / branch | Pinned commit |
+|-
+| NNG | [[https://github.com/nanomsg/nng/releases/tag/v2.0.0][v2.0.0]] | =809ea04726fbcdf41d35b1930ccd98aaf601bf07= |
+| HPX | upstream =master= snapshot | =6456abf559aeaa05b7a1612d8f8dc59c8d6df511= |
+| gRPC | [[https://github.com/grpc/grpc/releases/tag/v1.84.0][v1.84.0]] | =3252a89f10d8e92997862167ca7d095ecda85973= |
+| Folly | [[https://github.com/facebook/folly/releases/tag/v2026.10.19.00][v2026.10.19.00]] | =ea41cb2f0b3c13a225a616ffef33cdfa85eb4aad= |
+| Taskflow | =v4.1.0= (unchanged) | =45366fe5bc4f2f8ec9aa590b40c504e296886865= |
+| RapidJSON | development snapshot (unchanged) | =24b5e7a8b27f42fa16b96fc70aade9106cf7102f= |
+
+HPX's default branch is =master=, not =main=; this is a fixed development
+snapshot, not a release tag. Its stdexec pin remains
+=04de75de5807e73a229acf047c6976575e313359=, matching upstream.
+Nested submodules follow their parent's gitlinks, never their latest branches.
+gRPC adds =third_party/grpc-proto= at
+=ec30f589e2519d595688b9a42f88a91bdd6b733f=; Forge includes it in source
+preflight because reflection and channelz code generation require it.
+
+** Compatibility and validation boundary
+
+- NNG's legacy CPM fallback also selects =2.0.0=. See
+  [[file:nng_upgrade.org][NNG Upgrade and Downstream Adaptation]] for RC1-to-release changes,
+  the existing zpp API migration and later Rust FFI rebuild requirements.
+- HPX includes shutdown, MPI, synchronization and scheduler fixes. See
+  [[file:hpx_upgrade.org][HPX Master Upgrade and Downstream Adaptation]]; its 2026-10-15
+  acceptance results apply only to the previous source revision.
+- gRPC includes proxy hostname matching, cancellation/leak and transport-race
+  fixes. Existing module providers, code generation and disabled archive
+  downloading remain selected; this update does not switch to a prerelease.
+- Folly fixes RequestContext handling, timer spinning, asynchronous completions
+  and coroutine frame alignment, but removes =folly::bit_cast=, =folly::invoke=
+  and =folly::prevPowTwo=. Consumers must check for these and use the corresponding
+  standard facilities where needed. Folly provides no stable ABI between commits;
+  downstream source compatibility and performance require separate validation.
+- The builders retain static linking, the configured C++ standard, Conan pins
+  and feature switches. Static review checks the selected options and declared
+  dependencies, not successful CMake configuration or compilation. Folly's new
+  missing-dependency fetch fallbacks make dependency provenance another check
+  for the later full build; shared dependencies remain owned by Forge.
+
+This update covers source, configuration, documentation and lightweight checks.
+It does not build/install the four libraries or rebuild zpp/Trader. Existing
+installations and binaries still represent their previous inputs. A future
+installation requires rebuilding affected static consumers and Rust FFI;
+Debug, runtime integration and performance are unverified.
+
+Verification performed on 2026-10-22:
+
+- All six source revisions, release tags where applicable and recursive gitlinks
+  match the table; the four builders select the managed sources and pass source preflight.
+- =./zbuild.py test=: 91/91 build-tool regressions passed, including the new
+  missing-=grpc-proto= check and temporary native fixtures. These are not upstream library tests.
+- =./zbuild.py build <library> --profile release --dry-run= passed separately
+  for =nng=, =hpx=, =grpc= and =folly=; Folly's plan also selects gRPC staging.
+- =git diff --check= passed. Full CMake configuration, library compilation,
+  installation and downstream validation were not run.
+
+** Forge version
 
 External consumers should record the Forge version they use.
 See [[file:../../VERSION][VERSION]] and [[file:../../release_history.org][release_history.org]].

@@ -5,14 +5,14 @@
 
 * 源码与依赖基线
 
-HPX 由 =3rd/hpx= submodule 管理。2026-10-15 的升级将上游 =master= 从
-=41bf79c56fc9df3190efbf146e6cbd444fa3b6b0= 快进到
-=6e97afa18a1a189d0147397ecb3400917aef2b94=，不添加上游源码补丁。
+HPX 由 =3rd/hpx= submodule 管理。2026-10-22 的升级将上游 =master= 从
+=6e97afa18a1a189d0147397ecb3400917aef2b94= 快进到
+=6456abf559aeaa05b7a1612d8f8dc59c8d6df511=，不添加上游源码补丁。
 源码版本号为 =2.0.0=，这是固定的开发快照，不是正式发布 tag。
 
 HPX Builder 同步固定 stdexec 为该上游快照采用的
-=04de75de5807e73a229acf047c6976575e313359=。二者必须配套升级：如果保留
-Forge 原来的覆盖配置，即使更新 HPX，仍会选中旧 stdexec。
+=04de75de5807e73a229acf047c6976575e313359=。该值仍与新 HPX checkout
+一致，本次无需修改 Builder 固定值。今后升级仍需核对二者，避免沿用过期覆盖。
 保留 C++20、静态链接、jemalloc、networking 和 MPI parcelport；
 上游 examples/tests 继续关闭，tools 继续开启。
 
@@ -20,10 +20,21 @@ Forge 原来的覆盖配置，即使更新 HPX，仍会选中旧 stdexec。
 安装前缀沿用 =ZETA_INSTALL_PREFIX=，默认 =~/.local=。
 不修改代理环境、应用 JSON 或 HPX INI 配置。
 
+* 相对此前快照的变化：2026-10-22
+
+新快照包含 TCP sender 停机竞态与后台线程清理修复、MPI 与 distributed
+channels 死锁及初始化所有权修复、timed_mutex/semaphore/stop_callback
+修复，以及 work-requesting/NUMA 调度器和 Future 子任务执行修复。
+Forge 继续启用 networking 与 MPI；本次没有运行性能基准。
+
+本次仅更新源码，没有重建或安装 HPX 及其消费者。下方 2026-10-15 的验证
+记录仅适用于 =6e97afa18a1a189d0147397ecb3400917aef2b94=，不覆盖当前快照。
+当前验证边界见 [[file:third_party_usage.org][版本与更新]]。
+
 * 消费端兼容性
 
-HPX 保留 =as_sender=、=make_future= 和 =thread_pool_scheduler=。
-Future sender 的内部实现和完成环境发生变化；=make_future= 从 tag-invoke
+2026-10-15 的迁移保留了 =as_sender=、=make_future= 和 =thread_pool_scheduler=。
+Future sender 的内部实现和完成环境发生过变化；=make_future= 从 tag-invoke
 定制改为直接重载与 scheduler query。zpp 继续提供原有 =from_future=、
 =into_future= 和 scheduler 接口。
 

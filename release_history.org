@@ -5,6 +5,18 @@
 
 * Release History
 
+** v1.11.0 - 2026-10-22T06:32:19Z
+:PROPERTIES:
+:CUSTOM_ID: v1.11.0
+:END:
+*** Changes
+- Update NNG to v2.0.0, gRPC to v1.84.0, Folly to v2026.10.19.00 and the HPX master snapshot; align the NNG CPM fallback.
+- Require gRPC's grpc-proto submodule in source preflight and add regression coverage.
+- Document the source baselines, compatibility changes and downstream rebuild requirements in English and Chinese.
+
+*** Validation
+- This commit checks the staged changes and version records; no additional tests or builds were run. Earlier lightweight verification is recorded in the third-party usage documentation. Library builds, installation and downstream validation remain outstanding.
+
 ** v1.10.0 - 2026-10-22T03:11:12Z
 :PROPERTIES:
 :CUSTOM_ID: v1.10.0

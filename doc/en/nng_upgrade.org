@@ -1,18 +1,19 @@
 #+STARTUP: indent
-#+TITLE: NNG 2.0 RC Upgrade and Downstream Adaptation
+#+TITLE: NNG 2.0 Upgrade and Downstream Adaptation
 
 [[file:readme.org][Back to Documentation]] | [[file:../zh-CN/nng_upgrade.org][Chinese Version]]
 
 * Version and Source
 
 The =zeta_forge/3rd/nng= submodule manages NNG source. This upgrade pins upstream
-=v2.0.0-rc.1= at =8fde97db953012882298254bc4753d53e9155bb6= without local source
+=v2.0.0= at =809ea04726fbcdf41d35b1930ccd98aaf601bf07= without local source
 patches. The legacy CPM fallback uses the same version; modern projects continue
 to consume Forge-installed package configs. Builds remain static, with HTTP
 enabled and TLS and nngcat disabled.
 
-This RC's header still sets =NNG_RELEASE_SUFFIX= to =beta=; checking only
-=nng_version()= or the CMake package version cannot distinguish beta from this RC.
+The release header sets =NNG_RELEASE_SUFFIX= to an empty string. The previous
+=v2.0.0-rc.1= checkout still reported =beta=, so the source commit remains the
+authority for distinguishing these inputs.
 Verify the actual source commit, then rebuild and install from that source:
 
 #+begin_src bash
@@ -23,6 +24,18 @@ git -C "$ZETAX_ROOT/zeta_forge/3rd/nng" describe --tags --exact-match
 If =ZETA_NNG_SRC_DIR= or =ZETA_3RD_DIR= is set, first confirm that the actual input
 is the same commit. Keep =ZETA_INSTALL_PREFIX=, defaulting to =~/.local=;
 leave runtime configuration and proxy settings unchanged.
+
+* Changes from RC1: 2026-10-22
+
+Relative to =8fde97db953012882298254bc4753d53e9155bb6=, the release fixes
+queued UDP receive completion, stopped AIO handling, UDP dialer reconnection,
+concurrent error-string caching and failed-initialization cleanup. It also
+corrects the shared-library SOVERSION and package metadata. The public =nng.h=
+diff only clears the release suffix; the C++ migration below already applied
+to RC1. UDP and TLS features already present in RC1 are not new upgrade gains.
+
+This source update does not rebuild or install NNG or its consumers. See
+[[file:third_party_usage.org][Versions and Updates]] for this upgrade's verification boundary.
 
 * C++ API Migration
 
@@ -111,6 +124,6 @@ sanitizers and long-running stress tests require separate validation.
 
 * Upstream References
 
-- [[https://github.com/nanomsg/nng/releases/tag/v2.0.0-rc.1][NNG v2.0.0-rc.1 release notes]]
+- [[https://github.com/nanomsg/nng/releases/tag/v2.0.0][NNG v2.0.0 release notes]]
 - [[https://nng.nanomsg.org/ref/migrate/nng1.html][NNG 2.0 migration guide]]
 - [[https://github.com/nanomsg/nng-rs/blob/a474ee0272d18f20c360837e2f602dc53ae3b9ec/nng-sys/build.rs][Binding generation at the pinned nng-sys commit]]

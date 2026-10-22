@@ -119,8 +119,55 @@ export ZETA_TASKFLOW_SRC_DIR=$HOME/git/taskflow
 
 * 版本与更新
 
-NNG 当前固定到 =v2.0.0-rc.1=。源码提交、zpp API 迁移、Rust FFI 重建以及
-Release 编译安装顺序见 [[file:nng_upgrade.org][NNG 升级与下游适配]]。
+** 源码基线：2026-10-22
+
+| 库 | 版本 / 分支 | 固定提交 |
+|-
+| NNG | [[https://github.com/nanomsg/nng/releases/tag/v2.0.0][v2.0.0]] | =809ea04726fbcdf41d35b1930ccd98aaf601bf07= |
+| HPX | 上游 =master= 快照 | =6456abf559aeaa05b7a1612d8f8dc59c8d6df511= |
+| gRPC | [[https://github.com/grpc/grpc/releases/tag/v1.84.0][v1.84.0]] | =3252a89f10d8e92997862167ca7d095ecda85973= |
+| Folly | [[https://github.com/facebook/folly/releases/tag/v2026.10.19.00][v2026.10.19.00]] | =ea41cb2f0b3c13a225a616ffef33cdfa85eb4aad= |
+| Taskflow | =v4.1.0=（不变） | =45366fe5bc4f2f8ec9aa590b40c504e296886865= |
+| RapidJSON | 开发快照（不变） | =24b5e7a8b27f42fa16b96fc70aade9106cf7102f= |
+
+HPX 的默认分支为 =master=，不是 =main=；此处固定开发快照，不是正式发布 tag。
+stdexec 仍固定为 =04de75de5807e73a229acf047c6976575e313359=，与上游一致。
+嵌套子模块跟随父提交的 gitlink，不跟随其最新分支。
+gRPC 新增 =third_party/grpc-proto=，固定在
+=ec30f589e2519d595688b9a42f88a91bdd6b733f=；反射与 channelz 代码生成
+依赖它，因此 Forge 将其加入源码预检。
+
+** 兼容性与验证边界
+
+- NNG 的历史 CPM fallback 同步为 =2.0.0=。RC1 到正式版的变化、已有
+  zpp API 迁移和后续 Rust FFI 重建要求见 [[file:nng_upgrade.org][NNG 升级与下游适配]]。
+- HPX 包含停机、MPI、同步原语和调度器修复，见
+  [[file:hpx_upgrade.org][HPX 主线升级与下游适配]]；其中 2026-10-15 的验收结果仅适用于旧提交。
+- gRPC 包含代理主机名匹配、取消与泄漏、transport 竞态修复。继续使用
+  module provider、代码生成和禁用 archive 下载的配置，不选预发布版。
+- Folly 修复 RequestContext、定时器自旋、异步完成处理和协程帧对齐，
+  同时删除 =folly::bit_cast=、=folly::invoke=、=folly::prevPowTwo=。
+  消费者需检查这些接口，并按需使用对应标准库设施。Folly 不保证提交之间的
+  ABI 稳定，下游源码兼容性和性能需要单独验证。
+- Builder 保留静态链接、配置的 C++ 标准、Conan 固定版本和功能开关。
+  静态检查只核对选项及依赖声明，不代表 CMake 配置或编译通过。Folly 新增的
+  缺失依赖下载 fallback 使后续完整构建仍需核对依赖来源；共享依赖继续由 Forge 管理。
+
+本次范围是源码、配置、文档和轻量检查，没有编译安装四个库或重建 zpp/Trader。
+已有安装和二进制仍对应旧输入；将来安装后需要重建受影响的静态链接消费者和
+Rust FFI。Debug、运行时联调和性能均未验证。
+
+2026-10-22 实际验证记录：
+
+- 六个库的源码提交、适用的发布 tag 和递归 gitlink 均与表格一致；
+  四个 Builder 选中托管源码，源码预检通过。
+- =./zbuild.py test=：构建工具回归 91/91 通过，包含新增的 =grpc-proto=
+  缺失检查和临时原生 fixture，不代表上游库测试通过。
+- 分别执行 =./zbuild.py build <library> --profile release --dry-run=，
+  =nng=、=hpx=、=grpc=、=folly= 均通过；Folly 计划同时选择 gRPC staging。
+- =git diff --check= 通过；未执行完整 CMake 配置、库编译、安装和下游验收。
+
+** Forge 版本
 
 外部系统依赖 =zeta_forge= 公共行为时，应记录所使用的 =zeta_forge= 版本。当前版本在 [[file:../../VERSION][VERSION]]，发布历史在 [[file:release_history.org][发布历史]]。
 

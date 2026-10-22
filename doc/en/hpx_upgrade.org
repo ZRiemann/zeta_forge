@@ -5,25 +5,40 @@
 
 * Source and dependency baseline
 
-HPX is managed by the =3rd/hpx= submodule. The 2026-10-15 upgrade advances
-upstream =master= from =41bf79c56fc9df3190efbf146e6cbd444fa3b6b0= to
-=6e97afa18a1a189d0147397ecb3400917aef2b94= without local upstream patches.
+HPX is managed by the =3rd/hpx= submodule. The 2026-10-22 upgrade advances
+upstream =master= from =6e97afa18a1a189d0147397ecb3400917aef2b94= to
+=6456abf559aeaa05b7a1612d8f8dc59c8d6df511= without local upstream patches.
 The source reports =2.0.0=; this is a pinned development snapshot, not a release tag.
 
 The HPX builder pins fetched stdexec to the matching upstream baseline
-=04de75de5807e73a229acf047c6976575e313359=. Upgrade these together: leaving
-the previous Forge override in place would select the old stdexec even after
-updating HPX. C++20, static linking, jemalloc, networking and the MPI parcelport
+=04de75de5807e73a229acf047c6976575e313359=. This still matches the new HPX
+checkout, so no builder pin change is needed. Check the pair on each future
+upgrade rather than retaining an obsolete override. C++20, static linking,
+jemalloc, networking and the MPI parcelport
 remain enabled. Upstream examples/tests remain disabled and tools remain enabled.
 
 Source overrides (=ZETA_HPX_SRC_DIR= / =ZETA_3RD_DIR=) must select the intended
 checkout. The installation prefix remains =ZETA_INSTALL_PREFIX=, defaulting to
 =~/.local=. No proxy, application JSON or HPX INI settings are rewritten.
 
+* Changes from the previous snapshot: 2026-10-22
+
+The new snapshot includes TCP sender shutdown-race and background-thread cleanup
+fixes, MPI/distributed-channel deadlock and initialization-ownership fixes,
+timed-mutex/semaphore/stop-callback fixes, and work-requesting/NUMA scheduler and
+future-child execution fixes. Networking and MPI remain enabled in Forge;
+performance changes have not been benchmarked here.
+
+This source update has not rebuilt or installed HPX or its consumers. The
+2026-10-15 validation record below applies only to
+=6e97afa18a1a189d0147397ecb3400917aef2b94=, not the current snapshot. See
+[[file:third_party_usage.org][Versions and Updates]] for the current verification boundary.
+
 * Consumer compatibility
 
-HPX retains =as_sender=, =make_future= and =thread_pool_scheduler=. The future
-sender implementation and completion environment have changed; =make_future=
+The 2026-10-15 migration retained =as_sender=, =make_future= and
+=thread_pool_scheduler=. The future sender implementation and completion
+environment changed; =make_future=
 now uses direct overloads and scheduler queries instead of tag-invoke customization.
 zpp exposes the same =from_future=, =into_future= and scheduler interfaces.
 

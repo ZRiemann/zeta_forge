@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "package": "wry",
+  "version": "0.53.5",
+  "archive_sha256": "728b7d4c8ec8d81cab295e0b5b8a4c263c0d41a785fb8f8c4df284e5411140a2",
+  "tree_sha256": "250db007280d01f46f9043b78d2ca6c02fa2617cc00bddfa4999cb5d90251beb",
+  "upstream": "https://github.com/tauri-apps/wry/blob/wry-v0.53.5/src/webkitgtk/mod.rs",
+  "file": "src/webkitgtk/mod.rs",
+  "replacements": [
+    {
+      "before": "    // Connect before registering as recommended by the docs\n    manager.connect_script_message_received(None, move |_m, msg| {",
+      "after": "    // The manager belongs to this WebView; a strong capture forms a reference cycle.\n    let webview = webview.downgrade();\n    // Connect before registering as recommended by the docs\n    manager.connect_script_message_received(None, move |_m, msg| {\n      let Some(webview) = webview.upgrade() else { return; };"
+    }
+  ]
+}

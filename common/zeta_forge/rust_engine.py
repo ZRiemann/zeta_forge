@@ -140,6 +140,7 @@ class RustEngine:
                 manifest=str(project.manifest),
                 toolchain=project.toolchain_spec["channel"],
                 native_dependencies=project.native_dependencies,
+                source_patches=project.source_patches,
                 capabilities=project.capabilities,
                 dependencies={
                     name: value
@@ -181,6 +182,10 @@ class RustEngine:
             return
         manager = self.manager()
         manager.validate()
+        if request.action == "fetch":
+            from .rust_patches import prepare_patches
+
+            prepare_patches(manager.project, self.config)
         for name in names:
             target = self.targets[name]
             if target.kind == "cargo":

@@ -145,6 +145,29 @@ class GovernanceTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "shadows a Forge crate"):
                 validate_rust_project(load_rust_project(root, FORGE))
 
+    def test_source_repairs_reject_ancestor_or_member_cargo_overrides(self) -> None:
+        for relative in (".cargo/config.toml", "rust/crate/.cargo/config.toml"):
+            with self.subTest(relative=relative), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                create_project(root)
+                project = replace(load_rust_project(root, FORGE), source_patches=("wry-0.53.5-gtk-ipc-weak",))
+                configuration = root / relative
+                configuration.parent.mkdir(parents=True)
+                configuration.write_text('[patch.crates-io]\nwry = { path="/other" }\n')
+                with self.assertRaisesRegex(RuntimeError, "source overrides"):
+                    validate_rust_project(project)
+
+    def test_source_repair_requires_its_locked_target_even_for_transitive_crates(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            create_project(root)
+            project = replace(load_rust_project(root, FORGE), source_patches=("wry-0.53.5-gtk-ipc-weak",))
+            with self.assertRaisesRegex(RuntimeError, "locked Wry"):
+                validate_rust_project(project)
+            with (root / "rust/Cargo.lock").open("a") as lock:
+                lock.write('\n[[package]]\nname="wry"\nversion="0.53.5"\n')
+            validate_rust_project(project)
+
     def test_registry_alias_and_missing_approved_lock_identity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

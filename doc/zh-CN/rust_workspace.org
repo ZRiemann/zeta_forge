@@ -101,7 +101,7 @@ metadata/dry-run 展示 =examples=、=features=、=artifacts= 和示例的
 latest。目录只表达直接治理责任，当前仅间接使用的 =serde_core=、=serde_derive=
 已移出目录，锁文件记录保持不变。Registry 依赖采用 crates.io 身份；Git 依赖匹配
 批准的完整 revision。根 package、成员以及 target/dev/build 依赖均继承 workspace
-声明；别名按实际 package 身份检查。禁止 Cargo =[patch]= / =[replace]= 绕过目录，
+声明；别名按实际 package 身份检查。禁止应用自定义 Cargo =[patch]= / =[replace]= 绕过目录；显式 [[#managed-source-repairs][Forge 源码修补]]使用独立校验绑定批准流程，
 也禁止本地 crate 冒充目录中的第三方包。
 
 预检在工具安装、rebuild 清理和编译之前检查 Cargo.lock，按“自有消费方 → 实际
@@ -234,3 +234,33 @@ zeta_trader 消费 zust。目标必须是登记兄弟仓库的 workspace 包，�
 Trader 使用 zust v0.4.0 兄弟检出；重现发布应使用 Trader 记录的精确 Forge/zust
 提交，不仅匹配版本号。目录批准 tracing 0.1.44、tracing-subscriber 0.3.23，应用
 负责 feature 选择；原生与浏览器日志可保留各自的接入方式。
+
+* Forge 管理的 Rust 源码修补
+:PROPERTIES:
+:CUSTOM_ID: managed-source-repairs
+:END:
+
+Forge v1.13.0 在 schema 2 项目配置中增加可选声明
+=source-patches = ["wry-0.53.5-gtk-ipc-weak"]=，只批准这一命名修补，不开放任意应用侧
+Cargo patch、路径覆盖或依赖升级。修补将 Wry GTK IPC 回调持有的 WebView 改为弱引用，
+释放后回调安全返回；保留原有逐窗口 WebContext、存储/协议行为和桥接身份。
+
+=rust/patches/= 下的 Forge JSON 配方固定官方 Wry 0.53.5 发布包 SHA-256、精确替换及
+完整修补源码树 SHA-256。现有 =./zbuild.py fetch <deliverable>= 将源码准备到 Forge
+忽略的 =build/rust/source-patches/=，复用校验匹配的缓存发布包或访问 crates.io 官方下载。
+不修改 registry 源码缓存、vendor checkout 或安装库。check/doctor 只验证现有源码，不下载或
+重新生成；缺失、改动或符号链接均拒绝。fetch 也保留并拒绝已改动的源码树，需调查后显式移走再准备。
+
+启用项目使用生成的私有 Cargo home，其中只包含批准的修补，并从原位置 include 用户
+=config.toml=，通过受校验链接共享缓存和锁；父 shell 的 Cargo home 与代理环境不变。
+旧式 =config=，以及用户或祖先配置中的 source/patch/paths/include 覆盖会被拒绝。
+本次只验证 Linux，其他主机的源码准备未验收；固定 Cargo 1.97.1 的 config include 已核实。
+
+首次采用时，使用 managed 环境显式迁移 Cargo.lock，并与项目声明一起提交。Wry 路径记录
+仍为 0.53.5，原始发布包校验和与修补树身份由 Forge 配方管理；普通命令保持 locked，
+移除修补同样要求协调来源与锁文件迁移。直接依赖目录规则不变，本修补用于已批准 Dioxus
+栈的间接 Wry；resolved audit 核对实际修补 manifest。直接绕过 managed 环境运行 Cargo 不受支持。
+应用可用 =ZETA_RUST_SOURCE_PATCHES= 记录来源，并在原生验收前后校验。
+
+Forge v1.13.0 的修补及治理测试不替代应用生命周期、预算或 Stage 验收；Trader v0.47.0
+必须独立重跑原生验收。

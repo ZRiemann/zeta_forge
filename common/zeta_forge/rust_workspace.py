@@ -14,6 +14,7 @@ from .conan_openssl import read_openssl_manifest
 from .config import RepoConfig
 from .process import run_command
 from .rust_dependencies import DependencyReport, dependency_report, owned_manifest, package_identity
+from .rust_patches import patch_environment, patch_recipe
 
 PROJECT_CONFIG_NAME = "zeta-rust.toml"
 TOOLCHAIN_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -43,6 +44,7 @@ class RustProject:
     toolchain_spec: Mapping[str, object]
     catalog: RustCatalog
     local_roots: tuple[Path, ...] = ()
+    source_patches: tuple[str, ...] = ()
 
     @property
     def source_roots(self) -> tuple[Path, ...]:
@@ -264,11 +266,14 @@ def load_rust_project(project_root: Path, forge_root: Path) -> RustProject:
     document = _read_toml(config_path)
     if document.get("schema") != 2:
         raise RuntimeError(f"Unsupported Rust project schema in {config_path}")
-    if set(document) - {"schema", "manifest", "toolchain", "capabilities", "native-dependencies"}:
+    if set(document) - {"schema", "manifest", "toolchain", "capabilities", "native-dependencies", "source-patches"}:
         raise RuntimeError(f"Unknown Rust project field in {config_path}")
     toolchain_path = _project_path(root, document.get("toolchain"), "toolchain", config_path)
     toolchain = _table(_read_toml(toolchain_path), "toolchain", toolchain_path)
 
+    patches = _string_list(document.get("source-patches", []), "source-patches", config_path)
+    if patches:
+        patch_recipe(forge_root, patches)
     return RustProject(
         root=root,
         manifest=_project_path(root, document.get("manifest"), "manifest", config_path),
@@ -280,6 +285,7 @@ def load_rust_project(project_root: Path, forge_root: Path) -> RustProject:
         toolchain_spec=load_toolchain(forge_root, toolchain.get("channel")),
         catalog=load_catalog(forge_root),
         local_roots=_authorized_local_roots(root, forge_root),
+        source_patches=patches,
     )
 
 
@@ -460,6 +466,12 @@ def validate_rust_project(project: RustProject) -> None:
         for candidate in dict.fromkeys([member_manifest, workspace_manifest]):
             if set(_read_toml(candidate)) & {"patch", "replace"}:
                 raise RuntimeError(f"Cargo patch/replace overrides are forbidden in {candidate}")
+            if project.source_patches:
+                for directory in candidate.parents:
+                    for filename in ("config", "config.toml"):
+                        config_file = directory / ".cargo" / filename
+                        if config_file.is_file() and set(_read_toml(config_file)) & {"patch", "paths", "source", "include"}:
+                            raise RuntimeError(f"Cargo source overrides conflict with Forge source-patches: {config_file}")
         for name, value in declarations.items():
             if _is_local_dependency(value):
                 _validate_local_dependency(project, name, value, workspace_manifest.parent)
@@ -488,6 +500,11 @@ def validate_rust_project(project: RustProject) -> None:
     report = locked_dependency_report(project)
     if report["errors"]:
         raise RuntimeError(f"Rust dependency drift in {lockfile}: " + "; ".join(report["errors"]))
+    if project.source_patches:
+        repaired = [record for record in _read_toml(lockfile).get("package", []) if record.get("name") == "wry"]
+        if (len(repaired) != 1 or repaired[0].get("version") != "0.53.5"
+            or repaired[0].get("source") not in (None, "registry+https://github.com/rust-lang/crates.io-index")):
+            raise RuntimeError("Forge GTK IPC source repair requires exactly one locked Wry 0.53.5 identity")
 
 
 def _own_workspace(project: RustProject, manifest: Path) -> Path:
@@ -645,6 +662,7 @@ def _native_environment(project: RustProject, repo_config: RepoConfig) -> dict[s
                 f"{repo_config.forge_root}/zbuild.py install nng"
             )
         environment.update(NNG_NO_VENDOR="1", NNG_DIR=str(prefix), NNG_STATIC="1")
+    environment.update(patch_environment(project, repo_config))
     return environment
 
 
@@ -821,7 +839,7 @@ class RustWorkspaceManager:
         completed = run_command(
             self.cargo_command("metadata", "--format-version", "1", "--locked", "--offline"),
             cwd=self.project.workspace_dir,
-            env=self.repo_config.env,
+            env={**self.repo_config.env, **patch_environment(self.project, self.repo_config)},
             check=False,
             capture_output=True,
         )

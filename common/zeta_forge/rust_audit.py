@@ -11,6 +11,7 @@ from .build_cli import Request, log
 from .config import RepoConfig
 from .process import run_command
 from .rust_dependencies import DependencyReport, resolved_dependency_report
+from .rust_patches import patch_environment, verify_resolved_patches
 from .rust_workspace import (
     PROJECT_CONFIG_NAME,
     RustProject,
@@ -104,7 +105,8 @@ def resolved_metadata(project: RustProject, config: RepoConfig, *, timeout: floa
     manager = RustWorkspaceManager(project, config)
     completed = run_command(
         manager.cargo_command("metadata", "--format-version", "1", "--locked", "--offline"),
-        cwd=project.workspace_dir, env=config.env, check=False, capture_output=True, timeout=timeout,
+        cwd=project.workspace_dir, env={**config.env, **patch_environment(project, config)},
+        check=False, capture_output=True, timeout=timeout,
     )
     if completed.returncode != 0:
         detail = (completed.stderr or completed.stdout).strip()
@@ -119,6 +121,7 @@ def resolved_metadata(project: RustProject, config: RepoConfig, *, timeout: floa
         raise RuntimeError(f"Invalid Cargo metadata for {project.manifest}: {error}") from error
     if not isinstance(metadata, dict):
         raise RuntimeError(f"Expected Cargo metadata object for {project.manifest}")
+    verify_resolved_patches(metadata, project, config)
     return metadata
 
 

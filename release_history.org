@@ -5,6 +5,20 @@
 
 * Release History
 
+** v1.13.0 - 2026-10-25T14:39:48Z
+:PROPERTIES:
+:CUSTOM_ID: v1.13.0
+:END:
+
+*** Changes
+- Add an explicit, narrowly approved Rust source-repair declaration and checksum-bound fetch preparation, with verified private Cargo configuration and resolved-source audits.
+- Repair Wry 0.53.5's GTK IPC callback ownership using a weak WebView reference, preserving independent per-window contexts and rejecting callbacks after release.
+- Keep user proxy/settings and shared cache locks, reject conflicting source overrides or altered repair content, and document downstream lockfile adoption.
+
+*** Compatibility and Validation Notes
+- Consumers must explicitly opt in and use managed commands; arbitrary application patches remain forbidden. This first source-preparation integration is validated on Linux; other hosts remain unaccepted.
+- 63 focused Rust governance/source-repair tests, Python compilation, registered-consumer doctor and locked offline dependency audits passed. No complete application/native-library build, installation, deployment or push was performed. Trader's native Stage acceptance is separately owned and recorded there.
+
 ** v1.12.0 - 2026-10-22T07:18:45Z
 :PROPERTIES:
 :CUSTOM_ID: v1.12.0

@@ -148,8 +148,9 @@ ownership only. Currently indirect-only =serde_core= and =serde_derive= were
 removed from it; lockfiles are unchanged. Registry crates use the crates.io
 identity; Git crates require the approved full revision. Root packages, members,
 and target/dev/build dependencies inherit workspace declarations. Aliases are
-checked by actual package identity. Cargo =[patch]= / =[replace]= overrides and
-local crates shadowing catalog packages are rejected.
+checked by actual package identity. Consumer-authored Cargo =[patch]= / =[replace]=
+overrides and local crates shadowing catalog packages are rejected. Explicit
+[[#managed-source-repairs][Forge source repairs]] have a separate checksum-bound approval path.
 
 Preflight runs before tool installation, rebuild cleanup and compilation. It
 checks each own consumer's actual dependency identity, including direct drift
@@ -305,6 +306,52 @@ No complete application build, Release-profile compiler/test pass, desktop/Web
 artifact generation, live service/TUN/trading acceptance, commit, push or release
 was performed. The fixture may compile its small test executable; Forge's tool
 regressions use isolated temporary build fixtures.
+
+* Managed Rust source repairs
+:PROPERTIES:
+:CUSTOM_ID: managed-source-repairs
+:END:
+
+Forge v1.13.0 adds the optional schema-2 project declaration
+=source-patches = ["wry-0.53.5-gtk-ipc-weak"]=. Only this named repair is
+approved; it does not grant permission for arbitrary application Cargo patches,
+path overrides or a dependency upgrade. It repairs Wry's GTK IPC callback to
+capture a weak WebView and ignore callbacks after release. It preserves existing
+per-window WebContext, storage/protocol behavior and bridge identity.
+
+The Forge-owned JSON recipe under =rust/patches/= binds the official published
+Wry 0.53.5 archive SHA-256, exact replacement and complete resulting source-tree
+SHA-256. The existing =./zbuild.py fetch <deliverable>= prepares sources under
+Forge's ignored =build/rust/source-patches/=, using a checksum-matching cached
+archive or the official crates.io download. It never edits registry source
+caches, vendor checkouts or installed libraries. Checks/doctor verify existing
+sources without downloads or source regeneration; missing/changed content fails
+with an explicit fetch instruction. A modified tree is preserved and rejected,
+including by fetch; investigate and move it aside explicitly before recreating.
+
+Opted-in consumers use a generated private Cargo home with only the approved
+source patch. Its config includes an existing user =config.toml= from its original
+location, and shares cache directories/locks through checked links. The parent
+shell's Cargo home and proxy environment are preserved. Legacy =config= and
+source/patch/paths/include overrides in user or ancestor configuration are
+rejected for repaired consumers. This first integration is validated on Linux;
+other hosts' source preparation is unaccepted. Cargo tooling must support config
+includes (the pinned Rust/Cargo 1.97.1 is checked).
+
+On initial adoption, explicitly migrate the Cargo lockfile through the managed
+source environment; commit it with the project declaration. The Wry path entry
+keeps version 0.53.5; its original archive checksum and repaired tree identity are
+owned by Forge's recipe. Ordinary commands retain locked resolution; removing the
+repair requires a coordinated source/lockfile migration. Direct dependency
+catalog checks remain in force; this repair targets the indirect Wry dependency
+of the approved Dioxus stack. Resolved audits verify the actual repaired manifest.
+Direct raw Cargo invocation without the managed environment is unsupported.
+
+The application runner records =ZETA_RUST_SOURCE_PATCHES= provenance and verifies
+it before/after native acceptance. Forge's source repair does not establish a
+consumer's native lifecycle, resource budget or Stage acceptance; each consumer
+must rerun its own gates. Forge v1.13.0 unit/governance evidence is separate from
+Trader v0.47.0 native acceptance.
 
 * Authorized local Rust dependencies
 

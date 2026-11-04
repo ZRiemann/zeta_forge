@@ -13,7 +13,7 @@ import re
 import tarfile
 import tempfile
 import tomllib
-from typing import Mapping, TYPE_CHECKING, TypedDict
+from typing import Mapping, NotRequired, TYPE_CHECKING, TypedDict
 from urllib.request import urlopen
 
 if TYPE_CHECKING:
@@ -28,6 +28,11 @@ class Replacement(TypedDict):
     after: str
 
 
+class FileRepair(TypedDict):
+    file: str
+    replacements: list[Replacement]
+
+
 class SourceRecipe(TypedDict):
     schema: int
     package: str
@@ -35,8 +40,43 @@ class SourceRecipe(TypedDict):
     archive_sha256: str
     tree_sha256: str
     upstream: str
-    file: str
-    replacements: list[Replacement]
+    file: NotRequired[str]
+    replacements: NotRequired[list[Replacement]]
+    files: NotRequired[list[FileRepair]]
+
+
+def recipe_files(recipe: SourceRecipe) -> list[FileRepair]:
+    """Normalize both recipe schemas and reject ambiguous or escaping edits."""
+    if recipe["schema"] == 1:
+        if "files" in recipe:
+            raise RuntimeError("Single-file source repair cannot contain files")
+        files = [{"file": recipe.get("file"), "replacements": recipe.get("replacements")}]
+    elif recipe["schema"] == 2:
+        if "file" in recipe or "replacements" in recipe:
+            raise RuntimeError("Multi-file source repair cannot contain single-file edits")
+        files = recipe.get("files")
+    else:
+        raise RuntimeError("Unsupported source repair schema")
+    if not isinstance(files, list) or not files:
+        raise RuntimeError("Source repair requires file edits")
+    seen: set[str] = set()
+    for edit in files:
+        if not isinstance(edit, dict) or set(edit) != {"file", "replacements"}:
+            raise RuntimeError("Invalid source repair file edit")
+        name = edit["file"]
+        if (not isinstance(name, str) or not name or Path(name).is_absolute()
+            or ".." in Path(name).parts or name in seen):
+            raise RuntimeError("Invalid or duplicate source repair path")
+        seen.add(name)
+        replacements = edit["replacements"]
+        if not isinstance(replacements, list) or not replacements:
+            raise RuntimeError("Source repair requires replacements")
+        for replacement in replacements:
+            if (not isinstance(replacement, dict) or set(replacement) != {"before", "after"}
+                or not isinstance(replacement["before"], str) or not replacement["before"]
+                or not isinstance(replacement["after"], str)):
+                raise RuntimeError("Invalid source repair replacement")
+    return files
 
 
 def patch_recipe(forge_root: Path, names: tuple[str, ...]) -> tuple[SourceRecipe, Path]:
@@ -69,6 +109,7 @@ def verify_source(recipe: SourceRecipe, root: Path) -> None:
 
 
 def materialize(recipe: SourceRecipe, root: Path, payload: bytes) -> None:
+    files = recipe_files(recipe)
     if hashlib.sha256(payload).hexdigest() != recipe["archive_sha256"]:
         raise RuntimeError("Forge Rust source archive checksum mismatch")
     root.parent.mkdir(parents=True, exist_ok=True)
@@ -89,13 +130,14 @@ def materialize(recipe: SourceRecipe, root: Path, payload: bytes) -> None:
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     with archive.extractfile(member) as source:
                         destination.write_bytes(source.read())
-        target = prepared / recipe["file"]
-        text = target.read_text(encoding="utf-8")
-        for replacement in recipe["replacements"]:
-            if text.count(replacement["before"]) != 1:
-                raise RuntimeError("Forge Rust source repair does not match the pinned input")
-            text = text.replace(replacement["before"], replacement["after"])
-        target.write_text(text, encoding="utf-8")
+        for edit in files:
+            target = prepared / edit["file"]
+            text = target.read_text(encoding="utf-8")
+            for replacement in edit["replacements"]:
+                if text.count(replacement["before"]) != 1:
+                    raise RuntimeError("Forge Rust source repair does not match the pinned input")
+                text = text.replace(replacement["before"], replacement["after"])
+            target.write_text(text, encoding="utf-8")
         verify_source(recipe, prepared)
         if root.exists():
             verify_source(recipe, root)

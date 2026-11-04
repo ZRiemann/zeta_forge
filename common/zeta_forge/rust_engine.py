@@ -11,6 +11,7 @@ from .build_cli import Request
 from .build_ops import remove_generated, run_program, validate_generated_path
 from .config import RepoConfig
 from .process import require_command, run_command
+from .run_spec import RunSpec, launch_run
 from .rust_workspace import (
     RustWorkspaceManager,
     _native_environment,
@@ -79,6 +80,27 @@ class RustEngine:
         if platform and platform != "desktop":
             return self.target_dir / "dx" / target.package / request.profile / platform / "public"
         return self.target_dir / request.profile / (target.artifact_name or target.package)
+
+    def resolve_run(
+        self, request: Request, name: str, *, manager: RustWorkspaceManager | None = None,
+    ) -> RunSpec:
+        artifact = self.artifact(request, name)
+        target = self.targets[name]
+        environment = self.environment(request, manager or self.manager())
+        if self.application_environment:
+            environment.update(self.application_environment(request, name))
+        if target.kind == "fullstack":
+            environment.setdefault("IP", "127.0.0.1")
+            environment.setdefault("PORT", "8080")
+            environment.setdefault("DIOXUS_PUBLIC_PATH", str(artifact.parent / "public"))
+        if artifact.is_dir():
+            return RunSpec(
+                Path(sys.executable),
+                ("-m", "http.server", "8080", "--bind", "127.0.0.1", "--directory",
+                 str(artifact), *request.arguments), artifact, environment,
+            )
+        directory = target.directory if target.example is not None else artifact.parent
+        return RunSpec(artifact, request.arguments, directory, environment)
 
     def validate_request(self, request: Request, names: tuple[str, ...]) -> None:
         platform = getattr(request.options, "platform", None)
@@ -420,32 +442,4 @@ class RustEngine:
                 return
             self.build(manager, request, names)
         if request.action in {"run", "dev"}:
-            name = names[0]
-            artifact = self.artifact(request, name)
-            environment = self.environment(request, manager)
-            if self.application_environment:
-                environment.update(self.application_environment(request, name))
-            if self.targets[name].kind == "fullstack":
-                environment.setdefault("IP", "127.0.0.1")
-                environment.setdefault("PORT", "8080")
-                environment.setdefault("DIOXUS_PUBLIC_PATH", str(artifact.parent / "public"))
-            if artifact.is_dir():
-                run_program(
-                    [
-                        sys.executable,
-                        "-m",
-                        "http.server",
-                        "8080",
-                        "--bind",
-                        "127.0.0.1",
-                        "--directory",
-                        artifact,
-                        *request.arguments,
-                    ],
-                    cwd=artifact,
-                    env=environment,
-                )
-            else:
-                target = self.targets[name]
-                directory = target.directory if target.example is not None else artifact.parent
-                run_program([artifact, *request.arguments], cwd=directory, env=environment)
+            launch_run(self.resolve_run(request, names[0], manager=manager))

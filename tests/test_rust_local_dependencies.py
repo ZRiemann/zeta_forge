@@ -21,6 +21,7 @@ class LocalDependencyTests(unittest.TestCase):
         self.forge, self.consumer, self.library = base / "forge", base / "consumer", base / "library"
         (self.forge / "rust/toolchains").mkdir(parents=True)
         shutil.copy(FORGE_ROOT / "rust/catalog.toml", self.forge / "rust/catalog.toml")
+        shutil.copytree(FORGE_ROOT / "rust/tool-patches", self.forge / "rust/tool-patches")
         shutil.copy(FORGE_ROOT / "rust/toolchains/1.97.1.toml", self.forge / "rust/toolchains/1.97.1.toml")
         self.registry = self.forge / "rust/projects.toml"
         self.registry.write_text('schema = 1\n[[projects]]\npath = "consumer"\nlocal-dependencies = ["library"]\n[[projects]]\npath = "library"\n')

@@ -121,12 +121,16 @@ Dioxus CLI 等 Cargo 工具隔离安装到
 所选 Rust 交付物需要的工具缺失或版本不符时，=check=、=build=、=rebuild=、
 =test=、=dev= 和 =fetch= 使用固定工具链与 =--locked= 安装批准版本。
 工具准备在全部预检后、构建及 rebuild 清理前执行；安装需要访问 registry，
-失败时不会清理项目构建状态。等价的独立安装命令是：
+失败时不会清理项目构建状态。通过消费项目准备所选工具：
 
 #+begin_src bash
-cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
-  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
+# In a consuming project; installs the approved tool and fetches locked inputs.
+./zbuild.py fetch <Dioxus-target>
 #+end_src
+
+补丁工具在版本目录下增加 =source-<recipe-sha256>=，并校验绑定二进制的身份记录。
+Dioxus CLI 补丁将开发监听限制在实际 crate、本地依赖及显式资源范围。准备、升级及
+验证边界见 [[file:rust_workspace.org][Rust workspace 管理]]。
 
 #+begin_src bash
 ../zeta_trader/zbuild.py doctor zeta_owl

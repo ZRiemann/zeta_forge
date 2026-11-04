@@ -3,9 +3,27 @@
 
 [[file:readme.org][Back to Documentation]] | [[file:../zh-CN/nng_upgrade.org][Chinese Version]]
 
-* Version and Source
+* Current main snapshot: 2026-10-30
 
-The =zeta_forge/3rd/nng= submodule manages NNG source. This upgrade pins upstream
+The submodule now pins =main= at =5a0634a1ccd5f29989b7d25132e2be952af995a1=
+(2.2.0-dev), after the v2.0.0 release described below. The legacy CPM fallback
+remains at v2.0.0 and is not equivalent to the managed source. Check the commit
+with =git rev-parse HEAD=; an exact release tag is not expected.
+
+Changes include DTLS 1.3, TLS key-exchange groups, opt-in WebSocket redirects,
+protocol statistics and AIO deadline fixes. Forge still disables TLS. A focused
+static NNG build with HTTP enabled and TLS disabled was made in a temporary
+prefix; it does not replace the installed library. GCC warned that the upstream
+HTTP copy-body path may use an uninitialized pointer for zero-length data.
+The four endpoint uint64 functions are declared but absent from that static
+library; do not wrap or call them until upstream resolves the discrepancy.
+The isolated Release zpp =gtest_nng= linked this library and passed 75/75.
+See the zpp assessment delivered with this upgrade. Rebuild installed NNG and
+consumers before using this snapshot; the old validation below is historical.
+
+* Previous release: version and source
+
+The =zeta_forge/3rd/nng= submodule manages NNG source. The 2026-10-22 upgrade pinned upstream
 =v2.0.0= at =809ea04726fbcdf41d35b1930ccd98aaf601bf07= without local source
 patches. The legacy CPM fallback uses the same version; modern projects continue
 to consume Forge-installed package configs. Builds remain static, with HTTP
@@ -34,7 +52,7 @@ corrects the shared-library SOVERSION and package metadata. The public =nng.h=
 diff only clears the release suffix; the C++ migration below already applied
 to RC1. UDP and TLS features already present in RC1 are not new upgrade gains.
 
-This source update does not rebuild or install NNG or its consumers. See
+The 2026-10-22 source update did not rebuild or install NNG or its consumers. See
 [[file:third_party_usage.org][Versions and Updates]] for this upgrade's verification boundary.
 
 * C++ API Migration

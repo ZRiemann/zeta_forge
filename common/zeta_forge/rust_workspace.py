@@ -15,6 +15,7 @@ from .config import RepoConfig
 from .process import run_command
 from .rust_dependencies import DependencyReport, dependency_report, owned_manifest, package_identity
 from .rust_patches import patch_environment, patch_recipe
+from .rust_tool_patches import install_repaired_tool, tool_repair, verify_tool_install
 
 PROJECT_CONFIG_NAME = "zeta-rust.toml"
 TOOLCHAIN_PATTERN = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
@@ -193,8 +194,13 @@ def load_catalog(forge_root: Path) -> RustCatalog:
             or not PACKAGE_NAME_PATTERN.fullmatch(record["executable"])
         ):
             raise RuntimeError(f"Invalid Cargo tool record in {path}")
-        if set(record) != {"name", "version", "executable", "crate", "crate-version"}:
+        required_tool_fields = {"name", "version", "executable", "crate", "crate-version"}
+        if not required_tool_fields <= set(record) or set(record) - required_tool_fields - {"source-repair"}:
             raise RuntimeError(f"Unknown Cargo tool field in {path}")
+        if "source-repair" in record:
+            if record["source-repair"] is None:
+                raise RuntimeError(f"Invalid Cargo tool source-repair in {path}")
+            tool_repair(forge_root, record)
         if dependencies.get(crate, {}).get("version") != crate_version:
             raise RuntimeError(f"Cargo tool {name!r} references an unapproved crate version")
         if any(item["crate-version"] == crate_version for item in cargo_tools.get(name, ())):
@@ -727,7 +733,7 @@ class RustWorkspaceManager:
         return (completed.stdout or completed.stderr).strip()
 
     def cargo_tool_root(self, name: str, version: str) -> Path:
-        return (
+        root = (
             self.repo_config.install_prefix
             / "share"
             / "zeta_forge"
@@ -736,6 +742,12 @@ class RustWorkspaceManager:
             / name
             / version
         )
+        specification = next(
+            (item for item in self.project.catalog.cargo_tools.get(name, ())
+             if item["version"] == version), None,
+        )
+        repair = tool_repair(self.repo_config.forge_root, specification) if specification else None
+        return root / f"source-{repair.identity}" if repair else root
 
     def require_cargo_tool(self, name: str) -> str:
         if name not in self.project.catalog.cargo_tools:
@@ -751,11 +763,19 @@ class RustWorkspaceManager:
             f"cargo +{self.project.toolchain_spec['channel']} install {name} "
             f"--version {expected_version} --locked --force --root {tool_root}"
         )
+        repair = tool_repair(self.repo_config.forge_root, specification)
+        if repair:
+            install = f"./zbuild.py fetch <target> (builds the Forge-approved repaired {name})"
         if not executable.is_file() or not os.access(executable, os.X_OK):
             raise CargoToolUnavailable(
                 f"Forge-managed Cargo tool {name} is missing or not executable at {executable}; "
                 f"install it with: {install}"
             )
+        if repair:
+            try:
+                verify_tool_install(repair, str(self.project.toolchain_spec["channel"]), executable)
+            except RuntimeError as error:
+                raise CargoToolUnavailable(f"{error}; install it with: {install}") from error
         completed = run_command(
             [executable, "--version"],
             cwd=self.project.workspace_dir,
@@ -782,6 +802,14 @@ class RustWorkspaceManager:
         cargo = shutil.which("cargo")
         if cargo is None:
             raise RuntimeError("Required command not found on PATH: cargo")
+        repair = tool_repair(self.repo_config.forge_root, specification)
+        if repair:
+            install_repaired_tool(
+                repair, str(self.project.toolchain_spec["channel"]),
+                str(specification["executable"]), tool_root, cargo,
+                self.repo_config.forge_root, self.repo_config.env,
+            )
+            return self.require_cargo_tool(name)
         run_command(
             [
                 cargo,

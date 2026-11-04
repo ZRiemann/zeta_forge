@@ -3,7 +3,16 @@
 
 [[file:readme.org][Back to Documentation]] | [[file:../zh-CN/hpx_upgrade.org][Chinese Version]]
 
-* Source and dependency baseline
+* Current master snapshot: 2026-10-30
+
+The submodule advances from =6456abf559aeaa05b7a1612d8f8dc59c8d6df511= to
+=b8275fd3c4cd1b17427d02c849d92506379f1c2e=. Changes include condition-variable
+wakeup, connection-cache, scheduler starvation and shutdown fixes. The upstream
+stdexec default still matches Forge's =04de75de5807e73a229acf047c6976575e313359=
+pin. HPX and its consumers have not been rebuilt or installed for this snapshot;
+the results below apply to earlier revisions only.
+
+* Previous source and dependency baseline
 
 HPX is managed by the =3rd/hpx= submodule. The 2026-10-22 upgrade advances
 upstream =master= from =6e97afa18a1a189d0147397ecb3400917aef2b94= to

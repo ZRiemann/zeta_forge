@@ -119,12 +119,12 @@ export ZETA_TASKFLOW_SRC_DIR=$HOME/git/taskflow
 
 * 版本与更新
 
-** 源码基线：2026-10-22
+** 源码基线：2026-10-30
 
 | 库 | 版本 / 分支 | 固定提交 |
 |-
-| NNG | [[https://github.com/nanomsg/nng/releases/tag/v2.0.0][v2.0.0]] | =809ea04726fbcdf41d35b1930ccd98aaf601bf07= |
-| HPX | 上游 =master= 快照 | =6456abf559aeaa05b7a1612d8f8dc59c8d6df511= |
+| NNG | =main= (2.2.0-dev) | =5a0634a1ccd5f29989b7d25132e2be952af995a1= |
+| HPX | 上游 =master= 快照 | =b8275fd3c4cd1b17427d02c849d92506379f1c2e= |
 | gRPC | [[https://github.com/grpc/grpc/releases/tag/v1.84.0][v1.84.0]] | =3252a89f10d8e92997862167ca7d095ecda85973= |
 | Folly | [[https://github.com/facebook/folly/releases/tag/v2026.10.19.00][v2026.10.19.00]] | =ea41cb2f0b3c13a225a616ffef33cdfa85eb4aad= |
 | Taskflow | =v4.1.0=（不变） | =45366fe5bc4f2f8ec9aa590b40c504e296886865= |
@@ -153,13 +153,13 @@ gRPC 新增 =third_party/grpc-proto=，固定在
   静态检查只核对选项及依赖声明，不代表 CMake 配置或编译通过。Folly 新增的
   缺失依赖下载 fallback 使后续完整构建仍需核对依赖来源；共享依赖继续由 Forge 管理。
 
-本次范围是源码、配置、文档和轻量检查，没有编译安装四个库或重建 zpp/Trader。
+2026-10-22 的更新范围是源码、配置、文档和轻量检查，没有编译安装四个库或重建 zpp/Trader。
 已有安装和二进制仍对应旧输入；将来安装后需要重建受影响的静态链接消费者和
 Rust FFI。Debug、运行时联调和性能均未验证。
 
 2026-10-22 实际验证记录：
 
-- 六个库的源码提交、适用的发布 tag 和递归 gitlink 均与表格一致；
+- 六个库的源码提交、适用的发布 tag 和递归 gitlink 均与当时基线一致；
   四个 Builder 选中托管源码，源码预检通过。
 - =./zbuild.py test=：构建工具回归 91/91 通过，包含新增的 =grpc-proto=
   缺失检查和临时原生 fixture，不代表上游库测试通过。

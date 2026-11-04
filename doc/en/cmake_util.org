@@ -21,10 +21,61 @@ and are not included by the modern shared entrypoint.
 =add_run_target(exe_target [ARGS <args>...])= creates a CMake custom target named
 =run_<exe_target>= that executes the built executable in the current binary directory.
 
-Projects using the shared Forge Python framework can expose these entries through
-their =zbuild.py= commands. The shared action-first CLI is maintained in
-=zeta_forge.run_targets= and reads project =CMakeLists.txt= files to list the
-configured run entry name and matching CMake command.
+Projects explicitly expose runnable CMake products through =CMakeRunTarget=:
+
+#+begin_src python
+from zeta_forge.cmake_run import CMakeRunTarget
+
+# Additional keyword for the existing CMakeEngine constructor:
+run_targets={"my_app": CMakeRunTarget("native_executable_target")}
+#+end_src
+
+The public product name may differ from the native target name. The project still
+owns its build-target mapping; registration grants run capability, not an extra
+build graph. An explicit map is authoritative: an unregistered product fails and
+never falls back to source discovery. CMake's =add_run_target()= remains the sole
+authority for default arguments and native working directories. Existing CMake
+=run_<target>= targets remain available. They use CMake's native working-directory
+setting and direct argv quoting, avoiding a second argument parse by =cmake -E chdir=.
+
+During configuration/generation the helper writes schema-one runtime metadata to
+=<build>/.zeta-run/<configuration>/<native-target>/=. Executable paths use
+=$<TARGET_FILE:...>=, honoring native output names/directories and configuration.
+Separate raw UTF-8 field files preserve quotes, spaces, Unicode and newlines,
+including resolved generator expressions, without reinterpreting CMake in Python.
+The format includes source/build/configuration/target identity and a configuration
+token. Reconfiguration invalidates metadata left by now-disabled targets. A missing,
+invalid, moved or previous-configuration record fails with a reconfigure diagnostic.
+Default argument count is limited to 1024 and each field to 1 MiB. Default arguments
+are build metadata; runtime environment values are not written to these records.
+
+Include the shared helpers unconditionally in the root configuration so each
+configure invalidates previous tokens, even when all run targets are disabled.
+The helper generates metadata only during an explicit CMake configure/generate.
+Changes to CMake sources/options require reconfiguration. =run= does not configure,
+build or scan for registered products. An existing build tree made with older
+helpers needs reconfiguration once; for an already configured Release tree:
+
+#+begin_src sh
+cmake -S . -B build/Release
+#+end_src
+
+This updates build metadata without compiling. Debug has its own configured tree.
+The CMake, Rust and Zig adapters resolve a shared =RunSpec= (executable, argument
+vector, working directory and environment snapshot), then use =launch_run()= and
+the existing foreground process-group/interrupt owner. Rust/Zig keep their explicit
+registrations and native artifact policies. Arguments/environment are not printed
+by the common launcher. A missing executable remains an error; =dev= retains its
+explicit build-before-run behavior.
+
+Source discovery has been removed. Omitting =run_targets= declares no runnable
+products; it does not enable an implicit fallback. Workspace consumers =zpp=,
+=zgent=, =zeta_agent=, =zeta_vault= and =zeta_trader= register their public run
+products explicitly. Adding a public native runnable requires both a project
+registration and an =add_run_target()= declaration. Product lists do not require
+a configured build tree; executing or reading native runtime metadata does.
+Disabled targets are not runnable from stale artifacts: select/build the desired
+product first (or use =dev=) to configure its native options and metadata.
 
 Usage example:
 

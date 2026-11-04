@@ -129,12 +129,12 @@ export ZETA_TASKFLOW_SRC_DIR=$HOME/git/taskflow
 
 * Versions and Updates
 
-** Source baseline: 2026-10-22
+** Source baseline: 2026-10-30
 
 | Library | Version / branch | Pinned commit |
 |-
-| NNG | [[https://github.com/nanomsg/nng/releases/tag/v2.0.0][v2.0.0]] | =809ea04726fbcdf41d35b1930ccd98aaf601bf07= |
-| HPX | upstream =master= snapshot | =6456abf559aeaa05b7a1612d8f8dc59c8d6df511= |
+| NNG | =main= (2.2.0-dev) | =5a0634a1ccd5f29989b7d25132e2be952af995a1= |
+| HPX | upstream =master= snapshot | =b8275fd3c4cd1b17427d02c849d92506379f1c2e= |
 | gRPC | [[https://github.com/grpc/grpc/releases/tag/v1.84.0][v1.84.0]] | =3252a89f10d8e92997862167ca7d095ecda85973= |
 | Folly | [[https://github.com/facebook/folly/releases/tag/v2026.10.19.00][v2026.10.19.00]] | =ea41cb2f0b3c13a225a616ffef33cdfa85eb4aad= |
 | Taskflow | =v4.1.0= (unchanged) | =45366fe5bc4f2f8ec9aa590b40c504e296886865= |
@@ -170,7 +170,7 @@ preflight because reflection and channelz code generation require it.
   missing-dependency fetch fallbacks make dependency provenance another check
   for the later full build; shared dependencies remain owned by Forge.
 
-This update covers source, configuration, documentation and lightweight checks.
+The 2026-10-22 update covered source, configuration, documentation and lightweight checks.
 It does not build/install the four libraries or rebuild zpp/Trader. Existing
 installations and binaries still represent their previous inputs. A future
 installation requires rebuilding affected static consumers and Rust FFI;
@@ -179,7 +179,7 @@ Debug, runtime integration and performance are unverified.
 Verification performed on 2026-10-22:
 
 - All six source revisions, release tags where applicable and recursive gitlinks
-  match the table; the four builders select the managed sources and pass source preflight.
+  matched the baseline at that time; the four builders select the managed sources and pass source preflight.
 - =./zbuild.py test=: 91/91 build-tool regressions passed, including the new
   missing-=grpc-proto= check and temporary native fixtures. These are not upstream library tests.
 - =./zbuild.py build <library> --profile release --dry-run= passed separately

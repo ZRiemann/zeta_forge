@@ -109,11 +109,16 @@ Modern projects consume package configs prepared by =zeta_forge deps= through an
 explicit =CMAKE_PREFIX_PATH=. CPM fallback modules in =cmake_util/find_package=
 remain legacy compatibility assets outside the modern public entrypoint.
 
-=common/zeta_forge/run_targets.py= provides Python reuse of =add_run_target(...)=.
-External projects can scan their =CMakeLists.txt= for configured run entries, list
-the corresponding =cmake --build ... --target run_<name>= commands, or execute
-already built binaries with their preset arguments. This API does not configure
-CMake or build automatically; the project's =zbuild.py= prepares its build tree.
+Explicit CMake run registrations live in each project's adapter through
+=CMakeRunTarget=. Native =add_run_target()= declarations generate evaluated
+runtime metadata, including true target-file paths, default arguments and working
+directories. =cmake_run.py= validates the selected build/configuration identity;
+registered products never discover targets by scanning source trees.
+CMake, Rust and Zig resolve =RunSpec= values and use =launch_run()= over the
+existing foreground process-group owner. Native graphs stay in their native build
+files, while each project owns public products and environment policy.
+There is no source-scanning fallback. A missing registration means the product is
+not runnable. See [[file:cmake_util.org][registration and metadata lifecycle]].
 
 * External Project Extension
 

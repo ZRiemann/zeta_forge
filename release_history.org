@@ -5,6 +5,20 @@
 
 * Release History
 
+** v1.14.0 - 2026-11-04T03:10:39Z
+:PROPERTIES:
+:CUSTOM_ID: v1.14.0
+:END:
+
+*** Changes
+- Replace CMake source parsing with explicitly registered run targets and configuration-bound generated metadata; share foreground run specifications across build engines.
+- Add checksum-bound Cargo tool repairs and a scoped watcher repair for Dioxus CLI 0.7.10, with regression coverage and usage documentation.
+- Advance the HPX and NNG submodule snapshots and document their verification and downstream rebuild boundaries.
+
+*** Compatibility and Validation Notes
+- CMake run/dev consumers must register their targets and reconfigure existing build trees. Repaired Dioxus tools require preparation through Forge.
+- This commit checks the staged changes and release records; no additional tests or builds were run. Earlier focused NNG and watcher evidence and outstanding full CLI, application and downstream validation are documented separately.
+
 ** v1.13.0 - 2026-10-25T14:39:48Z
 :PROPERTIES:
 :CUSTOM_ID: v1.13.0

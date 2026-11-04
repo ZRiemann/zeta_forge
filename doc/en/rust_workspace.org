@@ -84,13 +84,83 @@ tool's path. If a selected Rust deliverable needs a missing or mismatched tool,
 =check=, =build=, =rebuild=, =test=, =dev= and =fetch= install the approved version
 with the pinned toolchain and =--locked=. Tool preparation follows all preflight
 checks and precedes building or rebuild cleanup. Installation needs crate-registry
-access; failure leaves project build outputs intact. The equivalent standalone
-installation command is:
+access; failure leaves project build outputs intact. Prepare the selected tool through the consuming project:
 
 #+begin_src bash
-cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
-  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
+# In a consuming project; installs the approved tool and fetches locked inputs.
+./zbuild.py fetch <Dioxus-target>
 #+end_src
+
+** Repaired Cargo tools and scoped Dioxus watching
+
+An optional =source-repair= on a =[[cargo-tools]]= catalog entry names a Forge-owned
+recipe under =rust/tool-patches/=. Projects select their existing Dioxus capability;
+new projects require no copied patch or machine-specific watch roots. The recipe
+binds the published tool package/version, archive SHA-256, exact replacements and
+complete patched-tree SHA-256. Cargo registry sources are never edited.
+
+Repaired tools live under the normal version directory in
+=source-<recipe-sha256>/bin/=. A =forge-tool.json= receipt binds the recipe, patched
+source tree, toolchain, package/version and installed executable SHA-256. Read-only
+=doctor= verifies this identity as well as =--version=; an original binary with the
+same upstream version is insufficient. Normal tool preparation acquires/verifies
+the source, builds it with =cargo +<channel> install --path ... --locked= into a
+private directory and publishes only after validation. Installation failure or
+interruption preserves an earlier installation. The original version-only path is
+left intact and is not selected for repaired tools. First preparation compiles the
+CLI; a matching verified installation is reused by other projects.
+
+The approved =dioxus-cli-0.7.10-scoped-watch-v2= repair removes the extra parent
+operation in both client/server local-crate discovery. It prunes default exclusions
+and workspace/crate-root =.gitignore= entries before opening directories, does not
+follow symlinks, and registers admitted directories non-recursively. Newly created
+or moved-in directories are admitted through the same traversal. Actual local
+Rust dependencies and explicitly configured public assets remain included. Nested
+=.gitignore= files are not newly interpreted by this repair. =[web.watcher].watch_path=
+is not a strict scan boundary in upstream 0.7.10; changing it alone does not repair
+the initial RSX scan. No project-parent or sibling-document scan is required.
+
+
+Tool recipe schema 2 uses an ordered =files= array of ={file, replacements}= edits,
+allowing one verified repair to cover sources and the packaged lockfile. Schema 1
+single-file recipes remain supported, including the existing Wry repair. Every
+file replacement must match exactly once and the complete final tree is verified
+before publication; a failed edit never publishes a partial tree.
+
+The v2 repair removes unused upstream ignore state/helpers rather than suppressing
+compiler diagnostics. It updates only =auth-git2 0.5.8 -> 0.5.9= and its registry
+checksum in the CLI lockfile; the CLI stays at 0.7.10 and installation stays locked.
+The installer appends its candidate bin directory to PATH only in the installation
+subprocess, eliminating Cargo's misleading temporary-path setup warning without
+changing the parent shell or proxy settings. Metadata loading emits INFO after
+one second and then every ten seconds; the original 203-second timeout remains
+an error. The regression uses virtual time to verify cadence and the deadline.
+
+For an upstream CLI upgrade, review and validate a recipe for that exact version;
+never reuse replacements without matching checksums. Remove =source-repair= after
+an upstream version passes the same scope and notification tests. Ordinary tools
+without this optional field retain their original installation workflow.
+
+The bounded regression compiles actual patched watcher/cache methods with the real
+ignore/notification libraries, using small dependency-graph substitutes. It tests
+single crates, workspaces, cross-repository dependencies, fullstack/server roots,
+external public assets, ignored trees, symlink escapes, Rust/CSS changes and
+new/moved-in directories. It does not compile the complete CLI or start an app.
+The CLI archive must be acquired separately; the harness uses locked offline
+Cargo inputs. When =strace= is available it also rejects directory opens under
+excluded fixtures. Reports name this additional coverage explicitly.
+
+#+begin_src bash
+python3 tests/manual/dioxus_watch_scope.py \
+  --archive /path/to/dioxus-cli-0.7.10.crate \
+  --output-dir build/reports/dioxus-watch-debug --profile debug
+python3 tests/manual/dioxus_watch_scope.py \
+  --archive /path/to/dioxus-cli-0.7.10.crate \
+  --output-dir build/reports/dioxus-watch-release --profile release
+#+end_src
+
+A complete repaired CLI build and a real =dev= hot-reload session remain separate
+acceptance steps; source-method regression is not evidence that they were run.
 
 * Commands and Upgrades
 

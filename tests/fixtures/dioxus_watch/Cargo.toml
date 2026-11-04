@@ -1,0 +1,14 @@
+[package]
+name = "forge-dioxus-watch-regression"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+ignore = "=0.4.25"
+walkdir = "=2.5.0"
+notify = "=8.2.0"
+tracing = "=0.1.44"
+tokio = { version = "=1.52.1", features = ["macros", "rt", "time", "test-util"] }

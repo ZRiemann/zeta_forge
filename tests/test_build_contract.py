@@ -351,7 +351,7 @@ class AdapterTests(unittest.TestCase):
                     engine, "build", side_effect=lambda *_: order.append("build")
                 ) as build,
                 mock.patch(
-                    "zeta_forge.rust_engine.run_program",
+                    "zeta_forge.run_spec.run_program",
                     side_effect=lambda *a, **kw: order.append("run"),
                 ) as run,
             ):
@@ -448,7 +448,7 @@ class AdapterTests(unittest.TestCase):
                     engine.preflight(request("run"), ("app",))
                 with (
                     mock.patch.object(engine, "environment", return_value={}),
-                    mock.patch("zeta_forge.rust_engine.run_program") as run,
+                    mock.patch("zeta_forge.run_spec.run_program") as run,
                 ):
                     engine.execute(request("run"), ("app",))
                 build.assert_not_called()

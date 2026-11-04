@@ -120,6 +120,7 @@ version = "0.7.10"
 executable = "dx"
 crate = "dioxus"
 crate-version = "=0.7.10"
+source-repair = "dioxus-cli-0.7.10-scoped-watch-v2"
 
 [capabilities.dioxus-desktop]
 crate = "dioxus"

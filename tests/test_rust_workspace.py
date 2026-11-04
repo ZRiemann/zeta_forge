@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -58,8 +59,16 @@ class RustWorkspaceTests(unittest.TestCase):
     def manager(self, root: Path) -> RustWorkspaceManager:
         config = mock.Mock()
         config.env = {}
+        config.forge_root = FORGE_ROOT
         config.install_prefix = root / "install"
-        return RustWorkspaceManager(load_rust_project(root, FORGE_ROOT), config)
+        project = load_rust_project(root, FORGE_ROOT)
+        # Keep coverage of ordinary registry-installed tools alongside repaired tools.
+        catalog = replace(project.catalog, cargo_tools={
+            name: tuple({key: value for key, value in item.items() if key != "source-repair"}
+                        for item in records)
+            for name, records in project.catalog.cargo_tools.items()
+        })
+        return RustWorkspaceManager(replace(project, catalog=catalog), config)
 
     def replace(self, root: Path, old: str, new: str) -> None:
         manifest = root / "rust" / "Cargo.toml"

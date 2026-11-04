@@ -3,14 +3,16 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Mapping
 
 from .build_cli import Request
-from .build_ops import remove_generated, run_program, validate_generated_path
+from .build_ops import remove_generated, validate_generated_path
 from .cmake_builder import CMakeProjectBuilder
+from .cmake_run import CMakeRunTarget, read_cmake_run
 from .process import require_command, run_command
-from .run_targets import discover_run_targets, find_run_target
+from .run_spec import RunSpec, launch_run
 
 CMAKE_ACTIONS = ("doctor", "check", "build", "rebuild", "test", "clean")
 
@@ -26,6 +28,7 @@ class CMakeEngine:
         native_targets: Callable[[tuple[str, ...]], tuple[str, ...]] = lambda names: names,
         components: Mapping[str, tuple[str, ...]] | None = None,
         run_environment: Callable[[str, Path], dict[str, str]] | None = None,
+        run_targets: Mapping[str, CMakeRunTarget] | None = None,
     ) -> None:
         self.root = root
         self.factory = factory
@@ -34,8 +37,23 @@ class CMakeEngine:
         self.native_targets = native_targets
         self.components = components or {}
         self.run_environment = run_environment
+        self.run_targets = dict(run_targets or {})
+
+    def resolve_run(self, request: Request, name: str) -> RunSpec:
+        if name not in self.run_targets:
+            raise ValueError(f"CMake product has no registered run target: {name}")
+        builder = self.factory(request, (name,))
+        spec = read_cmake_run(
+            self.run_targets[name], builder.source_dir, builder.build_dir, request.cmake_profile
+        )
+        environment = (self.run_environment(name, builder.source_dir)
+                       if self.run_environment else os.environ.copy())
+        return replace(spec, arguments=(*spec.arguments, *request.arguments), environment=environment)
 
     def validate_request(self, request: Request, names: tuple[str, ...]) -> None:
+        if request.action in {"run", "dev"}:
+            if len(names) != 1 or names[0] not in self.run_targets:
+                raise ValueError("run/dev requires one explicitly registered CMake run target")
         if request.action == "install" and any(name not in self.components for name in names):
             raise ValueError("selected deliverable has no CMake install component")
 
@@ -50,9 +68,9 @@ class CMakeEngine:
         }
         if request.action == "metadata":
             result["executables"] = {
-                target.name: str(target.executable_path)
-                for target in discover_run_targets(builder.source_dir, builder.build_dir)
-                if target.name in names
+                name: str(read_cmake_run(self.run_targets[name], builder.source_dir,
+                                        builder.build_dir, request.cmake_profile).executable)
+                for name in names if name in self.run_targets
             }
             result["install_components"] = {name: self.components.get(name, ()) for name in names}
             result["dependency_prefix"] = str(builder.repo_config.install_prefix)
@@ -77,16 +95,14 @@ class CMakeEngine:
         if request.action == "clean":
             return
         if request.action == "run":
-            target = find_run_target(
-                discover_run_targets(builder.source_dir, builder.build_dir), names[0]
-            )
-            if not target.executable_path.is_file():
-                raise RuntimeError(f"built executable is missing: {target.executable_path}")
+            spec = self.resolve_run(request, names[0])
+            if not spec.executable.is_file():
+                raise RuntimeError(f"built executable is missing: {spec.executable}")
         else:
             require_command("cmake")
             require_command("ninja")
             builder.validate()
-        if request.action in {"run", "dev"} and self.run_environment:
+        if request.action == "dev" and self.run_environment:
             self.run_environment(names[0], builder.source_dir)
 
     def execute(self, request: Request, names: tuple[str, ...]) -> None:
@@ -118,16 +134,4 @@ class CMakeEngine:
             components = tuple(dict.fromkeys(c for name in names for c in self.components[name]))
             builder.install(components)
         if request.action in {"run", "dev"}:
-            target = find_run_target(
-                discover_run_targets(builder.source_dir, builder.build_dir), names[0]
-            )
-            environment = (
-                self.run_environment(names[0], builder.source_dir)
-                if self.run_environment
-                else os.environ.copy()
-            )
-            run_program(
-                [target.executable_path, *target.resolved_args, *request.arguments],
-                cwd=target.working_dir,
-                env=environment,
-            )
+            launch_run(self.resolve_run(request, names[0]))

@@ -10,6 +10,7 @@ from typing import Mapping
 from .build_cli import Request
 from .build_ops import remove_generated, run_program, validate_generated_path
 from .process import require_command
+from .run_spec import RunSpec, launch_run
 
 ZIG_VERSION = "0.17.0"
 
@@ -33,6 +34,9 @@ class ZigEngine:
         if executable is None:
             raise ValueError(f"{name} has no runnable output")
         return self.profile_dir(request) / "bin" / executable
+
+    def resolve_run(self, request: Request, name: str) -> RunSpec:
+        return RunSpec(self.artifact(request, name), request.arguments, self.root, dict(os.environ))
 
     def validate_request(self, request: Request, names: tuple[str, ...]) -> None:
         for name in names:
@@ -107,7 +111,4 @@ class ZigEngine:
         elif request.action in {"check", "test"}:
             self.native(request, (request.action,))
         if request.action in {"run", "dev"}:
-            run_program(
-                [self.artifact(request, names[0]), *request.arguments],
-                cwd=self.root, env=dict(os.environ),
-            )
+            launch_run(self.resolve_run(request, names[0]))

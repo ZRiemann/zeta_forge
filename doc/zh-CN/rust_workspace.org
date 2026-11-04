@@ -54,12 +54,51 @@ NNG 由 Forge 管理源码、构建和安装；Cargo 继续禁用 vendored NNG�
 =dioxus-desktop= 要求 workspace 采用已批准的 Dioxus，并检查匹配版本的 Dioxus CLI。=dioxus-web-fullstack= 另外检查所选 Rust 工具链的 =wasm32-unknown-unknown= target。业务项目自行选择 =dioxus/web=、=dioxus/server=、=dioxus/fullstack= 等应用 feature。
 Web 项目如需在 release 构建中去掉 DWARF 调试符号，可在项目构建定义中设置 =RustTarget(..., web_release_debug_symbols=False)=。Forge 此时向 Dioxus release build 传入 =--debug-symbols false=；其他目标及 debug profile 保持 Dioxus 默认值。
 
-Cargo 工具按工具链、名称、版本隔离在 =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>/bin=，不回退全局 =PATH=。=doctor= 只读检查并在缺失时报告路径。所选 Rust 交付项需要的工具缺失或版本不符时，=check=、=build=、=rebuild=、=test=、=dev= 和 =fetch= 使用固定工具链与 =--locked= 安装 Forge 批准的版本。工具准备在全部预检完成后、构建及 rebuild 清理前执行；安装需要访问 crate registry，失败时不清理项目构建产物。等价的独立安装命令如下：
+Cargo 工具按工具链、名称、版本隔离在 =${ZETA_INSTALL_PREFIX}/share/zeta_forge/rust-tools/<channel>/<tool>/<version>/bin=，不回退全局 =PATH=。=doctor= 只读检查并在缺失时报告路径。所选 Rust 交付项需要的工具缺失或版本不符时，=check=、=build=、=rebuild=、=test=、=dev= 和 =fetch= 使用固定工具链与 =--locked= 安装 Forge 批准的版本。工具准备在全部预检完成后、构建及 rebuild 清理前执行；安装需要访问 crate registry，失败时不清理项目构建产物。通过消费项目准备所选工具：
 
 #+begin_src bash
-cargo +1.97.1 install dioxus-cli --version 0.7.10 --locked --force \
-  --root "${ZETA_INSTALL_PREFIX:-$HOME/.local}/share/zeta_forge/rust-tools/1.97.1/dioxus-cli/0.7.10"
+# In a consuming project; installs the approved tool and fetches locked inputs.
+./zbuild.py fetch <Dioxus-target>
 #+end_src
+
+** Cargo 工具补丁与 Dioxus 扫描范围
+
+=[[cargo-tools]]= 可通过可选的
+=source-repair= 引用 Forge 的 =rust/tool-patches/= 配方。业务项目继续声明原有
+Dioxus capability；新项目无需复制补丁或配置本机绝对路径。配方固定工具版本、
+发布归档 SHA-256、精确替换及完整补丁后源码树 SHA-256，不修改 Cargo registry。
+
+补丁工具安装在原版本目录下的 =source-<recipe-sha256>/bin/=。
+=forge-tool.json= 记录配方、源码树、工具链及可执行文件 SHA-256；=doctor= 只读
+校验身份和版本，不能用版本号相同的原版替代。正常工具准备在私有目录使用固定工具链
+与 =cargo install --path ... --locked= 编译，验证成功后发布；失败或中断保留原安装。
+原版目录保持原状。首次准备需要编译 CLI，此后其他项目复用验证通过的同一安装。
+
+=dioxus-cli-0.7.10-scoped-watch-v2= 删除客户端和服务端本地 crate 的多余父目录
+计算，在打开目录前按默认规则及 workspace/crate 根的 =.gitignore= 剪枝，跳过符号
+链接，逐个目录进行非递归监听。新建或移入目录使用相同规则重新接入。本地 Rust
+依赖和显式 public assets 仍被包含；本补丁未增加嵌套 =.gitignore= 解释能力。
+上游 0.7.10 的 =[web.watcher].watch_path= 无法约束初始 RSX 扫描，仅改该配置
+不能解决此问题。升级 CLI 时必须重新审查配方；上游修复并通过同一回归后移除补丁。
+未声明 =source-repair= 的工具保持原安装流程。
+
+
+工具补丁 schema 2 使用有序 =files= 数组，每项记录 ={file, replacements}=，
+可在同一校验配方内修复源码与锁文件；schema 1 单文件配方及现有 Wry 修复继续兼容。
+所有替换必须唯一匹配，最终完整源码树验证通过后才发布，不发布部分修复的源码。
+
+v2 删除不再使用的上游 ignore 字段和方法，不屏蔽编译器诊断。CLI 锁文件只更新
+=auth-git2 0.5.8 -> 0.5.9= 及其 registry 校验值；CLI 仍为 0.7.10，安装保留
+=--locked=。安装阶段仅在子进程 PATH 末尾追加候选 bin 目录，消除 Cargo 对临时
+目录的无效配置提示，不改变父 shell 或代理设置。metadata 等待 1 秒后输出 INFO，
+此后每 10 秒更新；原有 203 秒超时仍报错，回归使用虚拟时间检查频率和截止时间。
+
+轻量回归直接编译实际补丁后的监听/缓存方法，使用真实 ignore/notify 库及小型依赖图
+替身，覆盖单 crate、workspace、跨仓库依赖、fullstack、公用资源、忽略目录、符号
+链接及 Rust/CSS、新建/移入目录通知。需事先获取固定归档及离线依赖；有 =strace=
+时额外确认排除目录没有被打开。复现命令见
+[[file:../en/rust_workspace.org][英文工具契约]]。该回归不编译完整 CLI、不启动应用；
+完整 CLI 编译与实际 =dev= 热更新仍是独立验收项。
 
 * 命令与升级
 

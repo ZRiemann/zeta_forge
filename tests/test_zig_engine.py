@@ -73,7 +73,7 @@ class ZigContracts(unittest.TestCase):
 
     def test_run_never_builds_and_hides_arguments(self) -> None:
         req = Request("run", "release", 3, argparse.Namespace(), ("private-argument",))
-        with mock.patch.object(self.engine, "native") as build, mock.patch("zeta_forge.zig_engine.run_program") as run:
+        with mock.patch.object(self.engine, "native") as build, mock.patch("zeta_forge.run_spec.run_program") as run:
             self.engine.execute(req, ("example",))
             build.assert_not_called()
             self.assertEqual(run.call_args.args[0][1:], ["private-argument"])
@@ -81,7 +81,7 @@ class ZigContracts(unittest.TestCase):
 
     def test_dev_builds_before_run_and_preserves_environment(self) -> None:
         calls: list[str] = []
-        with mock.patch.object(self.engine, "native", side_effect=lambda *args: calls.append("build")), mock.patch("zeta_forge.zig_engine.run_program", side_effect=lambda *args, **kwargs: calls.append("run")) as run, mock.patch.dict(os.environ, {"HTTPS_PROXY": "http://test-proxy:1234"}):
+        with mock.patch.object(self.engine, "native", side_effect=lambda *args: calls.append("build")), mock.patch("zeta_forge.run_spec.run_program", side_effect=lambda *args, **kwargs: calls.append("run")) as run, mock.patch.dict(os.environ, {"HTTPS_PROXY": "http://test-proxy:1234"}):
             self.engine.execute(request("dev"), ("example",))
             self.assertEqual(calls, ["build", "run"])
             self.assertEqual(run.call_args.kwargs["env"]["HTTPS_PROXY"], "http://test-proxy:1234")

@@ -3,7 +3,15 @@
 
 [[file:readme.org][返回文档首页]] | [[file:../en/hpx_upgrade.org][English Version]]
 
-* 源码与依赖基线
+* 当前 master 快照：2026-10-30
+
+submodule 从 =6456abf559aeaa05b7a1612d8f8dc59c8d6df511= 更新至
+=b8275fd3c4cd1b17427d02c849d92506379f1c2e=。主要变化包括条件变量唤醒、
+连接缓存、调度饥饿及停机修复。上游 stdexec 默认值仍与 Forge 固定的
+=04de75de5807e73a229acf047c6976575e313359= 一致。该快照尚未重建或
+安装 HPX 与消费者；下方验证结果仅适用于之前的提交。
+
+* 上次源码与依赖基线
 
 HPX 由 =3rd/hpx= submodule 管理。2026-10-22 的升级将上游 =master= 从
 =6e97afa18a1a189d0147397ecb3400917aef2b94= 快进到

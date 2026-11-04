@@ -20,9 +20,45 @@
 =add_run_target(exe_target [ARGS <args>...])= 创建名为 =run_<exe_target>= 的
 CMake 自定义目标，在当前 binary directory 执行已构建的可执行文件。
 
-使用 Forge 公共 Python 框架的项目可以通过自己的 =zbuild.py= 命令暴露这些入口。
-共享的 action-first CLI 维护在 =zeta_forge.run_targets= 中，读取项目
-=CMakeLists.txt=，列出配置的运行入口名称及对应 CMake 命令。
+项目通过 =CMakeRunTarget= 显式开放可运行产品，例如为既有 CMakeEngine 增加参数：
+
+#+begin_src python
+from zeta_forge.cmake_run import CMakeRunTarget
+
+run_targets={"my_app": CMakeRunTarget("native_executable_target")}
+#+end_src
+
+公开产品名可以不同于原生目标名，构建目标映射仍归项目负责，不在注册表重建依赖图。
+显式映射是唯一准入依据，未注册产品失败，不回退源码扫描。默认参数与原生工作目录
+继续以 CMake 的 =add_run_target()= 为唯一来源，原 CMake =run_<target>= 入口保留。
+该入口使用CMake原生工作目录设置和直接参数引用，避免 =cmake -E chdir= 二次解释参数。
+
+helper在配置／生成阶段写入schema-one运行元数据：
+=<build>/.zeta-run/<configuration>/<native-target>/=。
+实际路径使用 =$<TARGET_FILE:...>=，支持原生输出名／目录和配置差异。独立原始UTF-8
+字段文件保留引号、空格、Unicode、换行及已求值生成器表达式，无需Python解释CMake。
+记录含源码／构建／配置／目标身份和配置代次标记；重配置后已禁用目标的残留记录会
+失效。缺失、畸形、移动或旧配置记录明确报错，要求重配置。默认参数最多1024个，
+单字段最多1MiB；默认参数属于构建元数据，运行环境值不写入记录。
+
+根配置须无条件加载共享helper，确保所有运行目标禁用时配置代次仍更新。
+元数据仅由显式CMake配置／生成更新。修改CMake源码或选项后需重新配置；注册模式
+的 =run= 不配置、不编译、不扫描源码。旧helper生成的构建树需要配置一次，例如：
+
+#+begin_src sh
+cmake -S . -B build/Release
+#+end_src
+
+这只更新构建元数据，不编译；Debug使用独立构建树。
+CMake、Rust、Zig统一解析为 =RunSpec=：可执行路径、参数向量、工作目录及环境快照，
+再由 =launch_run()= 复用既有前台进程组和中断处理。Rust／Zig保留显式注册及原生
+产物规则。共享启动器不打印参数／环境；缺产物明确失败，=dev= 仍先显式构建再运行。
+
+源码发现已移除；不传 =run_targets= 表示没有可运行产品，不启用隐式回退。工作区内
+=zpp=、=zgent=、=zeta_agent=、=zeta_vault= 和 =zeta_trader= 均显式注册公开运行产品。
+新增公开原生运行产品须同时增加项目注册和 =add_run_target()= 声明。产品清单不依赖
+已配置构建树；运行或读取原生运行元数据则需要。已禁用目标不能从遗留产物启动：
+先选择并构建所需产品，或用 =dev=，更新对应原生选项和元数据。
 
 使用示例：
 

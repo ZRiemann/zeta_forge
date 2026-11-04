@@ -1,0 +1,109 @@
+{
+  "schema": 2,
+  "package": "dioxus-cli",
+  "version": "0.7.10",
+  "archive_sha256": "1fcb6578719380a2094f115bbbde340c59b65d2bf1987b8ddbbb9834db6716e6",
+  "tree_sha256": "fad71a784d6c29b80151d2f393f66e2cb47d881087727ff0d4dbb01792eaf505",
+  "upstream": "https://github.com/DioxusLabs/dioxus/blob/v0.7.10/packages/cli/src/serve/runner.rs",
+  "files": [
+    {
+      "file": "src/serve/runner.rs",
+      "replacements": [
+        {
+          "before": "            .map(|p| {\n                p.parent()\n                    .expect(\"Local manifest to exist and have a parent\")\n                    .to_path_buf()\n            })\n",
+          "after": ""
+        },
+        {
+          "before": "                .map(|p| {\n                    p.parent()\n                        .expect(\"Server manifest to exist and have a parent\")\n                        .to_path_buf()\n                })\n",
+          "after": ""
+        },
+        {
+          "before": "        krates.dedup();",
+          "after": "        krates.sort();\n        krates.dedup();"
+        },
+        {
+          "before": "        for entry in walkdir::WalkDir::new(crate_dir).into_iter().flatten() {\n            if self\n                .workspace\n                .ignore\n                .matched(entry.path(), entry.file_type().is_dir())\n                .is_ignore()\n            {\n                continue;\n            }\n\n",
+          "after": "        for (path, _) in scoped_watch_entries(&self.workspace, &crate_dir) {\n"
+        },
+        {
+          "before": "            let path = entry.path();",
+          "after": "            let path = path.as_path();"
+        },
+        {
+          "before": "\n            if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {",
+          "after": "\n            if let Err(err) = self.watcher.watch(&path, RecursiveMode::NonRecursive) {"
+        },
+        {
+          "before": "\n                if let Err(err) = self.watcher.watch(&path, RecursiveMode::Recursive) {",
+          "after": "\n                if let Err(err) = self.watcher.watch(&path, RecursiveMode::NonRecursive) {"
+        },
+        {
+          "before": "                    watched_paths.push(public_dir);",
+          "after": "                    watched_crates.push(public_dir);"
+        },
+        {
+          "before": "        // Now, watch all the folders in the crates, but respecting their respective ignore files\n        for krate_root in watched_crates {\n            // Build the ignore builder for this crate, but with our default ignore list as well\n            let ignore = self.workspace.ignore_for_krate(&krate_root);\n\n            for entry in krate_root.read_dir().into_iter().flatten() {\n                let Ok(entry) = entry else {\n                    continue;\n                };\n\n                if ignore\n                    .matched(entry.path(), entry.path().is_dir())\n                    .is_ignore()\n                {\n                    continue;\n                }\n\n                watched_paths.push(entry.path().to_path_buf());\n            }\n        }\n\n",
+          "after": "        // Register each admitted entry non-recursively so ignored subtrees are never traversed\n        // by notify's recursive registration either. Directory watches still catch new files.\n        for krate_root in watched_crates {\n            watched_paths.extend(\n                scoped_watch_entries(&self.workspace, &krate_root)\n                    .filter(|(_, is_dir)| *is_dir)\n                    .map(|(path, _)| path),\n            );\n        }\n\n        watched_paths.sort();\n"
+        },
+        {
+          "before": "                        // If it's a new folder, watch it\n                        // If it's a new cargo.toml (ie dep on the fly),\n                        // todo(jon) support new folders on the fly\n",
+          "after": "                        // Non-recursive registration needs to admit newly created subtrees.\n                        // Reuse the same scoped traversal so ignored/symlinked folders stay out.\n                        if event.paths.iter().any(|path| path.is_dir()) {\n                            self.watch_filesystem();\n                        }\n"
+        },
+        {
+          "before": "if let EventKind::Create(_create_kind) = event.kind {",
+          "after": "if matches!(event.kind, EventKind::Create(_) | EventKind::Modify(ModifyKind::Name(_))) {"
+        },
+        {
+          "before": "fn create_notify_watcher(",
+          "after": "// Forge repair: scope both initial RSX discovery and notify registration to actual\n// crate roots, pruning ignored directories before descent. Never follow symlinks.\nfn scoped_watch_entries(workspace: &Workspace, crate_dir: &Path) -> impl Iterator<Item = (PathBuf, bool)> {\n    let mut builder = ignore::gitignore::GitignoreBuilder::new(crate_dir);\n    for pattern in Workspace::default_ignore_list() {\n        builder.add_line(None, pattern).expect(\"invalid default watch ignore\");\n    }\n    builder.add(workspace.workspace_root().join(\".gitignore\"));\n    builder.add(crate_dir.join(\".gitignore\"));\n    let ignore = builder.build().expect(\"invalid crate watch ignore\");\n    let root = crate_dir.to_path_buf();\n    let mut pending = vec![root.clone()];\n    std::iter::from_fn(move || loop {\n        let path = pending.pop()?;\n        let Ok(metadata) = std::fs::symlink_metadata(&path) else { continue; };\n        if metadata.file_type().is_symlink()\n            || (path != root && ignore.matched(&path, metadata.is_dir()).is_ignore())\n        {\n            continue;\n        }\n        if metadata.is_dir() {\n            if let Ok(entries) = std::fs::read_dir(&path) {\n                pending.extend(entries.flatten().map(|entry| entry.path()));\n            }\n        }\n        return Some((path, metadata.is_dir()));\n    })\n}\n\nfn create_notify_watcher("
+        }
+      ]
+    },
+    {
+      "file": "src/workspace.rs",
+      "replacements": [
+        {
+          "before": "use crate::styles::GLOW_STYLE;\n",
+          "after": ""
+        },
+        {
+          "before": "use ignore::gitignore::Gitignore;\n",
+          "after": ""
+        },
+        {
+          "before": "    pub(crate) ignore: Gitignore,\n",
+          "after": ""
+        },
+        {
+          "before": "        let ignore = Self::workspace_gitignore(krates.workspace_root().as_std_path());\n\n",
+          "after": ""
+        },
+        {
+          "before": "            ignore,\n",
+          "after": ""
+        },
+        {
+          "before": "    /// Create a new gitignore map for this target crate\n    ///\n    /// todo(jon): this is a bit expensive to build, so maybe we should cache it?\n    pub fn workspace_gitignore(workspace_dir: &Path) -> Gitignore {\n        let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(workspace_dir);\n        ignore_builder.add(workspace_dir.join(\".gitignore\"));\n\n        for path in Self::default_ignore_list() {\n            ignore_builder\n                .add_line(None, path)\n                .expect(\"failed to add path to file excluded\");\n        }\n\n        ignore_builder.build().unwrap()\n    }\n\n    pub fn ignore_for_krate(&self, path: &Path) -> ignore::gitignore::Gitignore {\n        let mut ignore_builder = ignore::gitignore::GitignoreBuilder::new(path);\n        for path in Self::default_ignore_list() {\n            ignore_builder\n                .add_line(None, path)\n                .expect(\"failed to add path to file excluded\");\n        }\n        ignore_builder.build().unwrap()\n    }\n\n",
+          "after": ""
+        },
+        {
+          "before": "        let spin_future = async move {\n            tokio::time::sleep(Duration::from_millis(1000)).await;\n            eprintln!(\"{GLOW_STYLE}warning{GLOW_STYLE:#}: Waiting for cargo-metadata...\");\n            tokio::time::sleep(Duration::from_millis(2000)).await;\n            for x in 1..=100 {\n                tokio::time::sleep(Duration::from_millis(2000)).await;\n                eprintln!(\"{GLOW_STYLE}warning{GLOW_STYLE:#}: (Try {x}) Taking a while...\");\n\n                if x % 10 == 0 {\n                    eprintln!(\"{GLOW_STYLE}warning{GLOW_STYLE:#}: maybe check your network connection or build lock?\");\n                }\n            }\n        };",
+          "after": "        let spin_future = metadata_progress();"
+        },
+        {
+          "before": "pub struct Workspace {",
+          "after": "// Report ordinary metadata loading as progress. Returning at the original\n// deadline leaves Workspace::current's existing timeout error path intact.\nasync fn metadata_progress() {\n    let started = tokio::time::Instant::now();\n    let deadline = started + Duration::from_secs(203);\n    tokio::time::sleep(Duration::from_secs(1)).await;\n    loop {\n        tracing::info!(elapsed_seconds = started.elapsed().as_secs(), \"Loading Cargo metadata\");\n        tokio::select! {\n            _ = tokio::time::sleep(Duration::from_secs(10)) => {},\n            _ = tokio::time::sleep_until(deadline) => return,\n        }\n    }\n}\n\npub struct Workspace {"
+        }
+      ]
+    },
+    {
+      "file": "Cargo.lock",
+      "replacements": [
+        {
+          "before": "name = \"auth-git2\"\nversion = \"0.5.8\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"4888bf91cce63baf1670512d0f12b5d636179a4abbad6504812ac8ab124b3efe\"",
+          "after": "name = \"auth-git2\"\nversion = \"0.5.9\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"b27bb6074f62c8d4aa627a7b1de26d5af106868c573632207798dbf64a60b54f\""
+        }
+      ]
+    }
+  ]
+}

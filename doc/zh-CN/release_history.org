@@ -5,6 +5,21 @@
 
 * 发布历史
 
+** v1.15.0 - 2026-11-13T02:51:09Z
+:PROPERTIES:
+:CUSTOM_ID: v1.15.0
+:END:
+
+*** 变更
+- 交付 Phase 2 的 Stage 2.1–2.6，并纳入 Stage 2.7 的集成测试样例和验收步骤。参见 [[file:phase2_native_delivery.org][Phase 2 原生交付]]。
+- 修复 Boost 1.91.0 的 Boost.Cobalt TLS 打包，将 Conan OpenSSL 清单与 CMake 包文件一同发布，供 C++ 和 Rust 使用方消费。
+- 统一 deps、HPX 和 Folly 的 Conan 依赖策略，按指纹复用锁文件与生成产物，并支持显式刷新锁文件。
+- 以确定的顺序规划原生目标操作，发布前校验暂存产物，并提供文件归属记录和事务恢复。Debian 环境准备纳入 HPX MPI parcelport 所需的 Open MPI。
+
+*** 兼容性与验证说明
+- 仅有旧完成标记的暂存目标需要重新构建。若旧文件冲突，请使用新安装前缀。发布 Folly 需要已发布且匹配的 gRPC 暂存产物。
+- 本次提交未额外运行测试或构建。Stage 2.7 和 Phase 2 整体验收仍待完成，包括完整原生构建、发布及使用方验收矩阵。
+
 ** v1.14.0 - 2026-11-04T03:10:39Z
 :PROPERTIES:
 :CUSTOM_ID: v1.14.0

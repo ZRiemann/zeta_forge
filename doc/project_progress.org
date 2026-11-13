@@ -1,0 +1,195 @@
+#+TITLE: Zeta Forge Project Progress and Agent Handoff
+
+[[file:../readme.org][Project]] | [[file:en/phase2_native_delivery.org][Phase 2 design]] | [[file:zh-CN/phase2_native_delivery.org][简体中文设计]]
+
+* Baseline and authority
+
+Snapshot: 2026-11-12, Asia/Shanghai. VERSION =v1.14.0=; HEAD
+=e74ac83e0cc963c6a776dc60bbff0731a9402931=.
+This ledger initially tracks the native delivery refactor only. It does not
+reclassify historical Rust governance or claim a whole-project readiness audit.
+The Phase design owns contracts and acceptance; this file owns live status and
+next actions. Release histories own actual deliveries.
+
+The baseline includes pre-existing uncommitted changes in BUILD.org,
+doc/zh-CN/build.org, builder/deps, builder/hpx, builder/folly,
+common/zeta_forge/cmake_builder.py and config.py, plus untracked builder/boost
+patches and common/zeta_forge/conan_boost.py. Preserve and inspect those changes;
+HEAD alone cannot reproduce the reviewed behavior. The design task adds only
+planning/navigation documents and does not fix the implementation.
+
+* Current work
+
+| Stage / owner | State | Implemented scope and evidence | Missing gate / next action | Delivery |
+|---------------+-------+--------------------------------+----------------------------+----------|
+| [[file:en/phase2_native_delivery.org::#stage-2-1][2.1]] / Forge recipe and deps | accepted-awaiting-versioned-delivery | B2 reproducer, strict Boost package, manifest publication and isolated Release Cobalt TLS consumer passed | Staged for Phase delivery | unset |
+| [[file:en/phase2_native_delivery.org::#stage-2-2][2.2]] / Forge Conan | accepted-awaiting-versioned-delivery | Central policy, three standalone recipe graphs, and isolated Release deps build, publication and Cobalt consumer passed | Staged for Phase delivery; HPX/Folly compilation stays in the Phase matrix | unset |
+| [[file:en/phase2_native_delivery.org::#stage-2-3][2.3]] / Forge Conan | accepted-awaiting-versioned-delivery | Content fingerprints, retained locks, refresh and generator receipts verified | Staged for Phase delivery | unset |
+| [[file:en/phase2_native_delivery.org::#stage-2-4][2.4]] / Forge orchestration | accepted-awaiting-versioned-delivery | Forge previews and executes deterministic native plans; three new plan tests and related contracts passed | Staged for Phase delivery | unset |
+| [[file:en/phase2_native_delivery.org::#stage-2-5][2.5]] / Forge artifacts | accepted-awaiting-versioned-delivery | Fresh candidates, receipt-last promotion, artifact identity and external references verified | Staged for Phase delivery | unset |
+| [[file:en/phase2_native_delivery.org::#stage-2-6][2.6]] / Forge publication | accepted-awaiting-versioned-delivery | Staged-only install, ownership, dependency checks, recovery and prefix serialization verified | Staged for Phase delivery | unset |
+| [[file:en/phase2_native_delivery.org::#stage-2-7][2.7]] / Forge integration | in-progress | Overall commands and consumer fixtures prepared. Compatible workspace tool tests and scoped real probes passed | User runs the full native build and overall acceptance | unset |
+
+Phase 2 overall acceptance remains pending. Stages may proceed after their stated
+implementation/fixture prerequisites while expensive integration checks remain
+explicitly outstanding; that does not mark those Stages accepted.
+
+* Evidence and limitations
+
+- User-provided Linux x86_64/GCC 15/C++20/Release log reported Boost package_info
+  rejecting ={z, crypto, ssl}= after packaging 50 static archives. Reported reference:
+  =boost/1.91.0@zetax/forge#1a7a9b7c30b86eb0bc43affaaeba207c:a712d8c83e9305f063307ee858d25b4b96e419a8#1e37819d4d790afca64f84d5b86ec50c=.
+  This is historical user evidence, not a rerun against a future implementation.
+  The original full log is not retained as a repository artifact.
+- Static review traced zbuild.py, shared CLI, ForgeEngine, native builders,
+  Conan Boost/OpenSSL integration, package patches and focused delivery tests.
+  It confirmed the JSON publication omission and incomplete stamp inputs.
+  Rust/Gradle/Zig internal implementations were not exhaustively reviewed.
+- Design verification is limited to document links, Stage identifiers, translated
+  contract consistency and whitespace checks. No application tests, tool adapter
+  tests, B2 invocation, Conan resolution, package build, compile/link, install,
+  migration or rollback execution is claimed by this design handoff.
+- Documentation check on 2026-11-12 passed: a read-only Python 3 link/anchor checker
+  inspected eight design/navigation documents and 101 local links, verified seven
+  Stage anchors in each language and common contract identifiers, and found no
+  missing destinations or trailing whitespace. Scoped =git diff --check= passed
+  for the five modified tracked navigation/architecture documents; the same
+  Python check covered whitespace in all three new planning documents.
+- No implementation version was assigned at the design handoff.
+
+- Stage 2.1 implementation, 2026-11-12: B2 with GCC 15 and =link=static=
+  staged the three prebuilt archives as well as the owned library when
+  =install-dependencies=on=. The linked fixture consumer returned zero.
+  Running the patched recipe's package filter removed only byte-identical
+  copies, left the originals and unrelated archive in place, and rejected
+  changed contents and a symlink before removing any candidate. Both Boost
+  patches passed application checks against the pinned inputs. Fixture sources
+  and logs are under =build/phase2/b2.k2bC26=.
+- =PYTHONPATH=tests python3 -m unittest test_conan_openssl
+  test_native_delivery.NativeDeliveryTests.test_deps_publish_preserves_other_prefix_files=
+  passed five checks. The OpenSSL test initially reproduced the missing manifest
+  at the publication prefix. The current publisher requires a regular manifest
+  in the deps stage before touching the prefix.
+- Isolated Linux x86_64 / GCC 15 / C++20 / Conan 2.34.0: the first Release build
+  overlapped the cache copy and failed during FMT resolution. After completing
+  the cache copy, =./zbuild.py build deps --profile release -j 4= and
+  =./zbuild.py install deps --profile release= both returned zero. Conan packaged
+  47 archives, including Cobalt TLS, with no =libssl.a=, =libcrypto.a= or =libz.a=
+  in the Boost package. Exact package:
+  =boost/1.91.0@zetax/forge#c4203782d86ead7104854e15f1dd406b:a712d8c83e9305f063307ee858d25b4b96e419a8#44b52169d8c5acb9148b218ce6ae1fec=.
+- The CMake Release consumer configured from the published package files, linked
+  =Boost::cobalt_io_ssl= and ran successfully. Its link command used OpenSSL and
+  zlib archives from their own Conan packages. The manifest reader returned the
+  same OpenSSL package path. CMake exported the OpenSSL component as
+  =OpenSSL::SSL=, corresponding to Conan's =openssl::ssl= dependency key.
+  See =build/phase2/stage-2.1-acceptance-dir= for the isolated root and logs.
+- =PYTHONPATH=tests python3 -m unittest test_build_contract test_native_delivery
+  test_conan_openssl= passed 33 tests, including the repository's small CMake
+  fixtures. Debug Boost, the other native deliverables and the overall Phase
+  integration matrix were outside the Stage 2.1 Release run.
+- Stage 2.4: =PYTHONPATH=tests python3 -m unittest test_build_contract
+  test_native_delivery test_conan_openssl test_native_plan= passed 36 tests.
+  The plan tests cover invalid actions and dependencies, cycle detection,
+  read-only preview, prerequisite order and selected-profile cleanup.
+  =./zbuild.py rebuild folly --profile debug --dry-run= and
+  =./zbuild.py install folly --dry-run= both returned zero with the expected
+  scopes. No additional native build is claimed for this Stage.
+- Stage 2.2: Conan 2.34.0 exported a recipe with a declared
+  =native-policy.json= snapshot. Changing the declared dependency changed the
+  exported recipe revision, and both exact revisions resolved their matching
+  dependency with =conan graph info --no-remote= and no =PYTHONPATH=.
+  The fixture and results are under =policy-snapshot-fixture= in the isolated
+  acceptance directory.
+- Stage 2.5: 45 focused tests passed, including failed-stage invalidation,
+  legacy receipts, stale and tampered files, and safe/escaping symlinks. A small
+  CMake fixture proved =DESTDIR= kept the stable prefix in metadata. Isolated
+  Release =build deps nng= and =install deps nng= passed, and the published
+  Cobalt TLS consumer ran. The deps inventory included the OpenSSL manifest and
+  package configs, excluded the Conan toolchain, and verified Conan and
+  RapidJSON references. See =stage-2.5-*.log= in the Stage 2.2 acceptance
+  directory. gRPC, HPX and Folly remain in the overall matrix.
+- Stage 2.2 command consolidation: deps, HPX and Folly now share Conan command
+  assembly and pass the Forge jobs budget to both Conan contexts. The HPX
+  toolchain block selection and HPX/Folly user toolchains are preserved.
+  Conan 2.34.0 =profile show -s build_type=Debug -c:a tools.build:jobs=2=
+  reported two jobs in both host and build profiles while keeping their separate
+  build types. The 39 focused Python and small CMake fixture checks passed
+  (see =build/phase2/stage-2.2-command-tests.log=). No package rebuild ran for
+  this command change.
+- Stage 2.2 policy migration: offline =conan graph info= resolved the same
+  dependency versions and options as the old recipes for deps (22 nodes), HPX
+  (12) and Folly (19). The graphs from the exported recipes matched their local
+  snapshot graphs without =PYTHONPATH= and with contradictory ambient version
+  variables. The managed Boost exports selected different recipe revisions for
+  the 3.6.2 and 3.6.1 OpenSSL snapshots. Only 3.6.2 was available for a complete
+  offline graph. The new test set passed 40 checks. See =stage-2.2-graphs= in
+  the isolated acceptance directory and =build/phase2/stage-2.2-policy-tests.log=.
+- Stage 2.2 Release rerun on the isolated Linux x86_64 / GCC 15 / C++20 /
+  Conan 2.34.0 setup: =./zbuild.py build deps --profile release -j 4= and
+  =./zbuild.py install deps --profile release= returned zero. The Boost package
+  contained 47 archives and excluded external ssl, crypto and z archives.
+  CMake linked the Cobalt TLS consumer against the OpenSSL package named by the
+  published manifest, and the executable returned zero. Exact Boost package:
+  =boost/1.91.0@zetax/forge#14fedb6f31c5f2d6473c6669bc41f832:a712d8c83e9305f063307ee858d25b4b96e419a8#fff5555a717b10559b095cda871bf9d8=.
+  Logs and generated outputs are under the path in
+  =build/phase2/stage-2.2-acceptance-dir=. HPX and Folly had graph checks only.
+- Stage 2.3 probe: Conan 2.34.0 =profile show --format=json= reported host and
+  build objects. =lock create= produced schema 0.5 and a locked deps graph with
+  the same recipe revisions and package IDs as the unlocked baseline. A
+  version-range fixture retained 1.0 with the original lock after a local 2.0
+  export, while a fresh candidate lock selected 2.0. See
+  =stage-2.3-lock-probe= in the isolated acceptance directory.
+- Stage 2.3 implementation: 44 focused tests passed. They cover relevant policy,
+  cppstd, restored mtimes, missing files, profiles, local toolchain includes,
+  failed refresh rollback and read-only preview. On the isolated Release deps
+  target with Conan remotes disabled, initial resolution, reuse with different
+  jobs/proxy, repair of a deleted generator, rebuild with the retained lock,
+  explicit refresh and publish all returned zero. Conan resolves effective
+  profiles; static local profile and toolchain includes participate in the
+  content fingerprint. See =stage-2.3-verified-*.log= in the Stage 2.2
+  acceptance directory.
+- Stage 2.6: 52 focused tests passed. Failure injection before and during
+  receipt commit restored previous files and ownership. Recovery rolled back
+  an uncommitted journal and retained a committed one. Tests also covered
+  shared ownership, legacy adoption, relocation, profile conflicts, the
+  Folly dependency gate and concurrent writers. In the isolated Release
+  fixture, =install deps nng= and =install nng= passed with an empty =PATH=
+  and both target build directories moved aside. Cobalt TLS and NNG linked
+  against the published prefix and ran. See =stage-2.6-*.log= in the Stage 2.2
+  acceptance directory.
+- Stage 2.7: the CMake Cobalt/NNG probes passed (2/2), and the Rust probe
+  linked the OpenSSL and zlib archives located through the installed deps
+  metadata and reported OpenSSL =0x30600020=. Isolated Debug NNG build,
+  publication and clean passed; the Release archive digest and stage
+  receipt remained intact. See =stage-2.7-*.log= in the Stage 2.2 directory.
+- The first Stage 2.7 full tool suite exposed a shared dataclass constructor
+  regression; making the new Forge argument fields keyword-only restored
+  the sibling subclass signatures. The current zgent checkout (=51a5035=)
+  imports the retired =zeta_forge.run_targets= API. The same four import
+  errors were reproduced against Forge =e74ac83=. With the compatible
+  zgent =2ee9bca= source archived in an isolated workspace,
+  =./zbuild.py test build-tools= passed all 147 tests. The live sibling
+  checkouts were preserved. See =build/phase2/stage-2.7-compatible-dir=.
+
+* Next action and continuation
+
+Run the [[file:zh-CN/phase2_native_delivery.org::*整体验收命令][overall acceptance commands]]
+on the staged Phase 2 changes. The user owns the full Release build, gRPC/HPX/Folly
+consumer runs and overall acceptance. The Phase remains pending until that
+evidence is recorded. The user requested a single local commit after overall
+acceptance. Keep all Phase work staged and update =VERSION= and both release
+histories with that commit. Git identity is needed at that point.
+
+Before broader work, assign one integration owner for builder/project.py and
+config.py. Follow Stage prerequisites, preserve other agents' edits, and update
+this ledger with exact commands/results and missing gates. This handoff itself
+does not start agents, authorize commits, mutate consumer repositories or publish.
+
+* Design decisions still requiring bounded implementation evidence
+
+- Overall acceptance still needs real gRPC, HPX and Folly builds, their
+  publication and the full consumer matrix. Focused dependency checks and
+  published deps/NNG evidence do not complete those gates.
+
+These are scoped investigation tasks with specified decision criteria, not
+permission to change the agreed public install or cleanup contracts.

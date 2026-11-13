@@ -3,10 +3,21 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from zeta_forge.cmake_builder import CMakeProjectBuilder
+from zeta_forge.conan_session import ForgeConanProjectBuilder
+
+HPX_TOOLCHAIN_BLOCKS = (
+    "user_toolchain", "generic_system", "compilers", "android_system", "apple_system",
+    "fpic", "arch_flags", "linker_scripts", "rpath_link_flags", "libcxx", "vs_runtime",
+    "vs_debugger_environment", "parallel", "extra_flags", "cmake_flags_init",
+    "extra_variables", "try_compile", "find_paths", "pkg_config", "rpath", "shared",
+    "output_dirs", "variables", "preprocessor",
+)
 
 
-class HpxBuilder(CMakeProjectBuilder):
+class HpxBuilder(ForgeConanProjectBuilder):
+    native_conan_target = "hpx"
+    enabled_toolchain_blocks = HPX_TOOLCHAIN_BLOCKS
+
     @property
     def project_name(self) -> str:
         return "HPX"
@@ -36,36 +47,9 @@ class HpxBuilder(CMakeProjectBuilder):
             ) from exc
         return result.stdout.strip()
 
-    @property
-    def user_toolchain(self) -> Path:
-        return self.script_dir / "cmake" / "conan_user_toolchain.cmake"
-
-    def conan_input_files(self) -> list[Path]:
-        return [self.script_dir / "conanfile.py", self.user_toolchain]
-
     def configure_dependencies(self) -> list[Path]:
         compat_dir = self.script_dir / "cmake" / "conan_compat" / "packages"
         return [*super().configure_dependencies(), *sorted(compat_dir.glob("*.cmake"))]
-
-    def conan_install_command(self) -> list[object]:
-        enabled_blocks = 'tools.cmake.cmaketoolchain:enabled_blocks=["user_toolchain", "generic_system", "compilers", "android_system", "apple_system", "fpic", "arch_flags", "linker_scripts", "rpath_link_flags", "libcxx", "vs_runtime", "vs_debugger_environment", "parallel", "extra_flags", "cmake_flags_init", "extra_variables", "try_compile", "find_paths", "pkg_config", "rpath", "shared", "output_dirs", "variables", "preprocessor"]'
-        return [
-            "conan",
-            "install",
-            self.script_dir / "conanfile.py",
-            f"--output-folder={self.conan_root}",
-            "--build=missing",
-            "-s",
-            f"build_type={self.args.build_type}",
-            "-s",
-            f"compiler.cppstd={self.repo_config.cxx_standard}",
-            "-c",
-            "tools.cmake.cmaketoolchain:generator=Ninja",
-            "-c",
-            f'tools.cmake.cmaketoolchain:user_toolchain=["{self.user_toolchain}"]',
-            "-c",
-            enabled_blocks,
-        ]
 
     def configure_command(self) -> list[object]:
         source_commit = self.source_git_commit

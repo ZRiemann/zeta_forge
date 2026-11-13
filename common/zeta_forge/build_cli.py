@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Callable, Mapping, Protocol, Sequence
 
-
 ACTIONS = (
     "list",
     "doctor",
@@ -74,6 +73,7 @@ class Project:
     action_defaults: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     extra_actions: tuple[str, ...] = ()
     add_options: Callable[[argparse.ArgumentParser], None] | None = None
+    validate_request: Callable[[Request, tuple[Product, ...]], None] | None = None
 
 
 def log(level: str, message: str) -> None:
@@ -167,6 +167,8 @@ def cli(project: Project, argv: Sequence[str] | None = None) -> int:
         request = Request(
             options.command, options.profile, options.jobs, options, program_arguments
         )
+        if project.validate_request is not None:
+            project.validate_request(request, selected)
         grouped: dict[str, list[str]] = {}
         for product in selected:
             grouped.setdefault(product.engine, []).append(product.name)

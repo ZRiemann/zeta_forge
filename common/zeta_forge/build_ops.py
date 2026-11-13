@@ -13,6 +13,12 @@ from typing import Sequence
 from .build_cli import log
 
 
+def destdir_path(destdir: Path, prefix: Path) -> Path:
+    if not prefix.is_absolute():
+        raise RuntimeError(f"CMake staging prefix must be absolute: {prefix}")
+    return destdir / prefix.relative_to(prefix.anchor)
+
+
 def validate_generated_path(path: Path, root: Path) -> None:
     """Reject escaping paths and links, including intermediate link components."""
     resolved = path.resolve()

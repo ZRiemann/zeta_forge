@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 from pathlib import Path
 
+from zeta_forge.build_ops import destdir_path
 from zeta_forge.cmake_builder import CMakeProjectBuilder
 
 
@@ -106,6 +107,11 @@ class GrpcBuilder(CMakeProjectBuilder):
                 )
             shutil.copy2(candidates[0], installed)
 
-    def install(self, components=(), *, prefix: Path | None = None) -> None:
-        super().install(components, prefix=prefix)
-        self.install_boringssl_fallback(prefix or self.repo_config.install_prefix)
+    def install(
+        self, components=(), *, prefix: Path | None = None, destdir: Path | None = None
+    ) -> None:
+        super().install(components, prefix=prefix, destdir=destdir)
+        install_prefix = prefix or self.repo_config.install_prefix
+        self.install_boringssl_fallback(
+            install_prefix if destdir is None else destdir_path(destdir, install_prefix)
+        )

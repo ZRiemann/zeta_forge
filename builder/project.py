@@ -2,19 +2,23 @@
 
 from __future__ import annotations
 
-import json
+import argparse
 import sys
+import tempfile
+from contextlib import ExitStack, contextmanager
 from dataclasses import replace
 from pathlib import Path
-from typing import Mapping
+from typing import Iterator, Mapping
 
+from zeta_forge import native_artifacts, native_publish
 from zeta_forge.build_cli import Product, Project, Request, log
 from zeta_forge.build_ops import (
-    relocate_installed_metadata,
+    destdir_path,
     remove_generated,
     validate_generated_path,
 )
 from zeta_forge.cmake_builder import CommonBuildArgs
+from zeta_forge.conan_state import writer_lock
 from zeta_forge.config import load_repo_config
 from zeta_forge.process import require_command, run_command
 from zeta_forge.rust_audit import RustDependencyAudit
@@ -24,9 +28,18 @@ from builder.deps.project import DepsBuilder
 from builder.folly.project import FollyBuilder
 from builder.grpc.project import GrpcBuilder
 from builder.hpx.project import HpxBuilder
+from builder.native_plan import (
+    BUILD_ACTIONS,
+    NATIVE_ACTIONS,
+    TARGETS,
+    NativePlan,
+    plan_native,
+    staging_directory,
+)
 from builder.nng.project import NngBuilder
 
-ORDER = ("deps", "grpc", "hpx", "folly", "nng")
+ORDER = tuple(target.name for target in TARGETS)
+PREREQUISITES = {target.name: target.prerequisites for target in TARGETS}
 BUILDERS = {
     "deps": DepsBuilder,
     "grpc": GrpcBuilder,
@@ -41,39 +54,75 @@ class ForgeEngine:
         self.root = script_path.resolve().parent
         self.config = load_repo_config(script_path)
 
-    def selected(self, names: tuple[str, ...], action: str) -> tuple[str, ...]:
-        selected = set(names)
-        if "folly" in names and action in {"build", "rebuild", "check", "doctor"}:
-            selected.add("grpc")
-        return tuple(name for name in ORDER if name in selected)
+    def plan(self, request: Request, names: tuple[str, ...]) -> NativePlan:
+        return plan_native(request, names, self.root, self.config.install_prefix)
 
     def staging(self, request: Request, name: str) -> Path:
-        return self.root / "build" / "staging" / request.profile / name
+        return staging_directory(self.root, request.profile, name)
 
     def build_stamp(self, request: Request, name: str) -> Path:
-        return self.staging(request, name) / ".zeta-build-complete.json"
+        return self.staging(request, name) / native_artifacts.RECEIPT_NAME
 
-    def require_built(self, request: Request, name: str) -> None:
-        stamp = self.build_stamp(request, name)
-        expected = {"target": name, "profile": request.profile}
+    def require_built(self, request: Request, name: str) -> dict:
         try:
-            actual = json.loads(stamp.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            actual = None
-        if actual != expected or not self.builder(request, name).build_dir.is_dir():
-            raise RuntimeError(
-                f"{name} has no successful {request.profile} build; "
-                f"run ./zbuild.py build {name} --profile {request.profile} first"
+            return native_artifacts.require_receipt(
+                self.staging(request, name), name, request.profile
             )
+        except (OSError, RuntimeError) as error:
+            raise RuntimeError(
+                f"{name} has no valid {request.profile} build; "
+                f"run ./zbuild.py build {name} --profile {request.profile} first. {error}"
+            ) from error
 
-    def mark_built(self, request: Request, name: str) -> None:
-        stamp = self.build_stamp(request, name)
-        stamp.parent.mkdir(parents=True, exist_ok=True)
-        temporary = stamp.with_suffix(".tmp")
-        temporary.write_text(
-            json.dumps({"target": name, "profile": request.profile}) + "\n", encoding="utf-8"
-        )
-        temporary.replace(stamp)
+    @contextmanager
+    def stage_locks(self, profile: str, names: tuple[str, ...]) -> Iterator[None]:
+        with ExitStack() as locks:
+            for name in sorted(set(names)):
+                path = self.root / "build" / "native-locks" / profile / f"{name}.lock"
+                validate_generated_path(path, self.root)
+                locks.enter_context(writer_lock(path))
+            yield
+
+    def stage_build(self, request: Request, plan: NativePlan, name: str) -> None:
+        stage = plan.staging(name)
+        validate_generated_path(stage, plan.root)
+        self.build_stamp(request, name).unlink(missing_ok=True)
+        builder = self.builder(request, name)
+        stage.parent.mkdir(parents=True, exist_ok=True)
+        dependencies = {
+            prerequisite: self.require_built(request, prerequisite)["artifact_id"]
+            for prerequisite in PREREQUISITES[name]
+        }
+        with tempfile.TemporaryDirectory(dir=stage.parent, prefix=f".{name}-") as directory:
+            work = Path(directory)
+            source = self.root
+            rapidjson = None
+            if name == "deps":
+                candidate = work / "candidate"
+                builder.run_conan()
+                builder.install(prefix=candidate)
+                rapidjson = self.config.source_dir("ZETA_RAPIDJSON_SRC_DIR")
+            else:
+                destination = work / "destdir"
+                candidate = destdir_path(destination, stage)
+                builder.build(jobs=plan.jobs)
+                builder.install(prefix=stage, destdir=destination)
+                source = builder.source_dir
+            conan = native_artifacts.conan_identity(
+                self.config.forge_root, name, plan.profile, builder.conan_root
+            ) if name in plan.conan_scope else None
+            references = native_artifacts.external_references(
+                candidate, name, plan.native_profile, conan, rapidjson
+            )
+            sources = [native_artifacts.source_identity(self.root, self.config.env)]
+            if source != self.root:
+                sources.append(native_artifacts.source_identity(source, self.config.env))
+            receipt = native_artifacts.make_receipt(
+                candidate, name, plan.profile,
+                sources=sources, conan=conan, references=references, dependencies=dependencies,
+            )
+            native_artifacts.promote(candidate, stage, work / "old-stage", receipt)
+            log("I", f"staged target={name} profile={plan.profile} build={receipt['build_id'][:12]}")
 
     def builder(self, request: Request, name: str):
         prefix = self.staging(request, name)
@@ -84,81 +133,59 @@ class ForgeEngine:
         return BUILDERS[name](
             script_path=self.root / "builder" / name / "project.py",
             repo_config=config,
-            args=CommonBuildArgs(request.cmake_profile),
+            args=CommonBuildArgs(
+                request.cmake_profile,
+                jobs=request.jobs,
+                refresh_conan_lock=getattr(request.options, "refresh_conan_lock", False),
+            ),
         )
 
     def validate_request(self, request: Request, names: tuple[str, ...]) -> None:
-        pass
+        self.plan(request, names)
 
     def describe(self, request: Request, names: tuple[str, ...]) -> Mapping[str, object]:
-        order = self.selected(names, request.action)
-        return dict(
-            order=order,
-            native_profile=request.cmake_profile,
-            build_dirs=[str(self.builder(request, name).build_dir) for name in order],
-            staging={name: str(self.staging(request, name)) for name in order},
-            install_prefix=str(self.config.install_prefix) if request.action == "install" else None,
-            clean_scope=list(names) if request.action in {"clean", "rebuild"} else [],
+        plan = self.plan(request, names)
+        description = dict(
+            order=plan.order,
+            native_profile=plan.native_profile,
+            build_dirs=[str(plan.build_directory(name)) for name in plan.order],
+            staging={name: str(plan.staging(name)) for name in plan.order},
+            install_prefix=str(plan.install_prefix) if plan.install_prefix is not None else None,
+            clean_scope=list(plan.clean_scope),
         )
+        if getattr(request.options, "refresh_conan_lock", False):
+            description["refresh_conan_lock"] = plan.conan_scope
+        return description
 
     def preflight(self, request: Request, names: tuple[str, ...]) -> None:
-        if request.action in {"clean", "rebuild"}:
-            for name in names:
-                validate_generated_path(self.builder(request, name).build_dir, self.root)
-                validate_generated_path(self.staging(request, name), self.root)
-        if request.action == "clean":
-            return
-        if request.action == "install":
-            if any(name != "deps" for name in names):
-                require_command("cmake")
-            for name in names:
-                self.require_built(request, name)
+        plan = self.plan(request, names)
+        for name in plan.clean_scope:
+            validate_generated_path(plan.build_directory(name), plan.root)
+            validate_generated_path(plan.staging(name), plan.root)
+        if plan.action in {"clean", "install"}:
             return
         require_command("cmake")
         require_command("ninja")
-        for name in self.selected(names, request.action):
+        for name in plan.order:
             self.builder(request, name).validate()
-            if name in {"deps", "hpx", "folly"}:
+            if name in plan.conan_scope:
                 require_command("conan")
 
     def execute(self, request: Request, names: tuple[str, ...]) -> None:
-        if request.action == "doctor":
-            return
-        if request.action == "install":
-            for name in self.selected(names, request.action):
-                builder = self.builder(request, name)
-                log(
-                    "I",
-                    f"publish target={name} profile={request.profile} "
-                    f"prefix={self.config.install_prefix}",
+        plan = self.plan(request, names)
+        if plan.install_prefix is not None:
+            with self.stage_locks(plan.profile, plan.publish_scope):
+                native_publish.publish(
+                    plan.install_prefix, plan.root,
+                    tuple((name, plan.profile, plan.staging(name)) for name in plan.publish_scope),
                 )
-                if name == "deps":
-                    builder.publish(self.config.install_prefix)
-                else:
-                    builder.install(prefix=self.config.install_prefix)
-                    relocate_installed_metadata(
-                        builder.build_dir / "install_manifest.txt",
-                        self.staging(request, name),
-                        self.config.install_prefix,
-                    )
-                log("I", f"published target={name}")
             return
-        if request.action in {"clean", "rebuild"}:
-            for name in names:
-                remove_generated(self.builder(request, name).build_dir, self.root)
-                remove_generated(self.staging(request, name), self.root)
-            if request.action == "clean":
-                return
-        for name in self.selected(names, request.action):
-            self.build_stamp(request, name).unlink(missing_ok=True)
-            builder = self.builder(request, name)
-            if name == "deps":
-                builder.run_conan()
-                builder.install()
-            else:
-                builder.build(jobs=request.jobs)
-                builder.install(prefix=self.staging(request, name))
-            self.mark_built(request, name)
+        with self.stage_locks(plan.profile, (*plan.clean_scope, *plan.build_scope)):
+            for name in plan.clean_scope:
+                remove_generated(plan.build_directory(name), plan.root)
+                remove_generated(plan.staging(name), plan.root)
+            for name in plan.build_scope:
+                self.stage_build(request, plan, name)
 
 
 class ToolTests:
@@ -178,14 +205,30 @@ class ToolTests:
         run_command([sys.executable, "-m", "unittest", "discover", "-s", "tests"], cwd=self.root)
 
 
+def add_native_options(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--refresh-conan-lock", action="store_true",
+        help="resolve a fresh Conan lock for selected build, check or rebuild targets",
+    )
+
+
+def validate_options(request: Request, selected: tuple[Product, ...]) -> None:
+    if not request.options.refresh_conan_lock:
+        return
+    conan_targets = {target.name for target in TARGETS if target.uses_conan}
+    if request.action not in BUILD_ACTIONS or not any(
+        product.name in conan_targets for product in selected
+    ):
+        raise ValueError("--refresh-conan-lock requires build, check or rebuild with a Conan target")
+
+
 def project(script_path: Path) -> Project:
-    actions = ("doctor", "check", "build", "rebuild", "clean", "install")
     products = tuple(
         Product(
             name,
             "native",
             "Shared dependency environment" if name == "deps" else "Native library",
-            actions,
+            NATIVE_ACTIONS,
         )
         for name in ORDER
     )
@@ -200,4 +243,6 @@ def project(script_path: Path) -> Project:
          "rust-updates": RustUpdates(load_repo_config(script_path))},
         ORDER,
         action_defaults={"test": ("build-tools",), "install": ()},
+        add_options=add_native_options,
+        validate_request=validate_options,
     )

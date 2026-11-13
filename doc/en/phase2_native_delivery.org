@@ -1,0 +1,427 @@
+#+TITLE: Phase 2 - Native Dependency Build and Delivery
+
+[[file:readme.org][Documentation]] | [[file:../zh-CN/phase2_native_delivery.org][简体中文]] | [[file:../project_progress.org][Progress and handoff]]
+
+* Purpose and authority
+
+Design date: 2026-11-12. This is an implementation proposal, not a description of
+completed functionality. The user approved preparing the unified design; later
+agents implement bounded Stages. Live status and actual delivery versions belong
+to the [[file:../project_progress.org][ledger]]. No implementation acceptance is implied by this document.
+
+Phase 2 owns Forge's native dependency resolution, build planning, staging and
+publication chain. Existing Phase 1 Rust governance identifiers remain unchanged.
+The current [[file:../../BUILD.org][build contract]] takes precedence over generic skill defaults,
+especially its publish-only =install= behavior.
+
+Goals: correct package ownership, complete delivery, explainable cache reuse,
+repeatable dependency resolution and recoverable publication. Preserve the thin
+=zbuild.py=, existing shared Engine protocol and native CMake/Cargo graphs.
+
+Out of scope: application changes, Rust/Gradle/Zig engine rewrites, upstream
+source edits, global cache cleanup, automatic dependency upgrades, remote binary
+cache deployment, arbitrary plugin discovery and portable SDK packaging. Existing
+Conan configs intentionally reference the local Conan cache; RapidJSON may refer
+to its source checkout. Record and validate these external references rather
+than claiming that the installation is self-contained.
+
+* Evidence and failure boundaries
+
+The baseline is the dirty worktree recorded in the ledger, not HEAD alone.
+
+| Finding | Evidence in this checkout | Design response |
+|---------+---------------------------+-----------------|
+| Boost package contains ssl/crypto/z | User's package_info failure; external B2 file targets in [[file:../../builder/boost/conan-center-cobalt-openssl.patch][recipe patch]] | Preserve strict Boost validation; separate linked dependencies from owned package files |
+| OpenSSL manifest is omitted on publication | [[file:../../builder/deps/project.py][DepsBuilder]] writes JSON but publishes only *.cmake; [[file:../../common/zeta_forge/conan_openssl.py][reader]] requires the installed JSON | One complete artifact inventory, including metadata |
+| Conan invalidation misses effective inputs | [[file:../../common/zeta_forge/cmake_builder.py][mtime checks]], [[file:../../common/zeta_forge/conan_boost.py][two-version stamp]], Folly's FMT environment input | Canonical inputs and content fingerprints |
+| Completion receipt proves little about artifacts | [[file:../../builder/project.py][ForgeEngine]] records target/profile and checks a build directory | Versioned receipt with inventory and provenance |
+| Publication paths have different guarantees | deps copies staging; other targets rerun CMake install; metadata repair follows writes | Validated staged delivery and one publisher |
+| Tests miss the full manifest path | [[file:../../tests/test_conan_openssl.py][OpenSSL tests]] and [[file:../../tests/test_native_delivery.py][publication tests]] validate separate fragments | Stage-publish-consume contract tests |
+
+The Boost failure is an actual reported packaging failure. Other lifecycle and
+recovery gaps are static findings or risks; no new full build was run for this
+design. A successful recipe export or synthetic B2 dry run does not validate B2
+installation or a usable CMake imported target.
+
+* Preserved public behavior
+
+- Actions, release/debug mappings, target defaults, exit codes 0/1/2/130 and
+  =ZETA_BUILD_DONE= remain compatible. Existing summary counts retain their
+  engine-step meaning; new per-target diagnostics must not silently redefine them.
+- Help/list/metadata/dry-run do not export recipes, create locks, write build
+  state or require installed tools. Doctor is read-only and reports absent state.
+- Build/check retain the existing Forge native behavior, including local staging.
+  Install requires explicit targets, does not build or resolve Conan, and publishes
+  only those targets. A missing installed prerequisite produces a useful error.
+- Rebuild cleans only selected target/profile build and staging directories;
+  required prerequisites may be built incrementally. Clean/rebuild preserve
+  installed outputs, other profiles, shared Conan cache and dependency lock state.
+- Preserve =ZETA_*= configuration and proxy inheritance. Do not serialize the
+  entire environment, credentials or proxy secrets into manifests or logs.
+- Cobalt TLS remains enabled for the managed Boost configuration. Public imported
+  targets, notably =Boost::cobalt_io_ssl= and =openssl::ssl= dependency metadata,
+  remain valid. Preserve the installed OpenSSL manifest schema 1 and its Release
+  consumer contract in this Phase; internal receipt schemas are separate.
+
+* Architecture and ownership
+
+#+begin_example
+zbuild.py -> build_cli -> ForgeEngine / immutable NativePlan
+                            |-- ConanSession -> Conan + managed recipe preparation
+                            |-- existing native Builders -> CMake/Ninja
+                            |-- ArtifactSet validation -> Publisher
+Policy and receipt values do not import ForgeEngine or concrete Builders.
+Conan owns package graphs; CMake owns its build graph.
+#+end_example
+
+The following are proposed modules and narrow seams, not mandatory class counts.
+Do not add a general service container or expose these as stable external APIs yet.
+
+| Owner / proposed placement | Contract and owned state |
+|----------------------------+--------------------------|
+| builder/project.py plus builder/native_plan.py | TargetSpec registry and pure plan creation; selected targets, prerequisite order, clean scope, publication scope |
+| common/zeta_forge/conan_policy.py | One native version/options baseline; typed resolution of supported ZETA overrides; explicit per-consumer differences |
+| common/zeta_forge/conan_session.py | ConanInputs -> ResolvedConan; command construction, profile identity, input fingerprint, locks and resolution receipts |
+| common/zeta_forge/conan_boost.py plus builder/boost/ | Managed recipe preparation returning exact recipe reference and patch identity; package-specific validation; no CMake superclass |
+| existing builder/<target>/project.py | Target-specific configure arguments, native build and candidate staging adapter |
+| common/zeta_forge/native_artifacts.py | ArtifactSet/BuildReceipt serialization, hashing, external references and relocation validation |
+| common/zeta_forge/native_publish.py | Prefix ownership, conflict checks, publication journal, rollback and installed receipts |
+| existing build_ops.py/process.py | Safe filesystem/process primitives; no Boost or dependency policy |
+
+Keep =config.py= as environment/path resolution. Move native dependency defaults
+to one policy owner; any temporary import alias delegates to that owner. Recipes
+must consume the same resolved policy without depending on an ambient Python path.
+Stage 2.2 uses an explicit exported policy snapshot. Forge pairs its native
+consumer recipe with =native-policy.json= and diagnoses a missing snapshot.
+The managed Boost export binds its OpenSSL version in =forge-openssl-version.txt=.
+Any policy input that changes exported recipe behavior must participate in recipe
+identity or explicit Conan settings/options; a hidden environment change alone
+must not select incompatible behavior under the same identity.
+
+TargetSpec declares only deliverable prerequisites, initially folly -> grpc.
+It does not reconstruct CMake or Conan dependency edges. Pure planning produces
+the same value for describe/preflight/execute; a request-local cached plan is
+allowed. Preserve the shared Engine protocol for external projects.
+
+* Data and cache contracts
+
+| Value / schema | Required fields and invariants |
+|----------------+--------------------------------|
+| NativePlan (internal) | action, profile, selected targets, ordered prerequisites, build/clean/publish scopes, paths, jobs; immutable and deterministic |
+| ConanInputs (internal) | schema, target, host/build profile identities and effective settings/options/conf, resolved version policy, recipe/export-input hashes, toolchain inputs, Conan/compiler identity, generator identity |
+| ResolvedConan (receipt schema 1) | input fingerprint, exact recipe refs/revisions, resolved graph identity, package IDs and available package revisions, lock digest, generator inventory, tool identities |
+| ArtifactSet (internal) | owner target/profile, input and dependency identities, relative entries, type/mode/digest or symlink target, external references and allowed relocation rules |
+| BuildReceipt (schema 1) | ArtifactSet plus successful build provenance, recipe/lock identities, source revision and dirty-state indication, completion identifier; written last |
+| InstalledReceipt (schema 1) | source receipt digest, prefix, final relocated file digests, dependency identities, owner set, publication transaction ID |
+
+Unknown receipt schemas fail with a rebuild/republication hint. Paths must stay
+inside their owning roots; reject traversal and escaping links. Explicitly
+support safe relative symlinks used by native installs; do not blindly dereference
+them. JSON serialization is canonical; timestamps are informational, not cache keys.
+
+Hash dependency inputs by content, including added/deleted files and the declared
+closure of profile includes, user toolchains and configuration files. Changed
+C++ standard, FMT version, compiler, profile contents or patch bytes must invalidate
+the appropriate Conan generation. Restored mtimes must not hide changes. Source
+revision/dirty state belongs to build provenance, not automatic Conan invalidation
+unless the recipe actually consumes that source. Native incremental compilation
+continues to be owned by CMake/Ninja.
+
+Jobs and transport credentials do not change artifact identity. Propagate the
+effective jobs budget to both Conan package builds and CMake, while preserving
+proxy configuration. Changes to the final publication prefix do not rebuild
+dependencies; changes to generator/build locations may require regeneration.
+
+Use =build/conan-state/<target>/<profile>/<input-fingerprint>/= for local lock and
+resolution state outside the target clean scope. Keep generations immutable and
+write a successful resolution pointer last. Missing/corrupt generated files force
+regeneration against the retained lock; they do not imply permission to upgrade.
+Conan's own source/package cache remains Conan-owned. Identical package identities
+reuse it; different recipe revisions/options may legitimately require new work.
+Do not copy cache directories to manufacture reuse across identities.
+
+For a new input fingerprint, a mutating build/check/rebuild may resolve and persist
+a lock before compilation. Subsequent runs reuse that lock with no implicit update.
+Add a Forge-only =--refresh-conan-lock= option for those three actions; reject it
+elsewhere, including install/doctor. Preview reports the intention without I/O.
+Refresh resolves to a candidate, reports graph changes, and replaces the active
+lock only after successful resolution. Rebuild alone does not refresh locks.
+This option is the only proposed public CLI addition in this Phase.
+
+Retain a sanitized exportable resolution bundle containing Conan lock, effective
+profiles/settings/options and recipe identities. Lockfiles alone are not assumed
+to encode every binary input or guarantee that a remote retains all revisions.
+Local locks provide repeatability; an approved baseline bundle is needed for
+cross-host reproduction. Stage 2.3 must verify actual installed Conan 2 JSON/lock
+semantics through fixtures and supported CLI behavior before claiming coverage.
+
+Do not force deps/hpx/folly into one graph or package ID. Folly currently disables
+Boost zlib while deps does not. Preserve such differences as named overrides with
+reasons, compare overlapping ABI-relevant dependencies, and reject incompatible
+publication combinations. Derive constraints from the actual exported link
+interface rather than equating every optional build difference with ABI failure.
+
+* Package, staging and publication lifecycle
+
+** Boost ownership repair
+
+Keep the pinned upstream recipe plus reviewed Forge patches. First reproduce the
+install dependency-copy behavior with a minimal B2 fixture. Prefer preventing
+external prebuilt targets from being installed if that preserves B2 linking and
+usage requirements. Otherwise use a narrow recipe package-stage filter based on
+the actual dependency inventory and matching content: remove only proven copies
+of external ssl/crypto/z archives. An unexpected file or differing contents is an
+error. Never weaken =non_used=, disable Cobalt or delete arbitrary non-Boost files.
+Record the selected mechanism and its tests before accepting Stage 2.1.
+
+** Staging and receipts
+
+Build -> candidate stage -> validate -> promote stage -> write receipt last.
+Target adapters produce a fresh candidate directory rather than overlaying the
+previous stage. Adapters must prove install-prefix/DESTDIR behavior using a small
+fixture; do not assume every upstream installation handles relocation identically.
+Keep the public =build/staging/<profile>/<target>/= location. Retained older
+artifacts cannot be mistaken for the result of a failed current build attempt.
+After interruption during promotion, the absence of a matching receipt prevents
+publication; a later build can reconstruct the target stage.
+
+The deps inventory includes every intended generated CMake config, compatibility
+config and =openssl-native.json=. Exclude scripts/secrets by declared role, not by
+publishing one filename extension. The OpenSSL JSON must reference the same
+validated Conan package as the CMake dependency graph.
+
+Install validates the stored artifact identity and current bytes, not whether
+the source tree has since changed. It publishes the explicitly recorded successful
+snapshot; source changes alone do not trigger a build. Missing/tampered artifacts,
+missing cache-backed external references or a different requested profile fail.
+Log the selected build identity so installing an earlier build is unambiguous.
+
+** Publication and ownership
+
+Install reads staged artifacts; it does not rerun CMake install from the mutable
+build directory. Preflight all selected inventories and destination conflicts
+before any public file is changed. Candidate publication files and backups live
+on the destination filesystem under a Forge-owned transaction directory.
+
+Use a prefix-wide writer lock for Forge publishers and target/profile locks for
+build/stage mutations. Acquire target locks in deterministic order, then the
+prefix lock; never reverse that order. Install holds its source-stage locks until
+the required artifacts have been safely snapshotted. OS-released locks and a
+journal distinguish a dead process from an active writer. Do not modify lock state
+from doctor or metadata.
+
+Maintain prefix ownership receipts under =<prefix>/share/zeta_forge/native/=.
+Files with identical content may have several explicit owners; removing one owner
+does not remove another's file. Conflicting content owned by an unselected target
+fails before mutation. Different profiles sharing the same destination paths are
+conflicting owners unless the files are identical; do not silently overwrite one.
+Delete an obsolete file only when its last selected owner is removed and its
+current digest still matches the prior receipt. Preserve unrelated files.
+
+For legacy installs without receipts, adopt byte-identical files explicitly.
+Different existing files remain untouched and cause a conflict with path/digest
+diagnostics. Do not auto-adopt or overwrite an entire existing =~/.local= prefix.
+Recommend a fresh prefix for first migration acceptance; separate user approval
+is required to remove conflicting legacy files. Old target/profile-only build
+stamps require one ordinary build to produce the new receipt, not a cache purge.
+
+Prepare relocated .cmake/.pc metadata before publication. Relocation maps include
+the target and declared prerequisites. An unselected prerequisite must already be
+published with compatible identity; otherwise fail and name the explicit install
+prerequisite. Reject residual references to Forge build/staging directories.
+Allow declared Conan cache/source references; do not blindly rewrite binary data
+or all occurrences of an arbitrary path. Validate representative imported targets.
+
+The selected install request is one journaled transaction. Back up replaced/removed
+owned files, use atomic per-file replacement, and commit installed receipts last.
+On an ordinary failure, restore prior files/receipts. On the next mutating install,
+recover an interrupted transaction under the prefix lock before proceeding.
+If recovery cannot complete, fail with the retained journal location; do not delete
+evidence or claim success. Flush journal/backups with an explicit durability order
+and test crash points. This provides recoverability, not atomic visibility of the
+whole prefix to concurrent external readers. Deployment during live readers and
+non-Forge writers requires separate operational coordination.
+
+* Migration and agent tasks
+
+All Stages are owned by zeta_forge. The ledger owns current status, evidence and
+actual delivery version. Numbering alone does not create dependencies.
+
+** Stage 2.1 - Repair package and manifest boundaries
+:PROPERTIES:
+:CUSTOM_ID: stage-2-1
+:END:
+- Prerequisite: re-read the dirty worktree and user failure; no prior Stage.
+- Own: builder/boost patches, conan_boost.py package-specific code,
+  builder/deps/project.py, OpenSSL/native-delivery regression tests.
+- Deliver: strict Boost ownership repair and complete OpenSSL manifest publication.
+  Use bounded fixes before larger extraction; do not change shared Engine APIs.
+- Accept: external-copy fixture rejects unexpected files; stage-publish-consume
+  OpenSSL regression passes. User's actual Boost packaging and Cobalt consumer
+  compile/link gate remains required for full acceptance.
+
+** Stage 2.2 - One native dependency policy and Conan session
+:PROPERTIES:
+:CUSTOM_ID: stage-2-2
+:END:
+- Prerequisite: Stage 2.1 implementation and focused boundary tests.
+- Own: conan_policy.py, conan_session.py, config.py, conan_boost.py,
+  deps/hpx/folly recipes and adapters, relevant cmake_builder.py seam.
+- Deliver: one source for defaults/options; managed recipe preparation by composition;
+  common Conan command construction and jobs propagation. Select/test the policy
+  export mechanism; remove BoostConanProjectBuilder after all Forge callers migrate.
+- Preserve external CMakeProjectBuilder hooks through a temporary delegating adapter
+  if needed. Do not force external projects to adopt Forge's internal policy.
+- Accept: command/policy fixtures cover all three consumers, standalone exported
+  recipe context, overrides and absence of ambient import requirements; actual
+  Conan graph compatibility is a separately recorded integration gate.
+
+** Stage 2.3 - Content fingerprints and persistent resolution locks
+:PROPERTIES:
+:CUSTOM_ID: stage-2-3
+:END:
+- Prerequisite: Stage 2.2 implementation and session contract tests.
+- Own: conan_session.py, Forge-specific option registration in builder/project.py,
+  cache/lock tests and native build documentation.
+- Deliver: canonical inputs, persistent locks, refresh option, resolution bundle,
+  generator inventory and actionable cache decisions. Replace mtime-only Conan reuse.
+- Accept: same inputs reuse; FMT/cppstd/profile/toolchain/patch changes invalidate;
+  deletion and preserved mtime changes invalidate; jobs/proxy changes do not alter
+  package identity; failures do not advance successful state; rebuild preserves locks.
+
+** Stage 2.4 - Deterministic native delivery plans
+:PROPERTIES:
+:CUSTOM_ID: stage-2-4
+:END:
+- Prerequisite: design contracts above; implementation may proceed independently
+  of 2.2/2.3 if file ownership is coordinated.
+- Own: builder/native_plan.py, builder/project.py planning paths, plan/CLI tests.
+- Deliver: explicit target prerequisites and one pure plan used throughout a request.
+- Accept: folly build includes grpc; folly install publishes only folly; rebuild
+  cleans only selected targets/profile; describe/execute agree; preview performs no
+  writes or tool/network calls; cycles and unsupported actions fail early.
+
+** Stage 2.5 - Validated artifacts and build receipts
+:PROPERTIES:
+:CUSTOM_ID: stage-2-5
+:END:
+- Prerequisites: 2.2, 2.3 and 2.4 implementations and focused contracts.
+- Own: native_artifacts.py, target staging adapters, build-receipt orchestration,
+  staging/metadata fixtures. Coordinate builder/project.py with its sole integrator.
+- Deliver: fresh staging, inventory including OpenSSL JSON, external-reference and
+  dependency provenance, safe links, receipt-last promotion and legacy stamp handling.
+- Accept: failed build/stage cannot publish; missing/changed files are rejected;
+  stale files disappear from new stage; source edits do not mutate recorded artifacts;
+  existing OpenSSL schema/consumer behavior is preserved.
+
+** Stage 2.6 - Recoverable manifest-based publication
+:PROPERTIES:
+:CUSTOM_ID: stage-2-6
+:END:
+- Prerequisite: Stage 2.5 implementation and artifact contract tests.
+- Own: native_publish.py, build_ops.py relocation seam, Forge install integration,
+  failure-injection and ownership tests.
+- Deliver: staged-only publishing, dependency checks, prefix ownership, writer locks,
+  journals/recovery, conflicts and explicit legacy migration behavior.
+- Accept: inject failures before/during/after file replacement and receipt commit;
+  recovery restores or completes a coherent transaction; unrelated files and other
+  owners survive; symlink escapes and unresolved staging references fail; concurrent
+  Forge writers serialize. No Conan/CMake build invocation occurs during install.
+
+** Stage 2.7 - Integration acceptance and handoff
+:PROPERTIES:
+:CUSTOM_ID: stage-2-7
+:END:
+- Prerequisites: implementations and focused evidence for 2.1 through 2.6.
+- Own: integration fixtures, English/Chinese BUILD/architecture documentation,
+  progress evidence and compatibility cleanup; no consumer-repository mutation.
+- Deliver: validate existing public CLI/framework consumers and the full native chain;
+  remove obsolete internal paths once all callers and tests use the new contracts.
+- Accept: execute the matrix below with recorded source/recipe/package identities.
+  Full builds are performed by the user unless newly authorized for an agent.
+  Missing integration evidence leaves Phase acceptance incomplete.
+
+* Acceptance matrix and evidence
+
+| Level | Required scenario | Execution boundary |
+|-------+-------------------+--------------------|
+| Pure policy | Canonical inputs, plan scopes, options, error/exit contract | Python fixtures; no compilers/network |
+| Filesystem contract | Stage -> publish -> OpenSSL reader, hashes, ownership, links, rollback/crash recovery | Temporary directories; no user prefix |
+| Tool adapter | Conan profile/graph/lock round trip and minimal B2 install dependency fixture | Explicitly selected tool tests; never disguised as pure unit tests |
+| Consumer fixture | CMake find_package Boost/OpenSSL and link Cobalt TLS through imported targets; header/archive provenance | User-authorized small compile/link test |
+| Full Release | build deps/grpc/hpx/folly/nng, install to a fresh prefix, representative C++ and Rust manifest consumption | User full build gate |
+| Reuse and mutation | Repeat unchanged build, change one declared dependency input, rebuild one target, change jobs only | Record graph/reuse reasons and actual work; no assumed timing claim |
+| Profile and migration | Debug representative native build; Release survives Debug clean; reject old receipts and conflicting legacy installs | User compilation plus filesystem fixtures |
+
+Record command, platform/compiler/Conan version, worktree/patch hashes, profile,
+resolved graph and package identities, prefix scope, result, logs and remaining
+gates. Preserve failure evidence. Python mocks, graph resolution and B2 dry runs
+must never be reported as proof of real packaging/linking success. Existing
+=test= discovery includes a native CMake fixture; do not run the entire suite
+under a no-compilation instruction. Maintain separately selectable pure tests.
+
+Phase acceptance requires the integrated chain in addition to Stage test passes.
+No version is assigned in advance; actual version/release records follow the
+repository delivery workflow. This design does not authorize commits or publishing.
+
+** Overall acceptance commands
+
+Run from the Forge checkout with the normal Conan profile and source checkouts.
+The commands publish into fresh, build-local prefixes. Keep the acceptance
+directory and logs with the tested staged diff.
+
+#+begin_src bash
+(
+  set -euo pipefail
+  mkdir -p build
+  evidence=$(mktemp -d "$PWD/build/phase2-acceptance.XXXXXX")
+  export ZETA_INSTALL_PREFIX="$evidence/release-prefix"
+  git rev-parse HEAD > "$evidence/head"
+  git diff HEAD --binary | sha256sum > "$evidence/worktree.sha256"
+  conan --version
+  cmake --version
+  ./zbuild.py build deps grpc hpx folly nng --profile release -j 4 |& tee "$evidence/build.log"
+  ./zbuild.py build deps --profile release -j 2 |& tee "$evidence/reuse.log"
+  ./zbuild.py rebuild deps --profile release -j 4 |& tee "$evidence/rebuild.log"
+  ./zbuild.py install deps grpc hpx folly nng --profile release |& tee "$evidence/install.log"
+
+  cmake -S tests/manual/native_delivery -B "$evidence/consumers" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    "-DCMAKE_PREFIX_PATH=$ZETA_INSTALL_PREFIX;$ZETA_INSTALL_PREFIX/lib/cmake/zeta_deps/Release"
+  cmake --build "$evidence/consumers" --parallel 4 --verbose |& tee "$evidence/consumers.log"
+  ctest --test-dir "$evidence/consumers" --output-on-failure | tee "$evidence/ctest.log"
+  python3 tests/manual/native_delivery/rust_smoke.py "$ZETA_INSTALL_PREFIX" \
+    "$evidence/rust-openssl" |& tee "$evidence/rust.log"
+
+  sha256sum "$ZETA_INSTALL_PREFIX/lib/libnng.a" > "$evidence/release-nng.sha256"
+  ./zbuild.py build nng --profile debug -j 4
+  ZETA_INSTALL_PREFIX="$evidence/debug-prefix" ./zbuild.py install nng --profile debug
+  ./zbuild.py clean nng --profile debug
+  sha256sum -c "$evidence/release-nng.sha256"
+  test -f build/staging/release/nng/.zeta-build-complete.json
+  printf 'Acceptance evidence: %s\n' "$evidence"
+)
+#+end_src
+
+Expect five CMake consumer tests, a linked Rust OpenSSL version report, and
+an unchanged Release NNG archive after Debug cleanup. Check the Conan log for
+reuse after the jobs-only change and retained-lock regeneration after rebuild.
+Preserve the build receipts and installed ownership index with the logs. The
+focused tests cover input mutation, journal recovery and legacy conflicts.
+
+* Agent handoff rules
+
+Start with the ledger, this plan, BUILD.org, local instructions and the current
+diff. Preserve other agents' edits. Select one Stage with its prerequisites;
+name the files owned before editing. Agents are not alone in the worktree and
+must reconcile concurrent changes rather than revert them. Use one integrator
+for builder/project.py, config.py and shared adapter changes; do not assign those
+files concurrently without an explicit split. Independent fixture preparation
+can proceed after agreeing the contracts; integration remains ordered.
+
+At completion, report implementation changes, exact checks, unrun gates, unresolved
+decisions and next Stage in the ledger. Changes to schema/ownership/CLI decisions
+must update this plan and its Chinese counterpart. Source files under 3rd remain
+untouched; patch assets live under builder/boost. Full compilation remains with
+the user. Do not claim the earlier Boost failure is fixed until the corresponding
+package and consumer evidence exists.

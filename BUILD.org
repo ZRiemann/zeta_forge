@@ -17,9 +17,34 @@ staged before configuring Folly. =install= requires explicit target names and a
 successful build of the same profile; it publishes only those targets without
 rebuilding or rerunning Conan. Build prerequisites not explicitly selected for
 installation remain staged only. CMake and pkg-config metadata are adjusted to
-the publication prefix. =clean/rebuild= affect the named native
+the publication prefix. =install deps= publishes the OpenSSL manifest with its
+CMake package files. Rebuild =deps= if its stage lacks the manifest.
+Forge validates the staged inventory and its external references before
+publishing. Rebuild a target once if it only has a legacy completion stamp.
+Publication reads the stage even if the original build directory has been
+removed. It records owners and recovers interrupted writes under
+=<prefix>/share/zeta_forge/native/=. Use a fresh prefix for the first install
+if legacy files conflict. Folly requires a matching published gRPC stage.
+=clean/rebuild= affect the named native
 build directories and target staging for one profile, not installations or shared
 Conan/Cargo caches. =rebuild= then rebuilds selected outputs and required dependencies.
+
+The native =-j= budget applies to both CMake and Conan package builds.
+The native dependency policy lives in =common/zeta_forge/conan_policy.py=.
+Forge generates the recipe and its policy snapshot together for deps, HPX and
+Folly. Use =zbuild.py= to prepare them.
+These targets retain their Conan locks and resolution receipts under
+=build/conan-state/<target>/<profile>/=. =rebuild= keeps the lock and regenerates
+missing or changed outputs against it. Use =--refresh-conan-lock= with
+=build=, =check= or =rebuild= to resolve a fresh lock for selected Conan targets.
+=--dry-run= shows the requested refresh without resolving dependencies.
+
+For Boost 1.91.0, =deps=, =hpx= and =folly= use a Forge recipe derived from a
+pinned Conan Center revision. Forge exports the patched recipe into the local
+Conan cache before resolution. Boost.Cobalt TLS uses the Conan OpenSSL selected
+by =ZETA_OPENSSL_VERSION= (default =3.6.2=). The generated
+=Boost::cobalt_io_ssl= target carries its Cobalt I/O and OpenSSL dependencies.
+Other =ZETA_BOOST_VERSION= selections use the corresponding upstream recipe.
 
 Forge =check= configures and compiles selected native libraries.
 Explicit =doctor rust-deps= performs static offline dependency governance;

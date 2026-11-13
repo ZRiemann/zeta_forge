@@ -1,0 +1,346 @@
+#+TITLE: Phase 2 - 原生依赖构建与交付链路重构
+
+[[file:readme.org][文档导航]] | [[file:../en/phase2_native_delivery.org][English authoritative design]] | [[file:../project_progress.org][统一进度与交接]]
+
+* 目标与文档权威
+
+设计日期为 2026-11-12。本文描述待实施方案，不代表功能已经实现。
+用户已同意制定统一设计，后续由其他 agent 按 Stage 实现。
+[[file:../project_progress.org][进度台账]]是状态、验证证据和实际交付版本的唯一记录。
+英文设计为主文档，本文同步维护契约与阶段范围，不另建状态表。
+
+Phase 2 负责 Forge 原生依赖的解析、构建计划、暂存和发布。
+既有 Phase 1 Rust 治理编号保持不变。当前 [[file:../../BUILD.org][BUILD.org]] 优先于通用技能默认值，
+尤其保留 install 仅发布、不隐式构建的行为。
+
+目标是明确包内文件归属、完整交付、可解释的缓存复用、可重复的依赖解析和可恢复的发布。
+保留薄 zbuild.py、共享 Engine 协议以及 CMake/Cargo 原生依赖图。
+
+范围不包括业务仓库修改，Rust/Gradle/Zig 引擎重写，上游源码修改，清理全局缓存，
+自动升级依赖，部署远程二进制缓存，通用插件框架及可移植 SDK 打包。
+现有 Conan 配置会引用本机缓存，RapidJSON 配置可能引用源码目录。
+本阶段记录并校验这些外部引用，不把现有安装宣称为独立可搬迁的 SDK。
+
+* 问题依据与验证边界
+
+基线是台账记录的带未提交改动的工作区，不能只用 HEAD 代表。
+
+| 问题 | 当前依据 | 设计响应 |
+|------+----------+----------|
+| Boost 包混入 ssl/crypto/z | 用户 package_info 报错及 [[file:../../builder/boost/conan-center-cobalt-openssl.patch][B2 文件目标补丁]] | 区分链接依赖与包内文件，保留严格检查 |
+| OpenSSL 清单漏发布 | [[file:../../builder/deps/project.py][DepsBuilder]] 写入 JSON，但仅发布 *.cmake；[[file:../../common/zeta_forge/conan_openssl.py][读取方]]要求最终目录存在 JSON | 按完整产物清单交付 |
+| Conan 缓存输入不完整 | [[file:../../common/zeta_forge/cmake_builder.py][mtime 判断]]、[[file:../../common/zeta_forge/conan_boost.py][两个版本的签名]]遗漏 Folly FMT 等输入 | 规范化输入与内容指纹 |
+| 成功标记不能证明产物完整 | [[file:../../builder/project.py][ForgeEngine]]仅记录 target/profile 并检查构建目录 | 带产物清单和来源的版本化记录 |
+| 发布保证不一致 | deps 复制暂存文件，其他目标重新调用 CMake install，随后修正元数据 | 校验暂存产物，统一发布 |
+| 测试遗漏完整链路 | [[file:../../tests/test_conan_openssl.py][OpenSSL 测试]]和[[file:../../tests/test_native_delivery.py][发布测试]]分段覆盖 | 增加暂存、发布、使用方读取的契约测试 |
+
+Boost 是用户实际遇到的打包失败；其余生命周期和恢复问题属于静态发现或风险。
+本次设计没有运行全量编译。配方导出、依赖图解析、B2 dry-run 均不能证明实际安装和链接正确。
+
+* 保留的公开行为
+
+- 保留动作名称、release/debug 映射、默认目标、退出码 0/1/2/130 及 ZETA_BUILD_DONE。
+  现有汇总计数保持引擎步骤语义；新增目标级日志不能悄悄改变计数含义。
+- help/list/metadata/dry-run 不导出配方、不创建锁文件、不写构建状态、不要求工具已安装。
+  doctor 只读检查，缺失状态直接报告。
+- build/check 保留当前 Forge 原生目标行为，包括本地暂存。
+  install 要求显式目标，不编译、不解析 Conan，也不自动发布未选中的前置依赖。
+  缺失已安装前置依赖时给出明确错误。
+- rebuild 只清理选中目标和 profile 的构建、暂存目录；前置依赖可增量构建。
+  clean/rebuild 保留安装目录、其他 profile、共享 Conan 缓存及依赖解析锁状态。
+- 保留 ZETA_* 配置和代理继承。日志与清单不保存完整环境、凭据或代理密钥。
+- 受管 Boost 配置继续启用 Cobalt TLS，维持 Boost::cobalt_io_ssl 与 OpenSSL 依赖元数据。
+  本阶段保留公开 openssl-native.json schema 1 和既有 Release 读取契约。
+  内部产物记录使用独立 schema，不借重构改变 Rust 使用方契约。
+
+* 模块职责与依赖方向
+
+#+begin_example
+zbuild.py -> build_cli -> ForgeEngine / 不可变 NativePlan
+                            |-- ConanSession -> Conan 与受管配方准备
+                            |-- 现有 Builder -> CMake/Ninja
+                            |-- ArtifactSet 校验 -> Publisher
+策略与记录类型不反向依赖 ForgeEngine 或具体 Builder。
+Conan 管理包依赖图，CMake 管理编译依赖图。
+#+end_example
+
+下表是建议模块与接口边界，不要求机械增加同名类，不引入通用服务容器，暂不作为外部稳定 API。
+
+| 所有者与建议位置 | 负责的契约和状态 |
+|------------------+------------------|
+| builder/project.py 与 builder/native_plan.py | TargetSpec 和纯计划生成；选择范围、前置顺序、清理与发布范围 |
+| common/zeta_forge/conan_policy.py | 唯一版本与选项基线，解析受支持 ZETA 覆盖项，显式记录使用方差异 |
+| common/zeta_forge/conan_session.py | ConanInputs 到 ResolvedConan；命令、profile 身份、指纹、锁与解析记录 |
+| common/zeta_forge/conan_boost.py 与 builder/boost/ | 返回精确配方引用和补丁身份，包专属校验，不继承通用 CMake Builder |
+| 现有 builder/<target>/project.py | 目标专属 CMake 参数、原生构建与候选暂存适配 |
+| common/zeta_forge/native_artifacts.py | 产物清单、构建记录、摘要、外部引用与重定位规则 |
+| common/zeta_forge/native_publish.py | 安装前缀文件归属、冲突、事务日志、恢复及安装记录 |
+| 现有 build_ops.py/process.py | 文件系统与进程操作，不承载 Boost 或依赖版本策略 |
+
+config.py 继续负责环境和路径。依赖默认值迁到唯一策略所有者，临时兼容导出只委托这一来源。
+Conan 配方必须在独立导出环境中取得同一策略，不依赖碰巧存在的 Python 搜索路径。
+Stage 2.2 使用显式导出的策略快照。Forge 将原生消费配方与 =native-policy.json=
+一同准备，缺少快照时明确报错。受管 Boost 导出通过 =forge-openssl-version.txt=
+绑定 OpenSSL 版本。
+影响配方行为的策略必须进入配方身份或显式 Conan settings/options，不能仅通过隐藏环境变量
+在同一身份下选择不兼容行为。
+
+TargetSpec 只声明交付目标关系，初始为 folly -> grpc；不复制原生包或编译图。
+describe/preflight/execute 使用同一纯函数生成的计划，可在单次请求中缓存。
+保持外部项目使用的 Engine 协议。
+
+* 数据与缓存契约
+
+| 数据及 schema | 必需内容 |
+|---------------+----------|
+| NativePlan，内部类型 | action、profile、显式目标、前置顺序、构建/清理/发布范围、路径、jobs；不可变且确定 |
+| ConanInputs，内部类型 | schema、目标、host/build profile 身份及有效 settings/options/conf、版本策略、配方与导出输入摘要、工具链输入、Conan/编译器/生成器身份 |
+| ResolvedConan，schema 1 | 输入指纹、精确配方及 revision、依赖图身份、package ID 与可获得的 package revision、锁摘要、生成文件清单、工具身份 |
+| ArtifactSet，内部类型 | target/profile 所有者、输入与依赖身份、相对文件路径、类型/权限/摘要或符号链接目标、外部引用、重定位规则 |
+| BuildReceipt，schema 1 | 产物清单、成功构建来源、配方与锁身份、源码 revision 与脏状态标识、完成 ID；最后写入 |
+| InstalledReceipt，schema 1 | 来源构建记录摘要、前缀、重定位后文件摘要、依赖身份、所有者集合、发布事务 ID |
+
+未知 schema 拒绝并提示重建或重新发布。路径不得逃逸所属根目录；拒绝路径穿越及逃逸链接。
+支持原生安装所需的安全相对符号链接，不能直接全部解引用。
+JSON 使用规范化序列化，时间戳只用于诊断，不作为缓存身份。
+
+按内容计算配方、profile include、用户工具链与声明配置文件闭包的摘要，包含新增、删除文件。
+C++ 标准、FMT、编译器、profile 或补丁内容变化须使相关 Conan 生成失效；保留旧 mtime 不能隐藏变化。
+源码 revision/脏状态属于构建来源；除非 Conan 配方真正使用该源码，否则不因此重新解析 Conan。
+增量编译仍由 CMake/Ninja 管理。
+
+jobs 和传输凭据不改变产物身份，但 jobs 必须传到 Conan 包编译和 CMake，并继续继承代理。
+最终发布前缀变化不触发依赖重编译；生成目录、构建位置变化可能需要重新生成。
+
+本地锁与解析记录放在 build/conan-state/<target>/<profile>/<input-fingerprint>/，
+位于单目标 clean 范围之外。各代解析记录不可变，成功指针最后写入。
+生成文件缺失或损坏时，使用已有锁重新生成，不自动升级。
+Conan 自己管理源码与二进制缓存；相同包身份复用，不同配方 revision 或 options 可合法触发新工作。
+不得复制 Conan 缓存目录来伪造跨身份复用。
+
+新输入指纹允许在 build/check/rebuild 中先解析并持久化锁，再编译；相同输入后续复用锁。
+新增 Forge 专属 --refresh-conan-lock，仅允许这三个动作；install/doctor 等动作拒绝该参数。
+预览只展示意图，不操作工具或网络。刷新生成候选图，报告变化，成功解析后才替换活动锁。
+普通 rebuild 不刷新锁。这是本 Phase 唯一计划新增的公开 CLI 参数。
+
+保留可导出的、去除敏感信息的解析包，包含 Conan lock、有效 profiles/settings/options 和配方身份。
+不假设锁文件包含全部二进制输入，也不保证远端永久保留 revision。
+本地锁用于重复构建，跨主机复现需要批准的基线解析包。
+Stage 2.3 必须核对实际 Conan 2 的 JSON、锁语义及受支持命令，用 fixture 和工具验证覆盖范围。
+
+不强行让 deps/hpx/folly 共享一个依赖图或 package ID。
+Folly 当前关闭 Boost zlib，deps 未关闭；这些差异先保留为有说明的覆盖项。
+比较重叠且影响 ABI 的依赖，拒绝不兼容发布组合；约束从实际导出链接接口推导，
+不能把所有可选构建差异都当作 ABI 不兼容。
+
+* 包、暂存与发布生命周期
+
+** Boost 文件归属修复
+
+继续使用固定上游配方及 Forge 补丁。先以最小 B2 fixture 重现安装复制依赖的行为。
+优先验证能否在维持链接和使用要求的同时阻止外部预编译目标安装。
+若不可行，在 recipe package 阶段依据实际依赖清单与内容一致性，过滤被证明是外部
+ssl/crypto/z 副本的文件。意外文件或内容不符必须失败。
+禁止放宽 non_used、禁用 Cobalt 或无差别删除非 Boost 文件。
+Stage 2.1 验收前记录采用的机制和证据。
+
+** 暂存和构建记录
+
+流程固定为构建、候选暂存、校验、切换暂存、最后写成功记录。
+每次生成干净候选目录，不向旧暂存目录叠加文件。
+各目标先用小 fixture 证明 install-prefix/DESTDIR 的实际行为，不假设上游具有相同重定位能力。
+保留公开 build/staging/<profile>/<target>/ 路径。
+当前构建失败后，保留的旧文件不能被误认为本次成功产物；切换中断且记录不匹配时禁止发布，
+后续构建可以重建该目标暂存。
+
+deps 清单包含全部预期 CMake 配置、兼容配置和 openssl-native.json。
+按文件角色排除脚本及敏感文件，不再用单一后缀决定全部交付内容。
+OpenSSL JSON 必须指向 CMake 依赖图使用的同一份已验证 Conan 包。
+
+install 校验已记录快照及当前文件内容，不要求源码树仍与构建时完全相同。
+它发布明确记录的成功构建；源码修改本身不隐式触发构建。
+产物缺失、被篡改、外部缓存引用消失或请求 profile 不匹配时失败。
+日志展示构建身份，避免用户不清楚安装的是哪次产物。
+
+** 发布和所有权
+
+install 从暂存产物发布，不再从可变构建目录重新运行 CMake install。
+修改公开文件之前，预检所有选中清单及目标路径冲突。
+候选发布文件、备份放在最终前缀所在文件系统的 Forge 事务目录中。
+
+构建/暂存使用 target/profile 锁，Forge 发布使用前缀级写锁。
+统一先按确定顺序取得目标锁，再取得前缀锁，不反向获取。
+install 在安全复制所需产物快照前持有源暂存锁。
+使用进程退出可释放的操作系统锁，配合日志识别中断事务；doctor/metadata 不改锁状态。
+
+前缀归属记录位于 <prefix>/share/zeta_forge/native/。
+相同内容可具有多个明确所有者，移除一个所有者不删除其他所有者仍使用的文件。
+与未选中目标的内容冲突在写入前失败。不同 profile 共用相同安装路径也视为不同所有者，
+内容不同时不能悄悄覆盖。仅当文件已无其他所有者且当前摘要匹配旧记录时，删除本次淘汰文件。
+保留无关文件。
+
+旧安装没有归属记录时，可明确接管字节一致的文件；已有且内容不同的文件保留，报告路径和摘要冲突。
+不能自动接管整个 ~/.local。首次迁移验收建议使用新前缀；清理冲突旧文件需用户另行授权。
+旧 target/profile 成功标记需要一次普通 build 生成新记录，不要求清理 Conan 缓存。
+
+发布前在候选区处理 .cmake/.pc 元数据。
+重定位映射覆盖本目标及声明的前置依赖；未选中前置依赖必须已安装且身份兼容，否则报告显式安装要求。
+拒绝残留 Forge build/staging 路径，允许清单声明的 Conan 缓存和源码引用。
+不对二进制数据或任意路径进行盲目替换；验证代表性 imported target。
+
+一次 install 请求的选中目标构成一个带日志的事务。
+备份将替换或删除的受管文件，逐文件原子替换，最后提交安装记录。
+普通失败回滚文件与记录；下一次修改型 install 在前缀锁保护下先恢复中断事务。
+无法恢复时保留日志并失败，不清理证据或宣称成功。
+定义日志和备份的持久化顺序，并注入崩溃点测试。
+此机制保证可恢复，不保证整个前缀对外部并发读取者原子可见；运行中部署及非 Forge 写入者需要另行协调。
+
+* 迁移阶段与 agent 任务
+
+所有 Stage 均由 zeta_forge 负责，当前状态与实际交付版本只记在台账。
+编号不隐含前置关系。
+
+** Stage 2.1 - 修复包和清单边界
+:PROPERTIES:
+:CUSTOM_ID: stage-2-1
+:END:
+- 前置：复核当前工作区和用户失败日志，无前置 Stage。
+- 负责：builder/boost 补丁、conan_boost.py 包专属逻辑、builder/deps/project.py，相关回归测试。
+- 交付：保持 Boost 严格校验的归属修复、完整发布 OpenSSL 清单；先做边界修复，不改共享 Engine API。
+- 验收：外部副本 fixture 拒绝意外文件，暂存到发布再读取清单的回归通过。
+  完整验收仍需用户实际 Boost 打包及 Cobalt 使用方编译链接。
+
+** Stage 2.2 - 统一依赖策略与 Conan 会话
+:PROPERTIES:
+:CUSTOM_ID: stage-2-2
+:END:
+- 前置：2.1 实现与聚焦边界测试。
+- 负责：conan_policy.py、conan_session.py、config.py、conan_boost.py、三个 Conan 使用方及 CMake 接入点。
+- 交付：唯一默认值和选项来源、组合式配方准备、统一命令及 jobs 传递；选定并验证策略导出机制。
+  Forge 调用方迁移完成后删除 BoostConanProjectBuilder。
+- 必要时通过临时委托适配保留外部 CMakeProjectBuilder hook；外部项目无需采用 Forge 内部依赖策略。
+- 验收：覆盖三个使用方、独立配方导出环境、配置覆盖及无环境搜索路径依赖；真实 Conan 图兼容性单独记录。
+
+** Stage 2.3 - 内容指纹与持久化解析锁
+:PROPERTIES:
+:CUSTOM_ID: stage-2-3
+:END:
+- 前置：2.2 实现和会话契约测试。
+- 负责：conan_session.py、builder/project.py 的 Forge 参数注册、缓存/锁测试及构建文档。
+- 交付：规范化输入、持久锁、刷新参数、解析包、生成文件清单、明确失效原因；替代仅 mtime 的 Conan 复用。
+- 验收：相同输入复用；FMT/cppstd/profile/toolchain/patch 变化、文件删除及保留 mtime 的修改使缓存失效；
+  jobs/代理变化不改变包身份；失败不推进成功状态；rebuild 保留锁。
+
+** Stage 2.4 - 确定的原生交付计划
+:PROPERTIES:
+:CUSTOM_ID: stage-2-4
+:END:
+- 前置：本文设计契约；协调文件所有权后可独立于 2.2/2.3 实施。
+- 负责：builder/native_plan.py、builder/project.py 计划路径、计划与 CLI 测试。
+- 交付：显式前置目标声明，单请求统一纯计划。
+- 验收：folly build 包含 grpc，folly install 只发布 folly；rebuild 只清指定目标/profile；
+  展示和执行一致；预览无写入、工具和网络调用；循环依赖与不支持动作提前失败。
+
+** Stage 2.5 - 校验产物与构建记录
+:PROPERTIES:
+:CUSTOM_ID: stage-2-5
+:END:
+- 前置：2.2、2.3、2.4 实现与聚焦契约测试。
+- 负责：native_artifacts.py、目标暂存适配、构建记录编排、暂存和元数据 fixture。
+  builder/project.py 改动由单一集成负责人协调。
+- 交付：干净暂存、含 OpenSSL JSON 的清单、外部引用和依赖来源、安全链接、最后写成功记录及旧标记迁移。
+- 验收：失败构建/暂存不可发布；文件缺失或变化被拒绝；新暂存无旧文件残留；源码修改不改变已记录产物；
+  OpenSSL 公开 schema 和读取行为保持一致。
+
+** Stage 2.6 - 可恢复的清单发布
+:PROPERTIES:
+:CUSTOM_ID: stage-2-6
+:END:
+- 前置：2.5 实现与产物契约测试。
+- 负责：native_publish.py、build_ops.py 重定位边界、install 集成、失败注入和归属测试。
+- 交付：仅从暂存发布、依赖校验、前缀归属、写锁、日志恢复、冲突和旧安装迁移规则。
+- 验收：替换文件及提交记录各阶段注入失败，可恢复一致事务；保留其他所有者和无关文件；
+  拒绝逃逸链接及残留暂存引用；Forge 并发写者串行化；install 不调用 Conan 或 CMake 构建。
+
+** Stage 2.7 - 集成验收与交接
+:PROPERTIES:
+:CUSTOM_ID: stage-2-7
+:END:
+- 前置：2.1 至 2.6 实现与聚焦测试证据。
+- 负责：集成 fixture、中英文 BUILD/架构文档、台账证据和兼容路径收尾；不修改使用方仓库。
+- 交付：验证既有 CLI、共享框架使用方式和完整原生交付链路；所有调用方迁移后清除过期内部路径。
+- 验收：执行下表并记录源码、配方、包身份。全量构建由用户执行，除非重新明确授权 agent。
+  缺少集成证据时，Phase 验收仍未完成。
+
+* 验收矩阵与证据
+
+| 层级 | 必须覆盖的场景 | 执行边界 |
+|------+----------------+----------|
+| 纯策略 | 输入规范化、计划范围、选项、错误与退出码 | Python fixture，无编译与网络 |
+| 文件系统契约 | 暂存、发布、OpenSSL 读取、摘要、归属、链接、回滚和中断恢复 | 临时目录，不使用用户安装前缀 |
+| 工具适配 | Conan profile/graph/lock 往返、最小 B2 依赖安装 fixture | 显式工具测试，不伪装成纯单测 |
+| 使用方 fixture | CMake 查找 Boost/OpenSSL，经 imported target 链接 Cobalt TLS，核对头文件和库来源 | 用户授权的小型编译链接 |
+| 完整 Release | 构建 deps/grpc/hpx/folly/nng，安装到新前缀，验证代表性 C++ 与 Rust 清单消费 | 用户全量编译门槛 |
+| 复用与变化 | 重复未变构建、改变一项输入、单目标 rebuild、仅改变 jobs | 记录实际复用与工作量，不预设性能收益数字 |
+| Profile 与迁移 | 代表性 Debug 构建、Debug clean 保留 Release、旧记录和冲突旧安装拒绝 | 用户编译及文件系统 fixture |
+
+证据包含命令、平台/编译器/Conan 版本、工作区与补丁摘要、profile、解析图和包身份、安装范围、
+结果、日志和剩余门槛。保留失败证据。Python mock、图解析和 B2 dry-run 不证明真实打包链接成功。
+现有 test discovery 包含原生 CMake 编译 fixture；禁止编译时不要直接运行整个测试集。
+纯测试必须可以单独选择。
+
+Stage 测试通过后仍需整条链路验收。设计不预定版本，不授权提交或发布；实际版本按交付流程记录。
+
+** 整体验收命令
+
+在 Forge 工作区使用正常的 Conan profile 和源码 checkout 执行。
+以下命令发布到 =build= 下的新前缀，请保留验收目录和日志以对应本次测试的改动。
+
+#+begin_src bash
+(
+  set -euo pipefail
+  mkdir -p build
+  evidence=$(mktemp -d "$PWD/build/phase2-acceptance.XXXXXX")
+  export ZETA_INSTALL_PREFIX="$evidence/release-prefix"
+  git rev-parse HEAD > "$evidence/head"
+  git diff HEAD --binary | sha256sum > "$evidence/worktree.sha256"
+  conan --version
+  cmake --version
+  ./zbuild.py build deps grpc hpx folly nng --profile release -j 4 |& tee "$evidence/build.log"
+  ./zbuild.py build deps --profile release -j 2 |& tee "$evidence/reuse.log"
+  ./zbuild.py rebuild deps --profile release -j 4 |& tee "$evidence/rebuild.log"
+  ./zbuild.py install deps grpc hpx folly nng --profile release |& tee "$evidence/install.log"
+
+  cmake -S tests/manual/native_delivery -B "$evidence/consumers" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release \
+    "-DCMAKE_PREFIX_PATH=$ZETA_INSTALL_PREFIX;$ZETA_INSTALL_PREFIX/lib/cmake/zeta_deps/Release"
+  cmake --build "$evidence/consumers" --parallel 4 --verbose |& tee "$evidence/consumers.log"
+  ctest --test-dir "$evidence/consumers" --output-on-failure | tee "$evidence/ctest.log"
+  python3 tests/manual/native_delivery/rust_smoke.py "$ZETA_INSTALL_PREFIX" \
+    "$evidence/rust-openssl" |& tee "$evidence/rust.log"
+
+  sha256sum "$ZETA_INSTALL_PREFIX/lib/libnng.a" > "$evidence/release-nng.sha256"
+  ./zbuild.py build nng --profile debug -j 4
+  ZETA_INSTALL_PREFIX="$evidence/debug-prefix" ./zbuild.py install nng --profile debug
+  ./zbuild.py clean nng --profile debug
+  sha256sum -c "$evidence/release-nng.sha256"
+  test -f build/staging/release/nng/.zeta-build-complete.json
+  printf 'Acceptance evidence: %s\n' "$evidence"
+)
+#+end_src
+
+预期五项 CMake 消费者测试通过，Rust 探针输出链接到的 OpenSSL 版本，Debug 清理后
+Release 的 NNG 归档保持原样。检查 Conan 日志中的 jobs 变更复用和 rebuild 保留锁记录。
+随日志保留构建记录与安装归属索引。输入变化、事务恢复和旧安装冲突由聚焦测试覆盖。
+
+* Agent 交接规则
+
+开始时读取台账、本文、BUILD.org、当地指引和当前 diff，保留其他人的工作。
+按前置关系选择一个 Stage，编辑前声明负责文件。多个 agent 共享工作区时不得覆盖或回退其他改动。
+builder/project.py、config.py 和共享适配器由单一集成负责人协调，不能未经分工同时编辑。
+可在契约确定后独立准备 fixture，集成仍按前置关系进行。
+
+完成时更新台账的实现范围、实际检查、未运行门槛、未决事项和下一步。
+改变 schema、所有权或 CLI 决策时同步中英文设计。
+3rd 源码保持原样，补丁资产放在 builder/boost。全量编译交给用户。
+取得对应打包和使用方验证前，不宣称先前 Boost 故障已经解决。

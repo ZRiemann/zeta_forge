@@ -1,0 +1,198 @@
+--- a/conanfile.py
++++ b/conanfile.py
+@@ -2,7 +2,7 @@
+ from conan.errors import ConanException, ConanInvalidConfiguration
+ from conan.tools.apple import is_apple_os, to_apple_arch, XCRun
+ from conan.tools.build import build_jobs, cross_building, valid_min_cppstd, supported_cppstd
+-from conan.tools.env import VirtualBuildEnv
++from conan.tools.env import Environment, VirtualBuildEnv
+ from conan.tools.files import (
+     apply_conandata_patches, chdir, collect_libs, copy, export_conandata_patches,
+     get, mkdir, rename, replace_in_file, rm, rmdir, save
+@@ -12,9 +12,11 @@
+ from conan.tools.microsoft import is_msvc, is_msvc_static_runtime, MSBuildToolchain, msvc_runtime_flag, VCVars
+ from conan.tools.scm import Version
+ 
++from filecmp import cmp as files_equal
+ import glob
+ from io import StringIO
+ import os
++from pathlib import Path
+ import re
+ import shlex
+ import shutil
+@@ -158,6 +160,7 @@
+ 
+     def export(self):
+         copy(self, f"dependencies/{self._dependency_filename}", src=self.recipe_folder, dst=self.export_folder)
++        copy(self, "forge-openssl-version.txt", src=self.recipe_folder, dst=self.export_folder)
+ 
+     def export_sources(self):
+         export_conandata_patches(self)
+@@ -829,7 +832,18 @@
+     def _with_stacktrace_backtrace(self):
+         return not self.options.header_only and self.options.get_safe("with_stacktrace_backtrace", False)
+ 
++    @property
++    def _with_cobalt_openssl(self):
++        return not self.options.header_only and not self.options.without_cobalt
++
+     def requirements(self):
++        if self._with_cobalt_openssl:
++            snapshot = Path(self.recipe_folder) / "forge-openssl-version.txt"
++            if not snapshot.is_file():
++                raise ConanException(f"Forge Boost OpenSSL policy snapshot is missing: {snapshot}")
++            openssl_version = snapshot.read_text(encoding="utf-8").strip()
++            self.requires(f"openssl/{openssl_version}", transitive_headers=True,
++                          transitive_libs=True, package_id_mode="full_mode")
+         if self._with_zlib:
+             self.requires("zlib/[>=1.2.11 <2]")
+         if self._with_bzip2:
+@@ -876,6 +890,76 @@
+             env.generate()
+             vc = VCVars(self)
+             vc.generate()
++
++        if self._with_cobalt_openssl:
++            self._generate_cobalt_openssl_jam()
++
++    @property
++    def _cobalt_openssl_jam(self):
++        return Path(self.generators_folder) / "cobalt-openssl.jam"
++
++    def _cobalt_openssl_library_files(self):
++        def library_file(dependency, info):
++            name, = info.libs
++            if is_msvc(self):
++                filenames = (f"{name}.lib",)
++            elif not dependency.options.shared or self.settings.os == "AIX":
++                filenames = (f"lib{name}.a",)
++            elif self.settings.os == "Windows":
++                filenames = (f"lib{name}.dll.a",)
++            elif is_apple_os(self):
++                filenames = (f"lib{name}.dylib",)
++            else:
++                filenames = (f"lib{name}.so",)
++            for directory in info.libdirs:
++                for filename in filenames:
++                    candidate = Path(directory) / filename
++                    if candidate.is_file():
++                        return candidate
++            raise ConanException(f"Library {name} missing from {dependency.ref}: {info.libdirs}")
++
++        openssl = self.dependencies["openssl"]
++        ssl = openssl.cpp_info.components["ssl"]
++        crypto = openssl.cpp_info.components["crypto"]
++        libraries = {"ssl": library_file(openssl, ssl), "crypto": library_file(openssl, crypto)}
++        if "zlib::zlib" in crypto.requires:
++            zlib = self.dependencies["zlib"]
++            libraries["zlib"] = library_file(zlib, zlib.cpp_info.aggregated_components())
++        return libraries
++
++    def _generate_cobalt_openssl_jam(self):
++        openssl = self.dependencies["openssl"]
++        ssl = openssl.cpp_info.components["ssl"]
++        crypto = openssl.cpp_info.components["crypto"]
++        includes = next((Path(path) for path in ssl.includedirs
++                         if (Path(path) / "openssl" / "ssl.h").is_file()), None)
++        if includes is None:
++            raise ConanException(f"OpenSSL headers missing from {openssl.ref}")
++        libraries = self._cobalt_openssl_library_files()
++
++        system_libraries = dict.fromkeys(ssl.system_libs + crypto.system_libs)
++        targets = {}
++        crypto_requires = []
++        for index, library in enumerate(system_libraries):
++            target = f"forge_cobalt_openssl_system_{index}"
++            targets[target] = f": : <name>{library}"
++            crypto_requires.append(f"<library>{target}")
++        if "zlib" in libraries:
++            zlib_file = libraries["zlib"].as_posix()
++            targets["forge_cobalt_openssl_zlib"] = f': : <file>"{zlib_file}"'
++            crypto_requires.append("<library>forge_cobalt_openssl_zlib")
++
++        crypto_file = libraries["crypto"].as_posix()
++        ssl_file = libraries["ssl"].as_posix()
++        targets["forge_cobalt_openssl_crypto"] = (
++            f': : <file>"{crypto_file}" : : {" ".join(crypto_requires)}'
++        )
++        targets["forge_cobalt_openssl_ssl"] = (
++            f': : <file>"{ssl_file}" : : <include>"{includes.as_posix()}" <library>forge_cobalt_openssl_crypto'
++        )
++        contents = [f"lib {name} {definition} ;" for name, definition in targets.items()]
++        contents.append(f"explicit {' '.join(targets)} ;")
++        save(self, str(self._cobalt_openssl_jam), "\n".join(contents) + "\n")
+ 
+     ##################### BUILDING METHODS ###########################
+ 
+@@ -1173,7 +1257,12 @@
+ 
+         # If sending a user-specified toolset to B2, setting the vcvars
+         # interferes with the compiler selection.
+-        with chdir(self, sources):
++        environment = Environment()
++        if self._with_cobalt_openssl:
++            environment.define("FORGE_COBALT_OPENSSL_CONFIG", self._cobalt_openssl_jam.as_posix())
++        else:
++            environment.unset("FORGE_COBALT_OPENSSL_CONFIG")
++        with environment.vars(self).apply(), chdir(self, sources):
+             # To show the libraries *1
+             # self.run("%s --show-libraries" % b2_exe)
+             self.run(full_command)
+@@ -1701,7 +1790,24 @@
+ 
+     ####################################################################
+ 
++    def _remove_cobalt_dependency_copies(self):
++        # B2 install follows <library> edges and stages explicit prebuilt targets.
++        libdir = Path(self.package_folder) / "lib"
++        copies = []
++        for original in self._cobalt_openssl_library_files().values():
++            candidate = libdir / original.name
++            if not candidate.exists() and not candidate.is_symlink():
++                continue
++            if (candidate.is_symlink() or not candidate.is_file()
++                    or not files_equal(candidate, original, shallow=False)):
++                raise ConanException(f"Unexpected Boost package file {candidate}; expected a copy of {original}")
++            copies.append(candidate)
++        for candidate in copies:
++            candidate.unlink()
++
+     def package(self):
++        if self._with_cobalt_openssl:
++            self._remove_cobalt_dependency_copies()
+         # This stage/lib is in source_folder... Face palm, looks like it builds in build but then
+         # copy to source with the good lib name
+         copy(self, "LICENSE_1_0.txt", src=self.source_folder, dst=os.path.join(self.package_folder, "licenses"))
+@@ -2010,6 +2116,8 @@
+                 self.cpp_info.components[module].libs = module_libraries
+ 
+                 self.cpp_info.components[module].requires = self._dependencies["dependencies"][module] + ["_libboost"]
++                if module == "cobalt_io_ssl":
++                    self.cpp_info.components[module].requires.append("openssl::ssl")
+                 self.cpp_info.components[module].set_property("cmake_target_name", "Boost::" + module)
+                 self.cpp_info.components[module].names["cmake_find_package"] = module
+                 self.cpp_info.components[module].names["cmake_find_package_multi"] = module
+--- a/conandata.yml
++++ b/conandata.yml
+@@ -2,6 +2,9 @@
+   1.91.0:
+   - patch_description: Optional flag to specify iconv from either libc of libiconv
+     patch_file: patches/1.88.0-locale-iconv-library-option.patch
++    patch_type: conan
++  - patch_description: Link Cobalt TLS against the Conan OpenSSL targets
++    patch_file: patches/cobalt-openssl-b2.patch
+     patch_type: conan
+ sources:
+   1.91.0:
+--- a/dependencies/dependencies-1.91.0.yml
++++ b/dependencies/dependencies-1.91.0.yml
+@@ -43,7 +43,7 @@
+   cobalt_io:
+   - cobalt
+   cobalt_io_ssl:
+-  - cobalt
++  - cobalt_io
+   container: []
+   context: []
+   contract:

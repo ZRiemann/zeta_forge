@@ -116,7 +116,7 @@ Forge 测试只验证自身入口和公共工具库契约；外部项目在各�
 zeta_forge 的版本协调包括：
 
 - =.gitmodules= 中的 submodule 来源和 revision。
-- =builder/deps/conanfile.py= 和 forge 内部 Conan 配方中的第三方依赖版本；外部项目不维护共享依赖 Conan 图。
+- =common/zeta_forge/conan_policy.py= 和 Forge 其他内部 Conan 配方中的第三方依赖版本与选项；外部项目不维护共享依赖 Conan 图。
 - =common/zeta_forge/config.py= 中的共享默认值，例如 C++ 标准和基础库版本。
 - forge 项目定义或 Builder 中的 CMake 配置开关。
 
@@ -125,3 +125,14 @@ zeta_forge 的版本协调包括：
 * 当前构建契约
 
 详见 [[file:build.org][BUILD.org]]；工程粒度清理、安装范围、只读操作和测试范围以该契约为准。
+
+Forge 原生计划器解析交付前置依赖，并用同一个不可变请求模型确定预演、构建、
+清理和发布范围。
+Conan 锁文件与包身份保存在目标清理范围之外。原生构建记录将暂存产物清单与
+源码和依赖关联。发布器将已核验的暂存产物复制到指定前缀，完成文件替换后再提交归属索引。
+
+* 计划中的原生交付演进
+
+[[file:phase2_native_delivery.org][Phase 2]] 设计 Conan 策略与会话、确定的原生计划、产物记录和可恢复发布边界，
+保留当前 install 仅发布契约及原生构建依赖图。
+实际实现与验证状态见[[file:../project_progress.org][统一进度台账]]。

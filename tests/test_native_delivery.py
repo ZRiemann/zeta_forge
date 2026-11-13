@@ -16,14 +16,32 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "common"))
 
-from builder.deps.project import DepsBuilder
-from builder.grpc.project import GrpcBuilder
-from builder.project import ForgeEngine, project as forge_project
+from test_build_contract import request
 from zeta_forge.build_cli import Product, Project, cli
-from zeta_forge.build_ops import relocate_installed_metadata
+from zeta_forge.build_ops import destdir_path, relocate_installed_metadata
 from zeta_forge.cmake_builder import CMakeProjectBuilder, CommonBuildArgs
 from zeta_forge.cmake_engine import CMAKE_ACTIONS, CMakeEngine
-from test_build_contract import request
+from zeta_forge.conan_state import write_json
+from zeta_forge.native_artifacts import make_receipt
+
+from builder.deps.project import DepsBuilder
+from builder.grpc.project import GrpcBuilder
+from builder.project import ForgeEngine
+from builder.project import project as forge_project
+
+
+def seed_stage(engine: ForgeEngine, name: str, dependencies: dict[str, str] | None = None) -> Path:
+    req = request("build")
+    stage = engine.staging(req, name)
+    stage.mkdir(parents=True)
+    (stage / "old.a").write_bytes(b"old")
+    write_json(
+        engine.build_stamp(req, name),
+        make_receipt(
+            stage, name, req.profile, sources=[], conan=None, references=[], dependencies=dependencies or {},
+        ),
+    )
+    return stage
 
 
 class FixtureBuilder(CMakeProjectBuilder):
@@ -139,40 +157,31 @@ class NativeDeliveryTests(unittest.TestCase):
             engine = ForgeEngine(ROOT / "zbuild.py")
             engine.root = Path(directory)
             engine.config = replace(engine.config, install_prefix=engine.root / "published")
-            folly = mock.Mock(build_dir=engine.root / "folly-build")
-            folly.build_dir.mkdir()
-            engine.mark_built(request("build"), "folly")
+            seed_stage(engine, "grpc")
+            grpc = engine.require_built(request("build"), "grpc")
+            seed_stage(engine, "folly", {"grpc": grpc["artifact_id"]})
             with (
-                mock.patch.object(engine, "builder", return_value=folly) as factory,
-                mock.patch("builder.project.relocate_installed_metadata") as relocate,
+                mock.patch.object(engine, "builder", side_effect=AssertionError("builder used")),
+                mock.patch("builder.project.require_command", side_effect=AssertionError("tool used")),
             ):
                 engine.preflight(request("install"), ("folly",))
+                with self.assertRaisesRegex(RuntimeError, "explicitly install grpc"):
+                    engine.execute(request("install"), ("folly",))
+                engine.execute(request("install"), ("grpc",))
                 engine.execute(request("install"), ("folly",))
-            self.assertEqual([call.args[1] for call in factory.call_args_list], ["folly", "folly"])
-            folly.build.assert_not_called()
-            folly.install.assert_called_once_with(prefix=engine.config.install_prefix)
-            relocate.assert_called_once_with(
-                folly.build_dir / "install_manifest.txt",
-                engine.staging(request("install"), "folly"),
-                engine.config.install_prefix,
-            )
+            self.assertTrue((engine.config.install_prefix / "old.a").is_file())
 
     def test_forge_install_requires_explicit_successful_builds(self) -> None:
         self.assertEqual(cli(forge_project(ROOT / "zbuild.py"), ["install"]), 2)
         with tempfile.TemporaryDirectory(prefix="zbuild-install-") as directory:
             engine = ForgeEngine(ROOT / "zbuild.py")
             engine.root = Path(directory)
-            builders = {
-                name: mock.Mock(build_dir=engine.root / f"{name}-build")
-                for name in ("grpc", "hpx")
-            }
-            builders["grpc"].build_dir.mkdir()
-            engine.mark_built(request("build"), "grpc")
-            with mock.patch.object(engine, "builder", side_effect=lambda req, name: builders[name]):
+            engine.config = replace(engine.config, install_prefix=engine.root / "published")
+            seed_stage(engine, "grpc")
+            with mock.patch.object(engine, "builder", side_effect=AssertionError("builder used")):
                 with self.assertRaisesRegex(RuntimeError, "build hpx --profile release"):
-                    engine.preflight(request("install"), ("grpc", "hpx"))
-            for builder in builders.values():
-                builder.install.assert_not_called()
+                    engine.execute(request("install"), ("grpc", "hpx"))
+            self.assertFalse((engine.config.install_prefix / "old.a").exists())
 
     def test_failed_forge_build_invalidates_completion_stamp(self) -> None:
         with tempfile.TemporaryDirectory(prefix="zbuild-build-") as directory:
@@ -180,7 +189,7 @@ class NativeDeliveryTests(unittest.TestCase):
             engine.root = Path(directory)
             nng = mock.Mock(build_dir=engine.root / "nng-build")
             nng.build_dir.mkdir()
-            engine.mark_built(request("build"), "nng")
+            seed_stage(engine, "nng")
             nng.build.side_effect = RuntimeError("compile failed")
             with mock.patch.object(engine, "builder", return_value=nng):
                 with self.assertRaisesRegex(RuntimeError, "compile failed"):
@@ -191,28 +200,39 @@ class NativeDeliveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="zbuild-build-") as directory:
             engine = ForgeEngine(ROOT / "zbuild.py")
             engine.root = Path(directory)
-            nng = mock.Mock(build_dir=engine.root / "nng-build")
+            nng = mock.Mock(build_dir=engine.root / "nng-build", source_dir=engine.root)
             nng.build_dir.mkdir()
+            stage = seed_stage(engine, "nng")
+
+            def install(*, prefix: Path, destdir: Path) -> None:
+                candidate = destdir_path(destdir, prefix)
+                candidate.mkdir(parents=True)
+                (candidate / "new.a").write_bytes(b"new")
+                (candidate / "link.a").symlink_to("new.a")
+
+            nng.install.side_effect = install
             with mock.patch.object(engine, "builder", return_value=nng):
                 engine.execute(request("build"), ("nng",))
                 engine.require_built(request("install"), "nng")
             nng.build.assert_called_once_with(jobs=2)
-            nng.install.assert_called_once_with(prefix=engine.staging(request("build"), "nng"))
+            self.assertEqual(nng.install.call_args.kwargs["prefix"], stage)
+            self.assertFalse((stage / "old.a").exists())
+            self.assertEqual((stage / "link.a").readlink(), Path("new.a"))
+            (stage / "new.a").write_bytes(b"tampered")
+            with self.assertRaisesRegex(RuntimeError, "contents differ"):
+                engine.require_built(request("install"), "nng")
 
-    def test_deps_publish_preserves_other_prefix_files(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="zbuild-deps-") as directory:
-            root = Path(directory)
-            builder = DepsBuilder.__new__(DepsBuilder)
-            builder.install_dir = root / "stage"
-            builder.args = CommonBuildArgs("Release")
-            builder.install_dir.mkdir()
-            (builder.install_dir / "BoostConfig.cmake").write_text("new config\n")
-            destination = root / "published/lib/cmake/zeta_deps/Release"
-            destination.mkdir(parents=True)
-            (destination / "keep.txt").write_text("user data\n")
-            builder.publish(root / "published")
-            self.assertEqual((destination / "BoostConfig.cmake").read_text(), "new config\n")
-            self.assertEqual((destination / "keep.txt").read_text(), "user data\n")
+    def test_legacy_receipt_and_escaping_links_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            engine = ForgeEngine(ROOT / "zbuild.py")
+            engine.root = Path(directory)
+            stage = seed_stage(engine, "nng")
+            (stage / "escape").symlink_to(engine.root)
+            with self.assertRaisesRegex(RuntimeError, "Unsafe native stage symlink"):
+                engine.require_built(request("install"), "nng")
+            write_json(engine.build_stamp(request("build"), "nng"), {"target": "nng", "profile": "release"})
+            with self.assertRaisesRegex(RuntimeError, "build nng --profile release"):
+                engine.require_built(request("install"), "nng")
 
     @unittest.skipUnless(
         all(shutil.which(tool) for tool in ("cmake", "ninja", "cc")),

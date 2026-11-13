@@ -1,14 +1,27 @@
 from __future__ import annotations
 
-import os
 import shutil
-import tempfile
 from pathlib import Path
 
 from zeta_forge.cmake_builder import CommonBuildArgs
-from zeta_forge.conan_openssl import package_from_generators, write_openssl_manifest
+from zeta_forge.conan_openssl import (
+    package_from_generators,
+    write_openssl_manifest,
+)
+from zeta_forge.conan_session import install_native
 from zeta_forge.config import RepoConfig
-from zeta_forge.process import run_command
+
+
+def is_cmake_package_file(path: Path) -> bool:
+    name = path.name
+    return path.is_file() and not path.is_symlink() and (
+        name in {"cmakedeps_macros.cmake", "conandeps_legacy.cmake"}
+        or name.endswith((
+            "Config.cmake", "ConfigVersion.cmake", "Targets.cmake",
+            "-config.cmake", "-config-version.cmake", "-data.cmake",
+        ))
+        or (name.endswith(".cmake") and (name.startswith("Find") or "-Target-" in name))
+    )
 
 
 class DepsBuilder:
@@ -28,7 +41,7 @@ class DepsBuilder:
 
     @property
     def conanfile(self) -> Path:
-        return self.script_dir / "conanfile.py"
+        return self.repo_config.builder_dir / "conanfile.py"
 
     def validate(self) -> None:
         if not self.conanfile.is_file():
@@ -42,25 +55,9 @@ class DepsBuilder:
             )
 
     def run_conan(self) -> None:
-        run_command(
-            [
-                "conan",
-                "install",
-                self.conanfile,
-                f"--output-folder={self.conan_root}",
-                "--build=missing",
-                "-s",
-                f"build_type={self.args.build_type}",
-                "-s",
-                f"compiler.cppstd={self.repo_config.cxx_standard}",
-                "-c",
-                "tools.cmake.cmaketoolchain:generator=Ninja",
-            ],
-            cwd=self.script_dir,
-            env=self.repo_config.env,
-        )
+        install_native("deps", self.repo_config, self.args, self.conan_root)
 
-    def install(self) -> None:
+    def install(self, *, prefix: Path | None = None) -> None:
         if not self.generators_dir.is_dir():
             raise RuntimeError(
                 f"Conan generators directory not found: {self.generators_dir}\n"
@@ -71,49 +68,24 @@ class DepsBuilder:
             self.generators_dir, self.args.build_type
         )
 
-        if self.install_dir.exists():
-            shutil.rmtree(self.install_dir)
-        self.install_dir.mkdir(parents=True, exist_ok=True)
+        install_dir = self.install_dir if prefix is None else (
+            prefix / "lib" / "cmake" / "zeta_deps" / self.args.build_type
+        )
+        if install_dir.exists():
+            shutil.rmtree(install_dir)
+        install_dir.mkdir(parents=True, exist_ok=True)
 
         for source in sorted(self.generators_dir.iterdir()):
-            if source.is_file() and source.suffix == ".cmake":
-                shutil.copy2(source, self.install_dir / source.name)
+            if is_cmake_package_file(source):
+                shutil.copy2(source, install_dir / source.name)
 
-        self.install_rapidjson_config()
-        self.install_boost_findboost_compat()
-        write_openssl_manifest(self.install_dir, openssl_version, openssl_package)
+        self.install_rapidjson_config(install_dir)
+        self.install_boost_findboost_compat(install_dir)
+        write_openssl_manifest(install_dir, openssl_version, openssl_package)
 
-        print(f"Installed zeta deps CMake package files to: {self.install_dir}")
+        print(f"Installed zeta deps CMake package files to: {install_dir}")
 
-    def publish(self, prefix: Path) -> None:
-        """Copy the staged package files without deleting other prefix contents."""
-        if not self.install_dir.is_dir():
-            raise RuntimeError(f"zeta deps staging is missing: {self.install_dir}")
-        files = sorted(
-            path for path in self.install_dir.glob("*.cmake")
-            if path.is_file() and not path.is_symlink()
-        )
-        if not files:
-            raise RuntimeError(f"zeta deps staging has no CMake package files: {self.install_dir}")
-        destination = prefix / "lib" / "cmake" / "zeta_deps" / self.args.build_type
-        destination.mkdir(parents=True, exist_ok=True)
-        for source in files:
-            installed = destination / source.name
-            if installed.is_symlink():
-                raise RuntimeError(f"refusing to replace linked package file: {installed}")
-        for source in files:
-            installed = destination / source.name
-            descriptor, temporary = tempfile.mkstemp(prefix=f".{source.name}.", dir=destination)
-            os.close(descriptor)
-            try:
-                shutil.copy2(source, temporary)
-                os.replace(temporary, installed)
-            finally:
-                if os.path.exists(temporary):
-                    os.unlink(temporary)
-        print(f"Published zeta deps CMake package files to: {destination}")
-
-    def install_boost_findboost_compat(self) -> None:
+    def install_boost_findboost_compat(self, install_dir: Path) -> None:
         """Append FindBoost compatibility variables to the Conan-generated BoostConfig.cmake.
 
         CMake 3.28+ FindBoost checks Boost_CONTEXT_FOUND, Boost_FILESYSTEM_FOUND, etc.
@@ -124,7 +96,7 @@ class DepsBuilder:
         find_package_handle_standard_args check even though all targets and library files
         are present in the Conan package folder.
         """
-        boost_config = self.install_dir / "BoostConfig.cmake"
+        boost_config = install_dir / "BoostConfig.cmake"
         if not boost_config.exists():
             return
         compat_block = "\n".join(
@@ -152,11 +124,11 @@ class DepsBuilder:
         with boost_config.open("a", encoding="utf-8") as f:
             f.write(compat_block)
 
-    def install_rapidjson_config(self) -> None:
+    def install_rapidjson_config(self, install_dir: Path) -> None:
         rapidjson_source_dir = self.repo_config.source_dir("ZETA_RAPIDJSON_SRC_DIR")
         rapidjson_include_dir = rapidjson_source_dir / "include"
-        config_file = self.install_dir / "RapidJSONConfig.cmake"
-        version_file = self.install_dir / "RapidJSONConfigVersion.cmake"
+        config_file = install_dir / "RapidJSONConfig.cmake"
+        version_file = install_dir / "RapidJSONConfigVersion.cmake"
 
         config_file.write_text(
             "\n".join(

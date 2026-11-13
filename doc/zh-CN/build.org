@@ -17,9 +17,28 @@
 Folly 配置前会先暂存其所需的 gRPC package。=install= 要求显式指定目标名称，
 且同一 profile 已成功构建；只发布这些目标，不重新构建或运行 Conan。
 未显式选择安装的构建前置依赖只保留在 staging 中。
-CMake 和 pkg-config 元数据会调整为发布前缀。
+CMake 和 pkg-config 元数据会调整为发布前缀。=install deps= 随 CMake 包文件一起
+发布 OpenSSL manifest。如果 staging 缺少该文件，请重新构建 =deps=。
+Forge 在发布前核验暂存产物清单及其外部引用。只有旧完成标记的目标需要重新构建一次。
+原构建目录移除后，仍可从 stage 发布。Forge 在 =<prefix>/share/zeta_forge/native/=
+记录文件归属并恢复中断的发布。旧安装文件冲突时，首次安装请使用新前缀。
+发布 Folly 需要先发布或同时发布与其构建记录匹配的 gRPC。
 =clean/rebuild= 仅影响一个 profile 下指定的原生构建目录及目标 staging，
 不影响安装内容或共享 Conan/Cargo 缓存。=rebuild= 随后重建所选产物及必要依赖。
+
+原生构建的 =-j= 并行度同时适用于 CMake 和 Conan 包构建。
+原生依赖策略由 =common/zeta_forge/conan_policy.py= 管理。Forge 为 deps、HPX
+和 Folly 一同生成配方与策略快照，请通过 =zbuild.py= 准备。
+这些目标将 Conan 锁文件和解析记录保留在 =build/conan-state/<目标>/<profile>/=。
+=rebuild= 保留锁文件，并用它重新生成缺失或变更的输出。可在 =build=、=check=
+或 =rebuild= 中使用 =--refresh-conan-lock=，为选定的 Conan 目标重新解析锁文件。
+=--dry-run= 只显示刷新范围。
+
+对于 Boost 1.91.0，=deps=、=hpx= 和 =folly= 使用基于固定 Conan Center 修订版的
+Forge 配方。Forge 在解析依赖前将补丁后的配方导出到本机 Conan 缓存。
+Boost.Cobalt TLS 使用 =ZETA_OPENSSL_VERSION= 选定的 Conan OpenSSL（默认 =3.6.2=）。
+生成的 =Boost::cobalt_io_ssl= 目标传递 Cobalt I/O 和 OpenSSL 链接依赖。
+=ZETA_BOOST_VERSION= 选用其他版本时使用对应的上游配方。
 
 Forge =check= 配置并编译所选原生库。显式 =doctor rust-deps= 离线静态审计，
 =check rust-deps= 另外完整执行固定工具链的 =--locked --offline= 解析，不编译。

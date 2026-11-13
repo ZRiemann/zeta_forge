@@ -5,6 +5,21 @@
 
 * Release History
 
+** v1.15.0 - 2026-11-13T02:51:09Z
+:PROPERTIES:
+:CUSTOM_ID: v1.15.0
+:END:
+
+*** Changes
+- Deliver Phase 2 Stages 2.1–2.6 and include the Stage 2.7 integration fixtures and acceptance instructions. See [[file:doc/en/phase2_native_delivery.org][Phase 2 native delivery]].
+- Repair Boost.Cobalt TLS packaging for Boost 1.91.0 and publish the Conan OpenSSL manifest alongside the CMake package files for C++ and Rust consumers.
+- Share Conan dependency policy across deps, HPX and Folly. Reuse locks and generator outputs by fingerprint and allow explicit lock refresh.
+- Plan native target operations deterministically and validate staged artifacts before publishing with ownership records and transaction recovery. Include Open MPI in Debian preparation for the HPX MPI parcelport.
+
+*** Compatibility and Validation Notes
+- Rebuild targets whose stages have only legacy completion stamps. Use a fresh prefix if legacy files conflict. Folly publication requires a matching published gRPC stage.
+- This commit adds no test or build runs. Stage 2.7 and overall Phase 2 acceptance remain pending, including full native builds, publication and the consumer matrix.
+
 ** v1.14.0 - 2026-11-04T03:10:39Z
 :PROPERTIES:
 :CUSTOM_ID: v1.14.0

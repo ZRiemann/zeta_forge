@@ -15,6 +15,8 @@ Zeta Forge 有三个明确用途：
 * 文档导航
 
 - [[file:architecture.org][架构设计]]
+- [[file:phase2_native_delivery.org][Phase 2 原生依赖构建与交付设计]]
+- [[file:../project_progress.org][统一进度与 agent 交接]]
 - [[file:third_party_usage.org][外部项目接入]]
 - [[file:rust_workspace.org][Rust 工程治理]]
 - [[file:rust_governance.org][Phase 1 Rust 依赖治理记录]]

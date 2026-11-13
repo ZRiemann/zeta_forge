@@ -138,7 +138,7 @@ Placement rules:
 Version coordination includes:
 
 - Submodule sources configured in =.gitmodules= and their revisions.
-- Third-party versions in =builder/deps/conanfile.py= and Forge's internal Conan recipes; external projects do not duplicate the shared Conan graph.
+- Third-party versions and options in =common/zeta_forge/conan_policy.py= and Forge's other internal Conan recipes; external projects do not duplicate the shared Conan graph.
 - Shared defaults in =common/zeta_forge/config.py=, such as the C++ standard and base-library versions.
 - CMake configuration switches in Forge project definitions or Builders.
 
@@ -149,3 +149,17 @@ contracts must update [[file:../../VERSION][VERSION]] and [[file:../../release_h
 
 See [[file:../../BUILD.org][BUILD.org]] for the authoritative engineering-unit cleanup,
 installation, read-only operation and test scope.
+
+Forge's native planner resolves delivery prerequisites and derives preview,
+build, cleanup and publication scopes from one immutable request model.
+Conan resolutions retain their lock and package identities outside target clean
+scope. Native build receipts bind the staged inventory to its source and
+dependencies. The publisher copies verified staged artifacts into the selected
+prefix and commits the ownership index after the file replacements.
+
+* Planned Native Delivery Evolution
+
+[[file:phase2_native_delivery.org][Phase 2]] defines the Conan policy/session,
+native planning, artifact receipts and recoverable publication boundaries.
+It preserves the publish-only install contract and native build graphs.
+Implementation and verification status live in [[file:../project_progress.org][the shared progress ledger]].

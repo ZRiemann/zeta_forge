@@ -30,6 +30,9 @@ class DebianPreparer:
         "pkg-config",
         "ccache",
         "gdb",
+        # HPX enables the MPI parcelport in the default Forge build.
+        "libopenmpi-dev",
+        "openmpi-bin",
     ]
     source_helper_packages = [
         "autoconf",
@@ -155,17 +158,15 @@ Environment preparation completed.
 
 Installed toolchain layers:
 1. Base tools: git, curl, archive utilities
-2. Native build tools: gcc/g++, cmake, ninja, pkg-config
+2. Native build tools: gcc/g++, cmake, ninja, pkg-config; Open MPI development files and tools
 3. Source-build helpers: autotools, perl, nasm, flex, bison
 4. Python toolchain: python3, uv, Conan 2
 
 Suggested next steps:
 1. source \"$HOME/.profile\"
 2. cd \"{self.forge_root}\"
-3. ./zbuild.py install grpc
-4. ./zbuild.py install hpx
-5. ./zbuild.py install folly
-6. ./zbuild.py install nng
+3. ./zbuild.py build deps grpc hpx folly nng
+4. ./zbuild.py install deps grpc hpx folly nng
 """.rstrip()
         )
 

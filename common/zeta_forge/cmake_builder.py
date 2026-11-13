@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
@@ -13,6 +13,8 @@ from .process import cpu_count, run_command
 @dataclass(frozen=True)
 class CommonBuildArgs:
     build_type: str
+    jobs: int | None = field(default=None, kw_only=True)
+    refresh_conan_lock: bool = field(default=False, kw_only=True)
 
 
 def cmake_bool(enabled: bool) -> str:
@@ -68,6 +70,9 @@ class CMakeProjectBuilder:
 
     def conan_install_command(self) -> Sequence[object]:
         raise NotImplementedError
+
+    def run_conan(self) -> None:
+        run_command(self.conan_install_command(), cwd=self.script_dir, env=self.repo_config.env)
 
     def configure_command(self) -> Sequence[object]:
         raise NotImplementedError
@@ -170,7 +175,7 @@ class CMakeProjectBuilder:
         if moved_build_dir:
             self.reset_moved_build_state()
         if self.should_run_conan():
-            run_command(self.conan_install_command(), cwd=self.script_dir, env=self.repo_config.env)
+            self.run_conan()
             self.conan_stamp.touch()
         signature = self.build_dir / ".configure.arguments.json"
         command = [str(arg) for arg in self.configure_command()]
@@ -194,11 +199,18 @@ class CMakeProjectBuilder:
             command.extend(("--target", *targets))
         run_command(command, env=self.repo_config.env)
 
-    def install(self, components: Sequence[str] = (), *, prefix: Path | None = None) -> None:
+    def install(
+        self,
+        components: Sequence[str] = (),
+        *,
+        prefix: Path | None = None,
+        destdir: Path | None = None,
+    ) -> None:
+        env = self.repo_config.env if destdir is None else dict(self.repo_config.env, DESTDIR=str(destdir))
         for component in components or (None,):
             command: list[object] = ["cmake", "--install", self.build_dir]
             if prefix is not None:
                 command.extend(("--prefix", prefix))
             if component is not None:
                 command.extend(("--component", component))
-            run_command(command, env=self.repo_config.env)
+            run_command(command, env=env)

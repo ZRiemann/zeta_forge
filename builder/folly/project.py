@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from zeta_forge.cmake_builder import CMakeProjectBuilder
+from zeta_forge.conan_session import ForgeConanProjectBuilder
 
 
-class FollyBuilder(CMakeProjectBuilder):
+class FollyBuilder(ForgeConanProjectBuilder):
+    native_conan_target = "folly"
+
     @property
     def project_name(self) -> str:
         return "Folly"
@@ -17,30 +19,6 @@ class FollyBuilder(CMakeProjectBuilder):
     @property
     def missing_source_hint(self) -> str:
         return "Set ZETA_FOLLY_SRC_DIR to a local checkout or initialize the submodule with: git submodule update --init --recursive 3rd/folly"
-
-    @property
-    def user_toolchain(self) -> Path:
-        return self.script_dir / "cmake" / "conan_user_toolchain.cmake"
-
-    def conan_input_files(self) -> list[Path]:
-        return [self.script_dir / "conanfile.py", self.user_toolchain]
-
-    def conan_install_command(self) -> list[object]:
-        return [
-            "conan",
-            "install",
-            self.script_dir / "conanfile.py",
-            f"--output-folder={self.conan_root}",
-            "--build=missing",
-            "-s",
-            f"build_type={self.args.build_type}",
-            "-s",
-            f"compiler.cppstd={self.repo_config.cxx_standard}",
-            "-c",
-            "tools.cmake.cmaketoolchain:generator=Ninja",
-            "-c",
-            f'tools.cmake.cmaketoolchain:user_toolchain=["{self.user_toolchain}"]',
-        ]
 
     def configure_command(self) -> list[object]:
         install_prefix = self.repo_config.install_prefix

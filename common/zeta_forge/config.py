@@ -4,14 +4,11 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from .conan_policy import VERSION_OVERRIDES
 
 DEFAULT_VERSION_VALUES = {
     "ZETA_CXX_STANDARD": "20",
-    "ZETA_BOOST_VERSION": "1.91.0",
-    "ZETA_JEMALLOC_VERSION": "5.3.0",
-    "ZETA_FMT_VERSION": "12.1.0",
-    "ZETA_SPDLOG_VERSION": "1.17.0",
-    "ZETA_SQLITE_VERSION": "3.53.3",
+    **dict(VERSION_OVERRIDES.values()),
 }
 
 THIRD_SOURCE_ENV_TO_SUBDIR = {

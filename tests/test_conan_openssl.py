@@ -16,6 +16,9 @@ from zeta_forge.conan_openssl import (  # noqa: E402
     read_openssl_manifest,
     write_openssl_manifest,
 )
+from zeta_forge.conan_state import write_json
+from zeta_forge.native_artifacts import RECEIPT_NAME, make_receipt
+from zeta_forge.native_publish import publish
 from zeta_forge.rust_workspace import (  # noqa: E402
     _native_environment,
 )
@@ -49,6 +52,7 @@ class ConanOpensslTests(unittest.TestCase):
             (generators / "OpenSSLConfigVersion.cmake").write_text(
                 'set(PACKAGE_VERSION "3.6.2")\n', encoding="utf-8"
             )
+            (generators / "conan_toolchain.cmake").write_text("set(BUILD_SETTING 1)\n")
             version, discovered = package_from_generators(generators, "Release")
             self.assertEqual((version, discovered), ("3.6.2", package_dir))
             self.install_manifest(root, discovered)
@@ -66,6 +70,14 @@ class ConanOpensslTests(unittest.TestCase):
             ):
                 builder.install()
             self.assertEqual(read_openssl_manifest(root / "installed"), package_dir)
+            self.assertFalse((builder.install_dir / "conan_toolchain.cmake").exists())
+            stage = root / "installed"
+            write_json(stage / RECEIPT_NAME, make_receipt(
+                stage, "deps", "release", sources=[], conan=None,
+                references=[{"kind": "openssl", "path": str(package_dir)}], dependencies={},
+            ))
+            publish(root / "published", root, (("deps", "release", stage),))
+            self.assertEqual(read_openssl_manifest(root / "published"), package_dir)
 
     def test_missing_manifest_and_library_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -83,7 +95,7 @@ class ConanOpensslTests(unittest.TestCase):
             root = Path(directory)
             package_dir = self.create_package(root)
             self.install_manifest(root, package_dir)
-            project = SimpleNamespace(native_dependencies=("openssl-conan",))
+            project = SimpleNamespace(native_dependencies=("openssl-conan",), source_patches=())
             config = SimpleNamespace(env={"TEST_ENV": "1"}, install_prefix=root / "prefix")
             environment = _native_environment(project, config)
             self.assertEqual(environment["OPENSSL_DIR"], str(package_dir))

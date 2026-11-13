@@ -54,14 +54,7 @@ class HpxBuilder(ForgeConanProjectBuilder):
     def configure_command(self) -> list[object]:
         source_commit = self.source_git_commit
         return [
-            "cmake",
-            "-S",
-            self.source_dir,
-            "-B",
-            self.build_dir,
-            "-G",
-            "Ninja",
-            f"-DCMAKE_BUILD_TYPE={self.args.build_type}",
+            *self.configure_arguments(suppress_dev_warnings=False),
             f"-DCMAKE_TOOLCHAIN_FILE={self.conan_toolchain_file}",
             "-DHPX_WITH_MALLOC=jemalloc",
             "-DHPX_WITH_NETWORKING=ON",

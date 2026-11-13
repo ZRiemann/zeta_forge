@@ -5,6 +5,17 @@
 
 * Release History
 
+** v1.21.0 - 2026-11-13T12:45:59Z
+:PROPERTIES:
+:CUSTOM_ID: v1.21.0
+:END:
+
+*** Changes
+- Deliver Phase 3 Stage 3.5. Share ordered CMake configuration arguments and give optional dependency preparation a separate step.
+
+*** Validation
+- All 156 tooling tests passed, including legacy subclass dispatch and gRPC fallback. No full build ran.
+
 ** v1.20.0 - 2026-11-13T12:44:15Z
 :PROPERTIES:
 :CUSTOM_ID: v1.20.0

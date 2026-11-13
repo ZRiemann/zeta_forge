@@ -77,6 +77,21 @@ class CMakeProjectBuilder:
     def configure_command(self) -> Sequence[object]:
         raise NotImplementedError
 
+    def configure_arguments(self, *, suppress_dev_warnings: bool) -> list[object]:
+        """Base argv. Builder options follow in their original order."""
+        command: list[object] = ["cmake", "-S", self.source_dir, "-B", self.build_dir, "-G", "Ninja"]
+        if suppress_dev_warnings:
+            command.append("-Wno-dev")
+        command.append(f"-DCMAKE_BUILD_TYPE={self.args.build_type}")
+        return command
+
+    def static_install_arguments(self) -> tuple[str, ...]:
+        return (
+            f"-DCMAKE_INSTALL_PREFIX={self.repo_config.install_prefix}",
+            f"-DCMAKE_CXX_STANDARD={self.repo_config.cxx_standard}",
+            "-DBUILD_SHARED_LIBS=OFF",
+        )
+
     def detect_moved_build_dir(self) -> bool:
         cache_path = self.build_dir / "CMakeCache.txt"
         if not cache_path.is_file():
@@ -167,6 +182,12 @@ class CMakeProjectBuilder:
         except OSError:
             shutil.copy2(source, entrypoint)
 
+    def prepare_dependencies(self) -> None:
+        """Delegate through existing hooks for legacy and managed Conan builders."""
+        if self.should_run_conan():
+            self.run_conan()
+            self.conan_stamp.touch()
+
     def prepare(self) -> None:
         """Configure the native tree, including changes in project options."""
         self.validate()
@@ -174,9 +195,7 @@ class CMakeProjectBuilder:
         self.ensure_build_directory()
         if moved_build_dir:
             self.reset_moved_build_state()
-        if self.should_run_conan():
-            self.run_conan()
-            self.conan_stamp.touch()
+        self.prepare_dependencies()
         signature = self.build_dir / ".configure.arguments.json"
         command = [str(arg) for arg in self.configure_command()]
         previous = json.loads(signature.read_text()) if signature.is_file() else None

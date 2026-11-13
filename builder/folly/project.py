@@ -23,15 +23,7 @@ class FollyBuilder(ForgeConanProjectBuilder):
     def configure_command(self) -> list[object]:
         install_prefix = self.repo_config.install_prefix
         return [
-            "cmake",
-            "-S",
-            self.source_dir,
-            "-B",
-            self.build_dir,
-            "-G",
-            "Ninja",
-            "-Wno-dev",
-            f"-DCMAKE_BUILD_TYPE={self.args.build_type}",
+            *self.configure_arguments(suppress_dev_warnings=True),
             f"-DCMAKE_TOOLCHAIN_FILE={self.conan_toolchain_file}",
             f"-DCMAKE_PREFIX_PATH={install_prefix};{self.repo_config.env.get('ZETA_GRPC_STAGE', install_prefix)}",
             f"-DCMAKE_INSTALL_PREFIX={install_prefix}",

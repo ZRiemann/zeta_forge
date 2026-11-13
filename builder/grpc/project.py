@@ -49,18 +49,8 @@ class GrpcBuilder(CMakeProjectBuilder):
 
     def configure_command(self) -> list[object]:
         return [
-            "cmake",
-            "-S",
-            self.source_dir,
-            "-B",
-            self.build_dir,
-            "-G",
-            "Ninja",
-            "-Wno-dev",
-            f"-DCMAKE_BUILD_TYPE={self.args.build_type}",
-            f"-DCMAKE_INSTALL_PREFIX={self.repo_config.install_prefix}",
-            f"-DCMAKE_CXX_STANDARD={self.repo_config.cxx_standard}",
-            "-DBUILD_SHARED_LIBS=OFF",
+            *self.configure_arguments(suppress_dev_warnings=True),
+            *self.static_install_arguments(),
             "-DBUILD_TESTING=OFF",
             "-DgRPC_INSTALL=ON",
             "-DgRPC_BUILD_TESTS=OFF",

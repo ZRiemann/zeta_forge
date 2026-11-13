@@ -162,7 +162,7 @@ class NativeDeliveryTests(unittest.TestCase):
             seed_stage(engine, "folly", {"grpc": grpc["artifact_id"]})
             with (
                 mock.patch.object(engine, "builder", side_effect=AssertionError("builder used")),
-                mock.patch("builder.project.require_command", side_effect=AssertionError("tool used")),
+                mock.patch("builder.native_engine.require_command", side_effect=AssertionError("tool used")),
             ):
                 engine.preflight(request("install"), ("folly",))
                 with self.assertRaisesRegex(RuntimeError, "explicitly install grpc"):

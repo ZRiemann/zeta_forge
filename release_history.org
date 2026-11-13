@@ -5,6 +5,17 @@
 
 * Release History
 
+** v1.20.0 - 2026-11-13T12:44:15Z
+:PROPERTIES:
+:CUSTOM_ID: v1.20.0
+:END:
+
+*** Changes
+- Deliver Phase 3 Stage 3.4. Derive native products and planning descriptors from one registration and move staging into the native engine.
+
+*** Validation
+- All 153 tooling tests passed, including an added target staged and published through registration. No full build ran.
+
 ** v1.19.0 - 2026-11-13T12:41:51Z
 :PROPERTIES:
 :CUSTOM_ID: v1.19.0

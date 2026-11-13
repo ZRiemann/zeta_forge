@@ -261,7 +261,7 @@ implementation on baseline =3eb9474da9b751e76356ec66c6b68a67642641e0=.
 | [[file:en/phase3_build_modularity.org::#stage-3-1][3.1]] / Forge tests | delivered | Independent contract baseline and explicit CMake consumer probe | None | v1.17.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-2][3.2]] / Forge CLI | delivered | Contracts and explicit lifecycle | None | v1.18.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-3][3.3]] / Forge state I/O | delivered | Neutral persistence mechanisms | None | v1.19.0 |
-| [[file:en/phase3_build_modularity.org::#stage-3-4][3.4]] / Forge native | planned | Composition and staging ownership | 3.2, 3.3 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-4][3.4]] / Forge native | delivered | Composition and staging ownership | None | v1.20.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-5][3.5]] / Forge CMake | planned | Configuration and dependency seam | 3.1, 3.4 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-6][3.6]] / Forge Rust governance | planned | Project/catalog and validation | 3.1, 3.2 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-7][3.7]] / Forge Rust delivery | planned | Tool preparation and delivery lifecycle | 3.2, 3.6 | unset |
@@ -333,8 +333,23 @@ journal bytes and Conan generation IDs. Each read the other's receipts and
 Conan lock and recovered an interrupted native publication on a temporary
 prefix. Ruff import checks passed. No full build or real publication ran.
 
-Next action: Stage 3.4, isolating target registration and native staging
-lifecycle behind the Forge composition root.
+Stage 3.4: the Forge composition root owns the ordered target registrations.
+Each pairs a pure planning descriptor with a builder factory and one of two
+staging policies. =builder/native_engine.py= owns stage locks, build/stage
+execution and publication dispatch. The planner receives descriptors only.
+Deps generator-copy and source-library DESTDIR staging are explicit policies;
+Folly's gRPC prerequisite and staged environment remain registration data.
+Receipts, publication locks and transaction recovery retain their existing owners.
+
+Validation for v1.20.0: =PYTHONDONTWRITEBYTECODE=1 ./zbuild.py test build-tools=
+passed 153 tests on the Stage 3.4 worktree over =cae6b08=. The synthetic sixth
+target was listed through project defaults, previewed, staged with a real receipt
+and published without invoking its builder or build tools at install time.
+Existing scope, failure, receipt, rollback and Conan fixture tests passed.
+Ruff import checks passed. No full native dependency build ran.
+
+Next action: Stage 3.5, sharing ordered CMake arguments and separating the
+optional dependency preparation step while preserving subclass dispatch.
 
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /

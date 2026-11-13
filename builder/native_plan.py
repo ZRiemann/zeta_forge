@@ -18,15 +18,6 @@ class TargetSpec:
     uses_conan: bool = False
 
 
-TARGETS = (
-    TargetSpec("deps", uses_conan=True),
-    TargetSpec("grpc"),
-    TargetSpec("hpx", uses_conan=True),
-    TargetSpec("folly", prerequisites=("grpc",), uses_conan=True),
-    TargetSpec("nng"),
-)
-
-
 def staging_directory(root: Path, profile: str, target: str) -> Path:
     return root / "build" / "staging" / profile / target
 
@@ -62,7 +53,7 @@ def plan_native(
     root: Path,
     install_prefix: Path,
     *,
-    targets: tuple[TargetSpec, ...] = TARGETS,
+    targets: tuple[TargetSpec, ...],
 ) -> NativePlan:
     action = request.action
     if action not in (*NATIVE_ACTIONS, "list", "metadata"):
@@ -75,6 +66,11 @@ def plan_native(
     if unknown:
         raise ValueError(f"unknown Forge native target: {', '.join(sorted(unknown))}")
 
+    for name, spec in specs.items():
+        for prerequisite in spec.prerequisites:
+            if prerequisite not in specs:
+                raise ValueError(f"unknown prerequisite {prerequisite} for Forge native target {name}")
+
     ordered: dict[str, None] = {}
     visiting: list[str] = []
     include_prerequisites = action in BUILD_ACTIONS or action == "doctor"
@@ -84,8 +80,6 @@ def plan_native(
             return
         if name in visiting:
             raise ValueError(f"Forge native prerequisite cycle: {' -> '.join((*visiting, name))}")
-        if name not in specs:
-            raise ValueError(f"unknown prerequisite {name} for Forge native target {visiting[-1]}")
         visiting.append(name)
         if include_prerequisites:
             for prerequisite in specs[name].prerequisites:

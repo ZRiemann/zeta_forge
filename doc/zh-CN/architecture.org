@@ -83,10 +83,12 @@ Forge 测试只验证自身入口和公共工具库契约；外部项目在各�
 - =config.py=：发现 forge 根目录、注入环境变量、解析源码目录和安装前缀。
 - =process.py=：统一命令执行、日志输出和错误处理。
 - =cmake_builder.py=：封装 Conan/CMake/Ninja 构建流程、stamp 判断、rebuild 和 install。
-- =build_cli.py=：公共动作、选择、profile、预检与退出码契约。
+- =build_cli.py=：参数解析、选择、输出与退出码。共享类型和执行顺序由
+  =build_contract.py= 与 =build_invocation.py= 管理。
 - =cmake_engine.py/rust_engine.py/gradle_engine.py=：原生技术栈适配器；不复制原生依赖图。
 - =debian_prep.py=：准备 Debian/Ubuntu 系统依赖和 Conan 工具链。
-- =rust_workspace.py=：加载 Rust 工具链、依赖目录和项目描述，检查 workspace，并通过固定 toolchain 执行 Cargo。
+- =rust_project.py= 与 =rust_governance.py=：Rust 目录、项目和锁文件规则。
+  =rust_workspace.py= 保留公开管理器与工具生命周期。
 
 外部项目入口应尽量保持薄层，只负责定位工具库、设置当前项目源码默认值并调用项目仓库自己的 Builder。
 
@@ -137,9 +139,17 @@ Conan 锁文件与包身份保存在目标清理范围之外。原生构建记�
 保留当前 install 仅发布契约及原生构建依赖图。
 实际实现与验证状态见[[file:../project_progress.org][统一进度台账]]。
 
-* 构建框架模块化提案
+* 构建框架模块化
 
-[[file:phase3_build_modularity.org][Phase 3]] 提议将稳定契约放到 CLI 下层，建立独立回归
-fixture，明确 native/Rust 生命周期 owner，提取中立的状态/进程机制并逐步消除重复策略。
-保留公开 CLI、消费者 API 和 Phase 2 交付格式。这些是建议边界，不是当前实现目录。
-实施前需完成 Phase 2 总验收、固定基线并评审批准提案。
+[[file:phase3_build_modularity.org][Phase 3]] 保留现有 CLI 和消费者导入路径，分离参数解析、
+执行顺序和各项能力的规则。共享 JSON、摘要和锁操作由 =state_io.py= 提供，原生收据
+和事务格式仍由各自领域管理。有序原生注册表关联规划描述、builder 工厂与 staging
+规则。规划过程不构造 builder。Rust 配置和锁文件规则独立于工具安装。预检验证待准备
+的 Rust 输入，准备阶段获取输入，随后各引擎才开始执行。
+
+扩展 Forge 原生交付时，在组合入口注册 =NativeTarget=、其 =TargetSpec= 和工厂。
+普通 CMake 库复用源码库的 staging 规则。扩展 Rust 消费项目时，在项目定义中添加
+=RustTarget= 与公开 =Product=，声明支持的操作，并在目标中指定平台、Cargo feature
+或 Dioxus 交付类型。
+
+已交付阶段、集成证据和待验收项见[[file:../project_progress.org][统一进度台账]]。

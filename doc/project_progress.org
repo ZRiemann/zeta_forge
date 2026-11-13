@@ -266,7 +266,7 @@ implementation on baseline =3eb9474da9b751e76356ec66c6b68a67642641e0=.
 | [[file:en/phase3_build_modularity.org::#stage-3-6][3.6]] / Forge Rust governance | delivered | Project/catalog and validation | None | v1.22.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-7][3.7]] / Forge Rust delivery | delivered | Tool preparation and delivery lifecycle | None | v1.23.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-8][3.8]] / Forge processes | delivered | Process ownership and diagnostics | None | v1.24.0 |
-| [[file:en/phase3_build_modularity.org::#stage-3-9][3.9]] / Forge integration | planned | Architecture gates and overall matrix | 3.3-3.8, then user overall acceptance | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-9][3.9]] / Forge integration | in-progress | Architecture gates, extension fixtures and isolated native matrix passed | Android, Trader Web and zgent consumer follow-up; user overall acceptance | v1.24.1 (verified subset) |
 
 Evidence: read-only source/test inspection and AST inventory on HEAD =e74ac83=
 plus staged Phase 2 diff SHA-256
@@ -401,8 +401,78 @@ termination of a grandchild that ignores SIGINT. Other fixtures cover captured
 stdout/stderr, environment forwarding, timeout and diagnostic privacy. Ruff
 import checks passed. No full build ran.
 
-Next action: Stage 3.9 architecture and integration gates, followed by the
-overall validation matrix and user acceptance.
+Stage 3.9 verified subset (=v1.24.1=): architecture tests resolve absolute, relative and package
+imports, check deferred imports, and distinguish type-only imports from runtime
+edges. The native and Rust extension fixtures reach the existing CLI and engine
+paths using registrations only. English and Chinese architecture guides describe
+the current ownership and extension points.
+
+The Stage 3.9 worktree over =d94a034= passed 162 default tests in each of two
+temporary source copies with seccomp-denied sockets, a temporary install prefix,
+and either no sibling checkouts or deliberately incompatible sibling fixtures.
+The suite includes Phase 2 state recovery, identity, staging and concurrency
+fixtures. Stage 3.3 separately verified cross-revision receipt, lock and rollback
+compatibility.
+
+Startup comparison against =3eb9474= (12 alternating runs per command, same host,
+bytecode writes disabled and a temporary prefix): median =metadata nng= went
+from 103.1 ms to 99.2 ms and =rebuild nng --dry-run= from 102.9 ms to 98.7 ms.
+The sample shows no material startup regression and does not measure build speed.
+Production Python grew from 37 modules / 6,410 lines to 48 / 6,739. Default test
+Python grew from 17 modules / 3,589 lines to 20 / 4,088 before final acceptance.
+Internal production imports of the CLI dropped to zero. Native registration and
+shared CMake configure arguments each have a single owner. JSON/digest/lock
+primitives and Rust manifest command construction are also shared.
+
+Actual consumer probes (temporary install prefix and bytecode writes disabled):
+- =zust@3c27f5e= metadata, =zeta_trader@4ea9e22= desktop and Web Dioxus dry runs,
+  =zeta_cat@0fbd0a3= Gradle dry run and =zzg@2b9735c= Zig dry run passed.
+- The live =zpp@d060043= tree lacked a run metadata token. An isolated clone
+  built =zpp_core= in Release against the earlier Phase 2 acceptance prefix
+  and then passed =metadata zpp_core=. The earlier =zgent= compatibility issue
+  remains open.
+- With isolated Rust 1.97.1 and prepared caches, =zust@3c27f5e= compiled and
+  passed its default doctest. =python3 tests/check_rust_consumer.py= passed
+  locked offline metadata and one integration test using =zust@3c27f5e=
+  and =zeta_trader@4ea9e22= dependency declarations.
+- =zzg@2b9735c= passed =./zbuild.py test= in Debug and Release with Zig 0.17.0
+  in the isolated checkout.
+- =zeta_trader@4ea9e22= passed Owl desktop Release build and 305 tests with
+  isolated Node 24.22.3, Rust 1.97.1, WebKitGTK/libsoup/Clang development files,
+  and the Phase 2 native prefix. This did not start a trading service.
+  Its separate Dioxus Web spike passed locked fetch but failed compiling
+  =dioxus-web= because =web_sys::Window::location()= was unavailable. A
+  locked offline Cargo feature tree with the managed Cargo home confirmed that
+  =web-sys/Location= was absent. The consumer's Web target remains open.
+- =zeta_practice@9985aa4= passed its Dioxus Release fullstack build. A temporary
+  loopback server served HTML and the compiled Wasm bundle; Chrome headless
+  returned the application DOM. No external service or existing database was used.
+- =zeta_cat@0fbd0a3= passed Gradle dry run. Debug host test preflight initially
+  lacked Java and, after adding isolated OpenJDK 21, stopped at missing zsa
+  Android client materials. Android SDK-backed compilation and unit tests
+  remain open.
+
+The native acceptance script passed on =d94a034=, using a copied source tree
+and Conan home with a disposable publication prefix. The initial clean Release
+build was stopped by the quota gate during gRPC; =bash
+tests/manual/native_delivery/acceptance.sh= resumed incrementally in the same
+checkout. The script built, staged and published deps, gRPC, HPX, Folly and NNG,
+verified Conan generator reuse and retained-lock regeneration, passed all five
+C++ CTest consumers and the Rust OpenSSL probe, then built, published and cleaned
+Debug NNG with the Release hashes unchanged. The resumed run recorded Conan
+2.34.0, CMake 4.3.4, Ninja 1.13.2, GCC 15.3.0 and rustc 1.99.1.
+An additional =./zbuild.py install grpc --profile release= with only Python on
+PATH published the same stage successfully; the archive and ownership index
+were present. Evidence: =build/phase3-native.9K6jLZ/native-resume.log= and
+=zeta_forge/build/phase2-acceptance.FnUZw1/= beneath that directory.
+The later Stage 3.9 production diff is limited to Rust registry parsing.
+The 162-test suite and the real static =./zbuild.py doctor rust-deps= probe
+passed with that diff applied.
+
+Next: resolve or obtain acceptance evidence for the Android, Trader Web and
+=zgent= consumer gates within their owners' scope, and obtain the user's
+Phase 3 overall acceptance. The v1.24.1 commit records verified implementation
+and checks, not Stage 3.9 completion.
 
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /
@@ -418,8 +488,8 @@ implementation tests were run for this documentation-only addition.
 
 * Design decisions still requiring bounded implementation evidence
 
-- Phase 3 overall acceptance still needs real gRPC, HPX and Folly builds, their
-  publication and the full consumer matrix. Focused dependency checks and
+- The Phase 3 native matrix passed. The remaining consumer gates and final
+  user acceptance are tracked in Stage 3.9 above. Focused dependency checks and
   published deps/NNG evidence do not complete those gates.
 
 These are scoped investigation tasks with specified decision criteria, not

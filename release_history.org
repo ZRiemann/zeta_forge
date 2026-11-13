@@ -5,6 +5,19 @@
 
 * Release History
 
+** v1.24.1 - 2026-11-13T15:56:01Z
+:PROPERTIES:
+:CUSTOM_ID: v1.24.1
+:END:
+
+*** Changes
+- Add Phase 3 architecture import gates and exercise Rust extension through existing registrations.
+- Share Rust registry parsing and document the current extension boundaries in both languages.
+
+*** Validation
+- The offline tooling suite passed 162 tests with and without sibling fixtures. The isolated native matrix passed across the clean build and incremental resume, including five C++ probes, Rust OpenSSL and Debug NNG isolation.
+- Stage 3.9 remains open for the outstanding consumer gates and final user acceptance.
+
 ** v1.24.0 - 2026-11-13T12:53:41Z
 :PROPERTIES:
 :CUSTOM_ID: v1.24.0

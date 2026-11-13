@@ -93,10 +93,12 @@ from project-local staging.
 - =config.py=: Forge root discovery, environment injection, source paths and installation prefix.
 - =process.py=: shared process execution, logging and error handling.
 - =cmake_builder.py=: Conan/CMake/Ninja lifecycle, stamp checks, rebuild and install.
-- =build_cli.py=: public actions, selection, profiles, preflight and exit-code contracts.
+- =build_cli.py=: argument parsing, selection, output and exit codes. Shared values
+  and execution ordering live in =build_contract.py= and =build_invocation.py=.
 - =cmake_engine.py/rust_engine.py/gradle_engine.py=: native-stack adapters without a duplicate native dependency graph.
 - =debian_prep.py=: Debian/Ubuntu build dependency and Conan toolchain preparation.
-- =rust_workspace.py=: toolchain, dependency catalog and project descriptor loading, workspace validation and pinned-toolchain Cargo execution.
+- =rust_project.py= and =rust_governance.py=: Rust catalog, project and lock policy.
+  =rust_workspace.py= keeps the public manager and tool lifecycle.
 
 External project entrypoints stay thin: locate the library, set project source
 defaults and invoke the project's own Builder.
@@ -164,11 +166,22 @@ native planning, artifact receipts and recoverable publication boundaries.
 It preserves the publish-only install contract and native build graphs.
 Implementation and verification status live in [[file:../project_progress.org][the shared progress ledger]].
 
-* Proposed Build Framework Modularity
+* Build Framework Modularity
 
-[[file:phase3_build_modularity.org][Phase 3]] proposes contracts below the CLI,
-independent regression fixtures, explicit native and Rust lifecycle owners,
-neutral state/process mechanisms and incremental removal of duplicated policy.
-It preserves the current public CLI, consumer APIs and Phase 2 delivery formats.
-These are proposed boundaries, not the current implementation layout. Execution
-requires Phase 2 overall acceptance, a fixed baseline and proposal approval.
+[[file:phase3_build_modularity.org][Phase 3]] keeps the existing CLI and consumer
+imports while splitting command parsing, execution order, and capability policy.
+Shared JSON, digest and lock operations live in =state_io.py=. Native receipt
+and transaction schemas still belong to their domain owners. The ordered native
+registry pairs planner descriptors with builder factories and staging policies;
+the planner never constructs builders. Rust configuration and lock policy are
+independent of tool installation. Preflight validates pending Rust inputs and
+preparation acquires them before any engine executes.
+
+To extend Forge native delivery, register a =NativeTarget= with its =TargetSpec=
+and factory in the composition root. Reuse the source-library staging policy for
+a normal CMake library. For a consuming Rust project, add a =RustTarget= and a
+public =Product= with the supported actions to its project definition. Set
+platforms, Cargo features or Dioxus delivery kind in the target declaration.
+
+The [[file:../project_progress.org][progress ledger]] records delivered stages,
+integration evidence and remaining acceptance.

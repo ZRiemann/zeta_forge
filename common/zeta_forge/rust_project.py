@@ -220,20 +220,25 @@ def load_catalog(forge_root: Path) -> RustCatalog:
     )
 
 
+def _registry_records(path: Path) -> list[dict]:
+    document = read_project_toml(path)
+    records = document.get("projects")
+    if document.get("schema") != 1 or set(document) != {"schema", "projects"} or not isinstance(records, list):
+        raise RuntimeError(f"Invalid Rust consumer registry: {path}")
+    for record in records:
+        if not isinstance(record, dict) or set(record) - {"path", "additional-manifests", "local-dependencies"}:
+            raise RuntimeError(f"Invalid Rust consumer entry in {path}: {record!r}")
+        name = record.get("path")
+        if not isinstance(name, str) or Path(name).is_absolute() or len(Path(name).parts) != 1:
+            raise RuntimeError(f"Rust consumer must name a workspace sibling in {path}: {name!r}")
+    return records
+
+
 def _authorized_local_roots(root: Path, forge_root: Path) -> tuple[Path, ...]:
     registry = forge_root / "rust/projects.toml"
     if not registry.is_file():
         return ()
-    document = read_project_toml(registry)
-    records = document.get("projects")
-    if document.get("schema") != 1 or set(document) != {"schema", "projects"} or not isinstance(records, list):
-        raise RuntimeError(f"Invalid Rust consumer registry: {registry}")
-    for record in records:
-        if not isinstance(record, dict) or set(record) - {"path", "additional-manifests", "local-dependencies"}:
-            raise RuntimeError(f"Invalid Rust consumer entry in {registry}")
-        name = record.get("path")
-        if not isinstance(name, str) or Path(name).is_absolute() or len(Path(name).parts) != 1:
-            raise RuntimeError(f"Rust consumer must name a workspace sibling: {name!r}")
+    records = _registry_records(registry)
     names = {record["path"] for record in records}
     selected = [record for record in records if record.get("path") == root.name]
     if not selected:
@@ -288,19 +293,11 @@ def load_rust_project(project_root: Path, forge_root: Path) -> RustProject:
 
 def registered_projects(config: RepoConfig) -> list[RustProject]:
     path = config.forge_root / "rust" / "projects.toml"
-    document = read_project_toml(path)
-    records = document.get("projects")
-    if document.get("schema") != 1 or set(document) != {"schema", "projects"} or not isinstance(records, list):
-        raise RuntimeError(f"Invalid Rust consumer registry: {path}")
     projects: list[RustProject] = []
     roots: set[Path] = set()
     manifests: set[Path] = set()
-    for record in records:
-        if not isinstance(record, dict) or set(record) - {"path", "additional-manifests", "local-dependencies"}:
-            raise RuntimeError(f"Invalid Rust consumer entry in {path}: {record!r}")
-        relative = record.get("path")
-        if not isinstance(relative, str) or Path(relative).is_absolute() or len(Path(relative).parts) != 1:
-            raise RuntimeError(f"Rust consumer must name a workspace sibling in {path}: {relative!r}")
+    for record in _registry_records(path):
+        relative = record["path"]
         root = project_relative_path(config.zetax_root, relative, "consumer", path)
         if root in roots:
             raise RuntimeError(f"Duplicate Rust consumer: {root}")

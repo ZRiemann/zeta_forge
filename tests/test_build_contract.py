@@ -253,6 +253,42 @@ class ContractTests(unittest.TestCase):
 
 
 class AdapterTests(unittest.TestCase):
+    def test_registered_rust_deliveries_use_existing_cli_and_adapter(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            manager = mock.Mock()
+            manager.project.capabilities = ("dioxus-web-fullstack",)
+            manager.project.catalog.capabilities = {
+                "dioxus-web-fullstack": {"cargo-tool": "dioxus-cli"},
+            }
+            manager.project.workspace_dir = root
+            manager.cargo_command.side_effect = lambda *args: ["cargo", *args]
+            manager.require_cargo_tool.return_value = "/fixture/dx"
+            targets = {
+                "library": RustTarget("fixture-lib", root, features=("fixture",)),
+                "site": RustTarget("fixture-site", root, "fullstack", ("web",)),
+            }
+            engine = RustEngine(root, mock.Mock(), targets, root / "target")
+            project = Project(
+                "fixture", tuple(Product(name, "rust", name, ("build",)) for name in targets),
+                {"rust": engine}, tuple(targets),
+            )
+            with (
+                mock.patch.object(engine, "manager", return_value=manager) as load,
+                mock.patch.object(engine, "environment", return_value={}),
+                mock.patch("zeta_forge.rust_engine.run_command") as run,
+                contextlib.redirect_stdout(io.StringIO()),
+            ):
+                self.assertEqual(cli(project, ["build"]), 0)
+                load.assert_called_once()
+            commands = [call.args[0] for call in run.call_args_list]
+            self.assertEqual(commands, [
+                ["cargo", "build", "--locked", "--profile", "release",
+                 "-p", "fixture-lib", "--features", "fixture"],
+                ["/fixture/dx", "build", "--locked", "--package", "fixture-site",
+                 "--web", "--release", "--fullstack", "true", "--force-sequential", "true"],
+            ])
+
     def test_cmake_selected_targets_tests_and_components(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 from typing import Sequence
 
-from .build_cli import log
+from .build_log import log
 
 
 def destdir_path(destdir: Path, prefix: Path) -> Path:

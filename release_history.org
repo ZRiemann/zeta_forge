@@ -5,6 +5,18 @@
 
 * Release History
 
+** v1.18.0 - 2026-11-13T12:39:08Z
+:PROPERTIES:
+:CUSTOM_ID: v1.18.0
+:END:
+
+*** Changes
+- Deliver Phase 3 Stage 3.2. Extract build contracts, log rendering and invocation dispatch while keeping legacy CLI imports.
+- Normalize native and Rust options in their adapters. Keep preparation optional and run it only after all preflights pass.
+
+*** Validation
+- The default tooling suite passed 149 tests, including legacy constructor and adapter coverage. No full build ran.
+
 ** v1.17.0 - 2026-11-13T12:36:46Z
 :PROPERTIES:
 :CUSTOM_ID: v1.17.0

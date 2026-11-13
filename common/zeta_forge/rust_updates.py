@@ -8,13 +8,24 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Mapping
 
-from .build_cli import Request, log
+from .build_contract import Request
+from .build_log import log
 from .config import RepoConfig
 from .rust_audit import registered_projects, resolved_metadata
 from .rust_dependencies import (
-    approved_source, compatibility_series, dependency_chains, owned_manifest, resolved_dependency_report,
+    approved_source,
+    compatibility_series,
+    dependency_chains,
+    owned_manifest,
+    resolved_dependency_report,
 )
-from .rust_releases import SemVer, TIMEOUT_SECONDS, git_releases, registry_releases, rust_version
+from .rust_releases import (
+    TIMEOUT_SECONDS,
+    SemVer,
+    git_releases,
+    registry_releases,
+    rust_version,
+)
 from .rust_workspace import RustProject, load_catalog, validate_rust_project
 
 MAX_CONCURRENT_QUERIES = 4

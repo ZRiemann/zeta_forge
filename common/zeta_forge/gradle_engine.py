@@ -8,7 +8,8 @@ import tempfile
 from pathlib import Path
 from typing import Callable, Mapping
 
-from .build_cli import Request, log
+from .build_contract import Request
+from .build_log import log
 from .build_ops import remove_generated, validate_generated_path
 from .process import require_command, run_command
 

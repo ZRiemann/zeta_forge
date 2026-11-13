@@ -10,14 +10,17 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
 
 FORGE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(FORGE / "common"))
 
+from zeta_forge import build_cli, build_contract, build_log
 from zeta_forge.build_cli import Product, Project, Request, cli
 from zeta_forge.build_ops import remove_generated, run_program
+from zeta_forge.cmake_builder import CommonBuildArgs
 from zeta_forge.cmake_engine import CMakeEngine
 from zeta_forge.config import load_repo_config
 from zeta_forge.gradle_engine import GradleEngine
@@ -48,6 +51,41 @@ class ContractTests(unittest.TestCase):
         with contextlib.redirect_stdout(output), contextlib.redirect_stderr(output):
             status = cli(self.project, args)
         return status, output.getvalue()
+
+    def test_legacy_contract_imports_and_constructors(self) -> None:
+        for name in ("Product", "Project", "Request", "Engine"):
+            self.assertIs(getattr(build_cli, name), getattr(build_contract, name))
+        self.assertIs(build_cli.log, build_log.log)
+        options = argparse.Namespace(extension_value="retained")
+        req = Request("build", "release", 2, options)
+        self.assertIs(req.options, options)
+        self.assertEqual(req.arguments, ())
+        project = Project("sample", (), {}, ())
+        self.assertIsNone(project.run_default)
+        self.assertEqual(project.action_defaults, {})
+
+        @dataclass(frozen=True)
+        class ConsumerArgs(CommonBuildArgs):
+            component: str
+
+        args = ConsumerArgs("Release", "core", jobs=2, refresh_conan_lock=True)
+        self.assertEqual((args.build_type, args.component, args.jobs, args.refresh_conan_lock),
+                         ("Release", "core", 2, True))
+
+    def test_engine_without_prepare_remains_compatible(self) -> None:
+        engine = mock.Mock(spec=build_contract.Engine)
+        engine.describe.return_value = {}
+        self.project = Project(
+            "legacy", (Product("app", "native", "app", ("build",)),),
+            {"native": engine}, ("app",),
+        )
+        status, output = self.invoke("build")
+        self.assertEqual(status, 0)
+        self.assertIn("succeeded=1 failed=0", output)
+        self.assertEqual(
+            [call[0] for call in engine.method_calls],
+            ["validate_request", "describe", "preflight", "execute"],
+        )
 
     def test_defaults_profiles_and_deduplication(self) -> None:
         self.assertEqual(self.invoke("build")[0], 0)

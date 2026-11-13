@@ -7,7 +7,8 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Mapping, TypedDict
 
-from .build_cli import Request, log
+from .build_contract import Request
+from .build_log import log
 from .config import RepoConfig
 from .process import run_command
 from .rust_dependencies import DependencyReport, resolved_dependency_report

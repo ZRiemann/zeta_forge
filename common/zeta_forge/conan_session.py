@@ -10,7 +10,7 @@ from functools import cached_property
 from pathlib import Path
 
 from . import conan_boost, conan_policy, conan_state
-from .build_cli import log
+from .build_log import log
 from .cmake_builder import CMakeProjectBuilder, CommonBuildArgs
 from .conan_inputs import (
     compiler_inputs,

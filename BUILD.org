@@ -85,6 +85,11 @@ Public contracts: =common/zeta_forge/build_cli.py=; native adapters:
 thin entry and project definition. There is no subsystem registry or alternate
 native dependency graph. The root =zbuild.py= is the only executable Forge build entry.
 
+The CLI keeps its public imports. Internal callers use =build_contract= for
+build values, =build_log= for log rendering and =build_invocation= for engine
+dispatch. All selected engines pass preflight before optional preparation,
+and preparation must succeed for all selected engines before execution.
+
 * Phase 3 compatibility baseline
 
 - The supported Python surface includes =build_cli.{Product,Project,Request,Engine,cli,log}=,

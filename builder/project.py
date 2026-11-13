@@ -6,12 +6,13 @@ import argparse
 import sys
 import tempfile
 from contextlib import ExitStack, contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Iterator, Mapping
 
 from zeta_forge import native_artifacts, native_publish
-from zeta_forge.build_cli import Product, Project, Request, log
+from zeta_forge.build_contract import Product, Project, Request
+from zeta_forge.build_log import log
 from zeta_forge.build_ops import (
     destdir_path,
     remove_generated,
@@ -47,6 +48,15 @@ BUILDERS = {
     "folly": FollyBuilder,
     "nng": NngBuilder,
 }
+
+
+@dataclass(frozen=True)
+class NativeOptions:
+    refresh_conan_lock: bool
+
+    @classmethod
+    def from_request(cls, request: Request) -> NativeOptions:
+        return cls(bool(getattr(request.options, "refresh_conan_lock", False)))
 
 
 class ForgeEngine:
@@ -136,7 +146,7 @@ class ForgeEngine:
             args=CommonBuildArgs(
                 request.cmake_profile,
                 jobs=request.jobs,
-                refresh_conan_lock=getattr(request.options, "refresh_conan_lock", False),
+                refresh_conan_lock=NativeOptions.from_request(request).refresh_conan_lock,
             ),
         )
 
@@ -153,7 +163,7 @@ class ForgeEngine:
             install_prefix=str(plan.install_prefix) if plan.install_prefix is not None else None,
             clean_scope=list(plan.clean_scope),
         )
-        if getattr(request.options, "refresh_conan_lock", False):
+        if NativeOptions.from_request(request).refresh_conan_lock:
             description["refresh_conan_lock"] = plan.conan_scope
         return description
 
@@ -213,7 +223,7 @@ def add_native_options(parser: argparse.ArgumentParser) -> None:
 
 
 def validate_options(request: Request, selected: tuple[Product, ...]) -> None:
-    if not request.options.refresh_conan_lock:
+    if not NativeOptions.from_request(request).refresh_conan_lock:
         return
     conan_targets = {target.name for target in TARGETS if target.uses_conan}
     if request.action not in BUILD_ACTIONS or not any(

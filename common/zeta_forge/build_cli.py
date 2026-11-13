@@ -11,9 +11,14 @@ import json
 import os
 import sys
 import time
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Callable, Mapping, Protocol, Sequence
+from typing import Sequence
+
+from .build_contract import Engine as Engine
+from .build_contract import Product as Product
+from .build_contract import Project as Project
+from .build_contract import Request as Request
+from .build_invocation import describe_invocation, execute_invocation, invocation_steps
+from .build_log import log as log
 
 ACTIONS = (
     "list",
@@ -29,55 +34,6 @@ ACTIONS = (
     "install",
     "fetch",
 )
-
-
-@dataclass(frozen=True)
-class Product:
-    name: str
-    engine: str
-    description: str
-    actions: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class Request:
-    action: str
-    profile: str
-    jobs: int
-    options: argparse.Namespace
-    arguments: tuple[str, ...] = ()
-
-    @property
-    def cmake_profile(self) -> str:
-        return {"release": "Release", "debug": "Debug"}[self.profile]
-
-    @property
-    def cargo_profile(self) -> str:
-        return {"release": "release", "debug": "dev"}[self.profile]
-
-
-class Engine(Protocol):
-    def describe(self, request: Request, names: tuple[str, ...]) -> Mapping[str, object]: ...
-    def validate_request(self, request: Request, names: tuple[str, ...]) -> None: ...
-    def preflight(self, request: Request, names: tuple[str, ...]) -> None: ...
-    def execute(self, request: Request, names: tuple[str, ...]) -> None: ...
-
-
-@dataclass(frozen=True)
-class Project:
-    name: str
-    products: tuple[Product, ...]
-    engines: Mapping[str, Engine]
-    defaults: tuple[str, ...]
-    run_default: str | None = None
-    action_defaults: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
-    extra_actions: tuple[str, ...] = ()
-    add_options: Callable[[argparse.ArgumentParser], None] | None = None
-    validate_request: Callable[[Request, tuple[Product, ...]], None] | None = None
-
-
-def log(level: str, message: str) -> None:
-    print(f"{datetime.now():%m-%d:%H:%M:%S.%f} [{level}] [zbuild] {message}", flush=True)
 
 
 def positive_int(value: str) -> int:
@@ -169,12 +125,7 @@ def cli(project: Project, argv: Sequence[str] | None = None) -> int:
         )
         if project.validate_request is not None:
             project.validate_request(request, selected)
-        grouped: dict[str, list[str]] = {}
-        for product in selected:
-            grouped.setdefault(product.engine, []).append(product.name)
-        steps = [(key, tuple(names)) for key, names in grouped.items()]
-        for key, names in steps:
-            project.engines[key].validate_request(request, names)
+        steps = invocation_steps(project.engines, selected, request)
     except ValueError as error:
         print(f"zbuild: {error}", file=sys.stderr)
         return 2
@@ -186,16 +137,16 @@ def cli(project: Project, argv: Sequence[str] | None = None) -> int:
             default = " default" if product.name in project.defaults else ""
             print(f"{product.name} [{product.engine}]{default}: {product.description}")
             print(f"  actions: {', '.join(product.actions)}")
-        for key, names in steps:
+        for step in steps:
             try:
-                info = project.engines[key].describe(request, names)
+                info = step.engine.describe(request, step.names)
             except (OSError, RuntimeError, ValueError) as error:
                 print(f"zbuild: {error}", file=sys.stderr)
                 return 1
             native = info.get(
-                "source", info.get("project", info.get("target_dir", info.get("build_dirs", key)))
+                "source", info.get("project", info.get("target_dir", info.get("build_dirs", step.key)))
             )
-            print(f"  native project [{key}]: {native}")
+            print(f"  native project [{step.key}]: {native}")
         print(f"default targets: {', '.join(project.defaults)}")
         for action, targets in project.action_defaults.items():
             default = ", ".join(targets) if targets else "(explicit selection required)"
@@ -207,10 +158,7 @@ def cli(project: Project, argv: Sequence[str] | None = None) -> int:
     succeeded = 0
     status = 0
     try:
-        plan = [
-            dict(engine=key, targets=names, **project.engines[key].describe(request, names))
-            for key, names in steps
-        ]
+        plan = describe_invocation(steps, request)
         if request.action == "metadata":
             print(
                 json.dumps(
@@ -222,18 +170,7 @@ def cli(project: Project, argv: Sequence[str] | None = None) -> int:
             log("I", json.dumps(step))
         if options.dry_run:
             return 0
-        for key, names in steps:
-            project.engines[key].preflight(request, names)
-        for key, names in steps:
-            prepare = getattr(project.engines[key], "prepare", None)
-            if prepare is not None:
-                prepare(request, names)
-        for index, (key, names) in enumerate(steps, 1):
-            log(
-                "I",
-                f"step={index}/{len(steps)} action={request.action} engine={key} profile={request.profile}",
-            )
-            project.engines[key].execute(request, names)
+        for _ in execute_invocation(steps, request):
             succeeded += 1
     except KeyboardInterrupt:
         status = 130

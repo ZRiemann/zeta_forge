@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Mapping
 
-from .build_cli import Request
+from .build_contract import Request
 from .build_ops import remove_generated, run_program, validate_generated_path
 from .config import RepoConfig
 from .process import require_command, run_command
@@ -16,8 +16,8 @@ from .rust_workspace import (
     RustWorkspaceManager,
     _native_environment,
     load_rust_project,
-    validate_rust_project,
     locked_dependency_report,
+    validate_rust_project,
     workspace_dependencies,
 )
 
@@ -35,6 +35,18 @@ class RustTarget:
     artifact_name: str | None = None
     features: tuple[str, ...] = ()
     example: str | None = None
+
+
+@dataclass(frozen=True)
+class RustOptions:
+    platform: str | None
+
+    @classmethod
+    def from_request(cls, request: Request) -> RustOptions:
+        platform = getattr(request.options, "platform", None)
+        if platform is not None and not isinstance(platform, str):
+            raise ValueError("Rust platform must be a string")
+        return cls(platform)
 
 
 class RustEngine:
@@ -65,7 +77,7 @@ class RustEngine:
         )
 
     def platform(self, request: Request, target: RustTarget) -> str | None:
-        return getattr(request.options, "platform", None) or (
+        return RustOptions.from_request(request).platform or (
             target.platforms[0] if target.platforms else None
         )
 
@@ -103,7 +115,7 @@ class RustEngine:
         return RunSpec(artifact, request.arguments, directory, environment)
 
     def validate_request(self, request: Request, names: tuple[str, ...]) -> None:
-        platform = getattr(request.options, "platform", None)
+        platform = RustOptions.from_request(request).platform
         for name in names:
             target = self.targets[name]
             if target.example is not None:

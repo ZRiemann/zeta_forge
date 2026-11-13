@@ -8,7 +8,7 @@ import shutil
 import stat
 from pathlib import Path, PurePosixPath
 
-from .build_cli import log
+from .build_log import log
 from .conan_inputs import file_digest
 from .conan_state import read_json, write_json
 

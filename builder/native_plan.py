@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from zeta_forge.build_cli import Request
+from zeta_forge.build_contract import Request
 
 NATIVE_ACTIONS = ("doctor", "check", "build", "rebuild", "clean", "install")
 BUILD_ACTIONS = frozenset(("check", "build", "rebuild"))

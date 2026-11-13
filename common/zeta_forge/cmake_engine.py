@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Mapping
 
-from .build_cli import Request
+from .build_contract import Request
 from .build_ops import remove_generated, validate_generated_path
 from .cmake_builder import CMakeProjectBuilder
 from .cmake_run import CMakeRunTarget, read_cmake_run

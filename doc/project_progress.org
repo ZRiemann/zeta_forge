@@ -259,7 +259,7 @@ implementation on baseline =3eb9474da9b751e76356ec66c6b68a67642641e0=.
 | Stage / owner | State | Scope | Missing gate / next action | Delivery |
 |---------------+-------+-------+----------------------------+----------|
 | [[file:en/phase3_build_modularity.org::#stage-3-1][3.1]] / Forge tests | delivered | Independent contract baseline and explicit CMake consumer probe | None | v1.17.0 |
-| [[file:en/phase3_build_modularity.org::#stage-3-2][3.2]] / Forge CLI | planned | Contracts and explicit lifecycle | 3.1 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-2][3.2]] / Forge CLI | delivered | Contracts and explicit lifecycle | None | v1.18.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-3][3.3]] / Forge state I/O | planned | Neutral persistence mechanisms | 3.1, 3.2 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-4][3.4]] / Forge native | planned | Composition and staging ownership | 3.2, 3.3 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-5][3.5]] / Forge CMake | planned | Configuration and dependency seam | 3.1, 3.4 | unset |
@@ -300,8 +300,24 @@ checkouts in isolation. On the live workspace the probe reported clean revisions
 remains open. Ruff import checks passed on the touched Python files. No full
 native build or overall Phase 3 acceptance ran.
 
-Next action: Stage 3.2, extracting contracts and explicit invocation lifecycle
-while retaining the legacy import surface and Stage 3.7's acquisition reproducer.
+Stage 3.2: =build_contract= owns shared build values and =build_log= owns log
+rendering. =build_cli= preserves the original public names as identical objects
+and retains parsing, output and exit-code mapping. =build_invocation= groups
+selected engines and owns validation, preflight, optional preparation and execution
+order. Rust and native adapters normalize their options locally. There are no
+production imports of =build_cli= under =common/zeta_forge/= or =builder/=.
+Persistent state and lock ownership are unchanged. Rust fetch's known early
+acquisition remains covered by the Stage 3.7 reproducer.
+
+Validation for v1.18.0: =PYTHONDONTWRITEBYTECODE=1 ./zbuild.py test build-tools=
+passed 149 tests on the Stage 3.2 worktree over =ddb008b=. Added coverage for
+public import identity, constructor defaults and inherited CMake argument
+ordering, and execution of engines without a preparation hook. Existing
+preview, status and failure-ordering tests passed. Ruff import checks passed
+on touched Python files. No full build or live consumer checks ran.
+
+Next action: Stage 3.3, moving persistence mechanisms below Conan and native
+publication while retaining existing on-disk state and recovery contracts.
 
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /

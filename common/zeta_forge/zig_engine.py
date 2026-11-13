@@ -8,8 +8,8 @@ from pathlib import Path
 from typing import Mapping
 
 from .build_contract import Request
-from .build_ops import remove_generated, run_program, validate_generated_path
-from .process import require_command
+from .build_ops import remove_generated, validate_generated_path
+from .process import require_command, run_program
 from .run_spec import RunSpec, launch_run
 
 ZIG_VERSION = "0.17.0"

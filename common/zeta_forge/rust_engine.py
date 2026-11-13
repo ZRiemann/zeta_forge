@@ -9,9 +9,9 @@ from typing import Callable, Mapping
 
 from .build_contract import Request
 from .build_invocation import invocation_snapshot
-from .build_ops import remove_generated, run_program, validate_generated_path
+from .build_ops import remove_generated, validate_generated_path
 from .config import RepoConfig
-from .process import require_command, run_command
+from .process import require_command, run_command, run_program
 from .run_spec import RunSpec, launch_run
 from .rust_environment import native_environment
 from .rust_governance import (

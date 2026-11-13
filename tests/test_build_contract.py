@@ -632,8 +632,8 @@ class AdapterTests(unittest.TestCase):
         process = mock.Mock(pid=9876)
         process.wait.side_effect = [KeyboardInterrupt, 0]
         with (
-            mock.patch("zeta_forge.build_ops.subprocess.Popen", return_value=process),
-            mock.patch("zeta_forge.build_ops.os.killpg") as kill,
+            mock.patch("zeta_forge.process.subprocess.Popen", return_value=process),
+            mock.patch("zeta_forge.process.os.killpg") as kill,
         ):
             with self.assertRaises(KeyboardInterrupt):
                 run_program([sys.executable], cwd=FORGE, env={})

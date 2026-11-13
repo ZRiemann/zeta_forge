@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 from zeta_forge.conan_session import ForgeConanProjectBuilder
+from zeta_forge.process import CommandError, run_command
 
 HPX_TOOLCHAIN_BLOCKS = (
     "user_toolchain", "generic_system", "compilers", "android_system", "apple_system",
@@ -34,14 +34,14 @@ class HpxBuilder(ForgeConanProjectBuilder):
     def source_git_commit(self) -> str:
         """Read HEAD exactly; HPX's path-filtered log can skip merge commits."""
         try:
-            result = subprocess.run(
+            result = run_command(
                 ["git", "-C", str(self.source_dir), "rev-parse", "HEAD"],
                 check=True,
                 capture_output=True,
-                text=True,
+                log_command=False,
                 env=self.repo_config.env,
             )
-        except (OSError, subprocess.CalledProcessError) as exc:
+        except (OSError, CommandError) as exc:
             raise RuntimeError(
                 f"Unable to read the HPX source commit from {self.source_dir}"
             ) from exc

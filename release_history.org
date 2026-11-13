@@ -5,6 +5,17 @@
 
 * Release History
 
+** v1.24.0 - 2026-11-13T12:53:41Z
+:PROPERTIES:
+:CUSTOM_ID: v1.24.0
+:END:
+
+*** Changes
+- Deliver Phase 3 Stage 3.8. Centralize foreground process ownership and make quiet capture explicit for read-only probes.
+
+*** Validation
+- All 159 tooling tests passed, including capture, timeout and real process group interruption. No full build ran.
+
 ** v1.23.0 - 2026-11-13T12:51:56Z
 :PROPERTIES:
 :CUSTOM_ID: v1.23.0

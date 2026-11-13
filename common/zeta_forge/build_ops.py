@@ -4,13 +4,11 @@ from __future__ import annotations
 
 import os
 import shutil
-import signal
-import subprocess
 import tempfile
 from pathlib import Path
-from typing import Sequence
 
 from .build_log import log
+from .process import run_program as run_program
 
 
 def destdir_path(destdir: Path, prefix: Path) -> Path:
@@ -78,38 +76,3 @@ def relocate_installed_metadata(manifest: Path, stage: Path, prefix: Path) -> No
         finally:
             if os.path.exists(temporary):
                 os.unlink(temporary)
-
-
-def run_program(command: Sequence[object], *, cwd: Path, env: dict[str, str] | None = None) -> None:
-    """Run a foreground process group without logging application arguments."""
-    executable = str(command[0])
-    if not Path(executable).is_file() or not os.access(executable, os.X_OK):
-        raise RuntimeError(f"executable is missing or not executable: {executable}")
-    log("I", f"launch {Path(executable).name}; application arguments omitted")
-    process = subprocess.Popen(
-        [str(arg) for arg in command], cwd=cwd, env=env, start_new_session=True
-    )
-    try:
-        status = process.wait()
-    except KeyboardInterrupt:
-        for sig, timeout in ((signal.SIGINT, 10), (signal.SIGTERM, 3), (signal.SIGKILL, 3)):
-            try:
-                os.killpg(process.pid, sig)
-            except ProcessLookupError:
-                break
-            try:
-                process.wait(timeout=timeout)
-                # The launcher may exit before its watcher/server descendants.
-                # Reap the remaining group rather than leaving background work.
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                break
-            except (subprocess.TimeoutExpired, KeyboardInterrupt):
-                continue
-        raise
-    if status != 0:
-        if status == -signal.SIGINT or status == 130:
-            raise KeyboardInterrupt
-        raise RuntimeError(f"{Path(executable).name} exited with status {status}")

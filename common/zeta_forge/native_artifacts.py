@@ -10,6 +10,7 @@ from pathlib import Path, PurePosixPath
 
 from .conan_openssl import MANIFEST_NAME, validate_openssl_package
 from .conan_state import active_generation
+from .process import run_command
 from .state_io import digest_json, file_digest, read_json, write_json
 
 RECEIPT_NAME = ".zeta-build-complete.json"
@@ -71,11 +72,11 @@ def source_identity(root: Path, env: dict[str, str]) -> dict:
         return identity
 
     def query(*args: str) -> subprocess.CompletedProcess[str]:
-        return subprocess.run(
+        return run_command(
             [git, "-C", str(root), *args],
             env=dict(env, GIT_OPTIONAL_LOCKS="0"),
             capture_output=True,
-            text=True,
+            log_command=False,
             check=False,
         )
 

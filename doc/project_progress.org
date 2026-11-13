@@ -265,7 +265,7 @@ implementation on baseline =3eb9474da9b751e76356ec66c6b68a67642641e0=.
 | [[file:en/phase3_build_modularity.org::#stage-3-5][3.5]] / Forge CMake | delivered | Configuration and dependency seam | None | v1.21.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-6][3.6]] / Forge Rust governance | delivered | Project/catalog and validation | None | v1.22.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-7][3.7]] / Forge Rust delivery | delivered | Tool preparation and delivery lifecycle | None | v1.23.0 |
-| [[file:en/phase3_build_modularity.org::#stage-3-8][3.8]] / Forge processes | planned | Process ownership and diagnostics | 3.1, 3.2 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-8][3.8]] / Forge processes | delivered | Process ownership and diagnostics | None | v1.24.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-9][3.9]] / Forge integration | planned | Architecture gates and overall matrix | 3.3-3.8, then user overall acceptance | unset |
 
 Evidence: read-only source/test inspection and AST inventory on HEAD =e74ac83=
@@ -388,8 +388,21 @@ validation, verified repair materialization, Cargo example/features, Dioxus
 variants and other-profile cleanup. Ruff import checks passed. No real Cargo
 fetch, Dioxus build or native dependency build ran.
 
-Next action: Stage 3.8, specifying process ownership and log visibility and
-exercising interruption of a foreground process group.
+Stage 3.8: =process= owns command capture, quiet probes and foreground group
+lifecycle. =build_ops.run_program= remains an alias. HPX and native provenance
+Git probes use the shared quiet capture path. Build commands retain their
+diagnostics, while private foreground arguments and quiet-probe arguments stay
+out of Forge messages. Interruption signals the whole group and reaps the
+direct child; the host owns final reaping of an orphaned grandchild.
+
+Validation for v1.24.0: 159 tooling tests passed over =f65d8d8=. A Linux
+subprocess fixture verified group interruption, exit 130, a reaped child and
+termination of a grandchild that ignores SIGINT. Other fixtures cover captured
+stdout/stderr, environment forwarding, timeout and diagnostic privacy. Ruff
+import checks passed. No full build ran.
+
+Next action: Stage 3.9 architecture and integration gates, followed by the
+overall validation matrix and user acceptance.
 
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /

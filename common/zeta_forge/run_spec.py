@@ -7,7 +7,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping
 
-from .build_ops import run_program
+from .process import run_program
 
 
 @dataclass(frozen=True)

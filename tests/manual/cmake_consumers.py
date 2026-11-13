@@ -17,7 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
-FORGE = Path(__file__).resolve().parents[1]
+FORGE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(FORGE / "common"))
 
 from zeta_forge.build_cli import Request, cli
@@ -44,8 +44,6 @@ def request(action: str, profile: str, *arguments: str) -> Request:
     return Request(action, profile, 2, argparse.Namespace(), arguments)
 
 
-@unittest.skipUnless(all(path.is_file() for path in SOURCES.values()),
-                     "explicit CMake consumer sibling checkouts unavailable")
 class CMakeConsumerTests(unittest.TestCase):
     def setUp(self) -> None:
         directory = tempfile.TemporaryDirectory(prefix="registered consumers ")
@@ -148,7 +146,6 @@ class CMakeConsumerTests(unittest.TestCase):
             check=True, capture_output=True, text=True, timeout=30,
         )
 
-    @unittest.skipUnless(shutil.which("cmake"), "CMake unavailable")
     def test_private_native_metadata_reaches_every_consumer_in_both_profiles(self) -> None:
         for name, project in self.projects.items():
             engine = project.engines["cmake"]
@@ -175,7 +172,6 @@ class CMakeConsumerTests(unittest.TestCase):
             if name == "zgent":
                 self.assertTrue((self.workspace / "logs/zgent").is_dir())
 
-    @unittest.skipUnless(shutil.which("cmake"), "CMake unavailable")
     def test_zgent_uses_shared_dev_order_and_interrupt_status(self) -> None:
         project = self.projects["zgent"]
         engine = project.engines["cmake"]
@@ -196,5 +192,39 @@ class CMakeConsumerTests(unittest.TestCase):
                 self.assertEqual(cli(project, ["run", "--profile", profile]), 130)
 
 
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.parse_args()
+    unavailable = False
+    for name, source in SOURCES.items():
+        root = FORGE.parent / name
+        if not source.is_file() or not (root / ".git").exists() or not shutil.which("git"):
+            print(f"{name}: unavailable (Git checkout and builder required)", file=sys.stderr)
+            unavailable = True
+            continue
+        revision = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, timeout=10,
+        )
+        changes = subprocess.run(
+            ["git", "status", "--porcelain"], cwd=root,
+            capture_output=True, text=True, timeout=10,
+        )
+        if revision.returncode or changes.returncode:
+            print(f"{name}: unavailable (cannot inspect Git revision)", file=sys.stderr)
+            unavailable = True
+            continue
+        state = "dirty" if changes.stdout else "clean"
+        print(f"{name}: {revision.stdout.strip()} ({state})", flush=True)
+    if not shutil.which("cmake"):
+        print("CMake unavailable", file=sys.stderr)
+        unavailable = True
+    if unavailable:
+        return 1
+    result = unittest.main(argv=[sys.argv[0]], exit=False).result
+    if not result.wasSuccessful():
+        print("Consumer revisions failed the compatibility checks above", file=sys.stderr)
+    return int(not result.wasSuccessful())
+
+
 if __name__ == "__main__":
-    unittest.main()
+    raise SystemExit(main())

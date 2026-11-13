@@ -44,7 +44,7 @@ source materialization or cleanup before all static preflights succeed.
 
 ** P1: default tests depend on live sibling revisions
 
-[[file:../../tests/test_cmake_consumers.py::SOURCES =][CMake consumer tests]] load
+[[file:../../tests/manual/cmake_consumers.py::SOURCES =][CMake consumer tests]] load
 builders directly from four sibling repositories and skip the group when any
 required checkout is absent. Thus both coverage and results depend on workspace
 contents. This conflicts with the independence promised in
@@ -503,8 +503,9 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=common:tests python3 -m unittest \
 ./zbuild.py test build-tools
 #+end_src
 
-The final command currently includes live-sibling tests; 3.1 must remove that
-implicit coupling. These commands do not replace the real integration matrix.
+Stage 3.1 moved live-sibling checks out of the final command. Run
+=python3 tests/manual/cmake_consumers.py= explicitly for those checks. These
+commands do not replace the real integration matrix.
 Future boundary/contract tests will be added to the existing unittest tooling.
 The implementation delivery records exact commands, revisions and results.
 

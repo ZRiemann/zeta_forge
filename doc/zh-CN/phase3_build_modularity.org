@@ -36,7 +36,7 @@ Cargo 配置。因此，后一个 engine 的 preflight 失败时，前一个已�
 
 ** P1：默认测试结果受兄弟仓库当前 revision 影响
 
-[[file:../../tests/test_cmake_consumers.py::SOURCES =][CMake 消费者测试]]直接加载四个兄弟
+[[file:../../tests/manual/cmake_consumers.py::SOURCES =][CMake 消费者测试]]直接加载四个兄弟
 仓库的 builder，缺少任意一个时跳过整组。因此，覆盖范围和结果随工作区内容改变，
 与[[file:architecture.org][架构文档]]承诺的 Forge 测试独立性不一致。
 Phase 2 台账记录了 zgent API 不匹配，以及使用兼容工作区通过测试的历史证据，
@@ -408,8 +408,8 @@ PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=common:tests python3 -m unittest \
 ./zbuild.py test build-tools
 #+end_src
 
-最后一条当前仍包含实时兄弟仓库测试，3.1 必须解除这一隐式耦合。以上命令不能代替
-真实集成矩阵。新边界/契约测试接入既有 unittest 工具，交付记录准确命令、revision 和结果。
+Stage 3.1 已将实时兄弟仓库检查移出默认命令。请显式运行
+=python3 tests/manual/cmake_consumers.py= 执行这些检查。以上命令不能代替真实集成矩阵。新边界/契约测试接入既有 unittest 工具，交付记录准确命令、revision 和结果。
 
 * 迁移、取舍与交付
 

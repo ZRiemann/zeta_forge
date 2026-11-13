@@ -5,6 +5,19 @@
 
 * Release History
 
+** v1.17.0 - 2026-11-13T12:36:46Z
+:PROPERTIES:
+:CUSTOM_ID: v1.17.0
+:END:
+
+*** Changes
+- Deliver Phase 3 Stage 3.1. Document the compatibility baseline and use Forge-owned fixtures for default tooling tests.
+- Move real sibling CMake checks to an explicit command that reports the tested revisions.
+
+*** Validation
+- The default suite passed 147 tests both with and without unrelated siblings in a network-denied environment.
+- The optional real-consumer probe identified an incompatible zgent revision. No full build ran.
+
 ** v1.16.0 - 2026-11-13T11:22:38Z
 :PROPERTIES:
 :CUSTOM_ID: v1.16.0

@@ -18,7 +18,7 @@ from unittest import mock
 FORGE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(FORGE / "common"))
 
-from zeta_forge.build_cli import Request
+from zeta_forge.build_cli import Product, Project, Request, cli
 from zeta_forge.cmake_engine import CMakeEngine
 from zeta_forge.cmake_run import CMakeRunTarget, read_cmake_run
 from zeta_forge.run_spec import RunSpec, launch_run
@@ -113,6 +113,53 @@ add_run_target(native_app ARGS "${PROJECT_SOURCE_DIR}/record args.py"
                 builder.build.assert_not_called()
                 with self.assertRaisesRegex(ValueError, "registered"):
                     engine.validate_request(request("run"), ("library",))
+
+    def test_registered_product_preview_and_dev_order(self) -> None:
+        for profile in ("debug", "release"):
+            with self.subTest(profile=profile):
+                build = self.root / "output" / profile.title()
+                builder = mock.Mock(source_dir=self.source, build_dir=build)
+                builder.repo_config.install_prefix = self.root / "install"
+                environment = {"RUN_FIXTURE": "preserved"}
+                engine = CMakeEngine(
+                    self.source, lambda req, names: builder, ("app",),
+                    test_targets=lambda names: (),
+                    run_targets={"app": CMakeRunTarget("native_app")},
+                    run_environment=lambda name, root: environment,
+                )
+                project = Project(
+                    "fixture", (Product("app", "cmake", "app", ("run", "dev")),),
+                    {"cmake": engine}, ("app",), run_default="app",
+                )
+                output = io.StringIO()
+                with (
+                    mock.patch("os.walk", side_effect=AssertionError("must not scan")),
+                    mock.patch("subprocess.Popen", side_effect=AssertionError("must not launch")),
+                    contextlib.redirect_stdout(output),
+                ):
+                    self.assertEqual(cli(project, ["list", "--profile", profile]), 0)
+                    self.assertEqual(cli(project, [
+                        "run", "--profile", profile, "--dry-run", "--", "private argument",
+                    ]), 0)
+                self.assertNotIn("private argument", output.getvalue())
+                self.assertFalse(build.exists())
+                builder.build.assert_not_called()
+
+                self.configure(profile.title())
+                order: list[str] = []
+                builder.build.side_effect = lambda *args, **kwargs: order.append("build")
+                with mock.patch("zeta_forge.cmake_engine.launch_run",
+                                side_effect=lambda _: order.append("run")) as launch:
+                    engine.execute(request("dev", profile, "forwarded"), ("app",))
+                self.assertEqual(order, ["build", "run"])
+                spec = launch.call_args.args[0]
+                self.assertEqual(spec.arguments[-1], "forwarded")
+                self.assertEqual(spec.environment["RUN_FIXTURE"], "preserved")
+                with (
+                    mock.patch("zeta_forge.cmake_engine.launch_run", side_effect=KeyboardInterrupt),
+                    contextlib.redirect_stdout(io.StringIO()),
+                ):
+                    self.assertEqual(cli(project, ["run", "--profile", profile]), 130)
 
     def test_missing_disabled_or_mismatched_metadata_never_falls_back(self) -> None:
         build = self.configure("Release", "-DENABLE_APP=OFF")

@@ -18,7 +18,7 @@ patches and common/zeta_forge/conan_boost.py. Preserve and inspect those changes
 HEAD alone cannot reproduce the reviewed behavior. The design task adds only
 planning/navigation documents and does not fix the implementation.
 
-* Current work
+* Phase 2 implementation snapshot (historical)
 
 | Stage / owner | State | Implemented scope and evidence | Missing gate / next action | Delivery |
 |---------------+-------+--------------------------------+----------------------------+----------|
@@ -30,9 +30,8 @@ planning/navigation documents and does not fix the implementation.
 | [[file:en/phase2_native_delivery.org::#stage-2-6][2.6]] / Forge publication | accepted-awaiting-versioned-delivery | Staged-only install, ownership, dependency checks, recovery and prefix serialization verified | Staged for Phase delivery | unset |
 | [[file:en/phase2_native_delivery.org::#stage-2-7][2.7]] / Forge integration | in-progress | Overall commands and consumer fixtures prepared. Compatible workspace tool tests and scoped real probes passed | User runs the full native build and overall acceptance | unset |
 
-Phase 2 overall acceptance remains pending. Stages may proceed after their stated
-implementation/fixture prerequisites while expensive integration checks remain
-explicitly outstanding; that does not mark those Stages accepted.
+This table records the pre-delivery state. See the Phase 3 section for the
+subsequent Phase 2 acceptance and delivery evidence.
 
 * Evidence and limitations
 
@@ -251,11 +250,15 @@ The final worktree was not rebuilt from scratch a second time.
 performing Phase 2 overall acceptance. See
 [[file:en/phase3_build_modularity.org][Phase 3 build framework modularity]] /
 [[file:zh-CN/phase3_build_modularity.org][中文提案]]. This extends the ledger's scope
-to future build-framework modularity without changing Phase 2 acceptance.
+to build-framework modularity. The user subsequently confirmed Phase 2 overall
+acceptance. Phase 2 delivery and acceptance evidence are in
+[[file:../release_history.org::#v1.15.0][v1.15.0]] and
+[[file:../release_history.org::#v1.16.0][v1.16.0]]. The user approved Phase 3
+implementation on baseline =3eb9474da9b751e76356ec66c6b68a67642641e0=.
 
 | Stage / owner | State | Scope | Missing gate / next action | Delivery |
 |---------------+-------+-------+----------------------------+----------|
-| [[file:en/phase3_build_modularity.org::#stage-3-1][3.1]] / Forge tests | planned | Independent contract baseline | Phase 2 user acceptance, fixed baseline and proposal approval | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-1][3.1]] / Forge tests | delivered | Independent contract baseline and explicit CMake consumer probe | None | v1.17.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-2][3.2]] / Forge CLI | planned | Contracts and explicit lifecycle | 3.1 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-3][3.3]] / Forge state I/O | planned | Neutral persistence mechanisms | 3.1, 3.2 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-4][3.4]] / Forge native | planned | Composition and staging ownership | 3.2, 3.3 | unset |
@@ -279,9 +282,26 @@ nine matching Stage identifiers per language, identical bilingual command blocks
 and whitespace checks. The existing Phase 2 index digest and the production
 Python content digest remained unchanged; all new work is documentation only.
 
-Next proposed action after Phase 2 acceptance and design approval: establish
-the independent contract baseline in Stage 3.1. The existing Phase 2 user
-acceptance and single-local-commit handoff above remains the active delivery gate.
+Stage 3.1: the [[file:../BUILD.org::*Phase 3 compatibility baseline][compatibility inventory]]
+records public interfaces, paths, schemas and environment precedence. No production
+Python modules changed. Forge-owned CMake fixtures cover registered previews, argv
+forwarding, development order and interrupt status. The two-engine Rust fetch
+fixture records that patch acquisition currently precedes a later engine failure;
+Stage 3.7 must change the assertion to verify zero acquisition.
+
+Validation for v1.17.0: =./zbuild.py test build-tools= passed 147 tests without
+skips in an isolated source copy with an empty third-party root and temporary
+prefix, with and without deliberately incompatible sibling fixtures. Socket
+creation and connection were denied using seccomp for the test process tree.
+=python3 tests/manual/cmake_consumers.py= returned 1 and reported four unavailable
+checkouts in isolation. On the live workspace the probe reported clean revisions
+=zpp@d0600437=, =zgent@51a50354=, =zeta_agent@9565b028= and =zeta_vault@43aaa179=;
+=zgent= imports the removed =zeta_forge.run_targets= API, so live compatibility
+remains open. Ruff import checks passed on the touched Python files. No full
+native build or overall Phase 3 acceptance ran.
+
+Next action: Stage 3.2, extracting contracts and explicit invocation lifecycle
+while retaining the legacy import surface and Stage 3.7's acquisition reproducer.
 
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /
@@ -297,7 +317,7 @@ implementation tests were run for this documentation-only addition.
 
 * Design decisions still requiring bounded implementation evidence
 
-- Overall acceptance still needs real gRPC, HPX and Folly builds, their
+- Phase 3 overall acceptance still needs real gRPC, HPX and Folly builds, their
   publication and the full consumer matrix. Focused dependency checks and
   published deps/NNG evidence do not complete those gates.
 

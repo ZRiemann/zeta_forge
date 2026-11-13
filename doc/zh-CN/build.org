@@ -49,8 +49,10 @@ Forge =check= 配置并编译所选原生库。显式 =doctor rust-deps= 离线�
 =check rust-updates= 读取当前锁定图后显式查询 crates.io/GitHub 升级候选，不采用更新；
 其 metadata/list/help/dry-run 只描述范围且不联网。报告及失败语义见
 [[file:rust_workspace.org][Rust 治理说明]]。=test= 默认选择 =build-tools=，运行 Python 工具测试，
-而非上游第三方测试套件。测试覆盖 Forge 公共入口及共享适配器；
-各消费项目在自身仓库测试自己的 =zbuild.py=。
+而非上游第三方测试套件。默认使用 Forge 自有 fixture 覆盖公共入口及共享适配器，
+无需同级仓库或网络。显式运行 =python3 tests/manual/cmake_consumers.py= 可检查真实
+同级 CMake 入口。该命令报告可用仓库的 revision，前置条件缺失或兼容性检查失败时
+返回非零状态。Phase 3 的兼容契约清单见[[file:../../BUILD.org::*Phase 3 compatibility baseline][英文构建契约]]。
 不支持的上游测试、运行及 fetch 能力会报错。
 宿主机准备仍使用 =common/prepare_debian.sh=，不属于构建动作。
 构建不会覆盖全局 Conan profile；应单独准备所选 Conan profile。

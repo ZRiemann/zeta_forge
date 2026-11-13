@@ -61,8 +61,11 @@ graphs; it does not adopt updates. =metadata/list/help/dry-run= for this target
 only describe scope and never connect upstream. See
 [[file:doc/en/rust_workspace.org][Rust governance]] for report schemas and failure semantics. =test= defaults to
 =build-tools= and runs Python tooling tests, not upstream third-party test suites.
-These tests cover Forge's public entrypoint and shared adapters; each consuming
-project tests its own =zbuild.py= in its repository.
+The default tests cover Forge's public entrypoint and shared adapters with
+Forge-owned fixtures and require no sibling checkout or network access.
+Run =python3 tests/manual/cmake_consumers.py= explicitly to check the real
+sibling CMake entrypoints. It reports each available revision and returns a
+failure if prerequisites or compatibility checks fail.
 Unsupported upstream tests, runtime and fetch capabilities are errors. Host preparation
 remains =common/prepare_debian.sh=; it is not a build action. No global Conan profile
 is overwritten by build. Provision the selected Conan profile separately.
@@ -81,3 +84,28 @@ Public contracts: =common/zeta_forge/build_cli.py=; native adapters:
 =builder/project.py= and =builder/<target>/project.py=. Applications keep their own
 thin entry and project definition. There is no subsystem registry or alternate
 native dependency graph. The root =zbuild.py= is the only executable Forge build entry.
+
+* Phase 3 compatibility baseline
+
+- The supported Python surface includes =build_cli.{Product,Project,Request,Engine,cli,log}=,
+  =config.{RepoConfig,load_repo_config,discover_forge_root}=, the CMake, Rust,
+  Gradle and Zig adapter constructors, =cmake_run.CMakeRunTarget= and =run_spec.RunSpec=.
+  Preserve project parser/validation hooks and engine description, validation,
+  preflight, optional preparation and execution hooks. This inventory records
+  the existing surface, without promoting other internals to public APIs.
+- CLI verbs, profiles, selection order, exit codes, forwarded argv and the
+  =ZETA_BUILD_DONE= record are covered by the Forge regression suite.
+- Native staging uses =build/staging/<profile>/<target>/= and a schema-1
+  =.zeta-build-complete.json=. Published ownership and pending journal records
+  use schema 1 beneath =<prefix>/share/zeta_forge/native/=. Conan state stays
+  under =build/conan-state/<target>/<profile>/= with schema-1 Forge receipts
+  and the Conan 2 lock format. The published OpenSSL manifest and CMake
+  =.zeta-run/<CMake-profile>/<target>/= metadata use schema 1. The Rust
+  catalog and project descriptors use schema 2, the project registry uses
+  schema 1, and locked dependency reports use schema 2.
+- Forge discovery considers the explicit =ZETAX_ROOT= workspace first. The
+  selected Forge root determines the canonical workspace, builder and CMake
+  utility paths. Inherited install prefix, third-party root, version and C++
+  standard settings override defaults. Nonempty source overrides beat the
+  derived third-party path or project default. Engine-specific profile and
+  artifact mappings remain owned by their adapters.

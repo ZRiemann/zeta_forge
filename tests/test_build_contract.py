@@ -19,6 +19,7 @@ sys.path.insert(0, str(FORGE / "common"))
 from zeta_forge.build_cli import Product, Project, Request, cli
 from zeta_forge.build_ops import remove_generated, run_program
 from zeta_forge.cmake_engine import CMakeEngine
+from zeta_forge.config import load_repo_config
 from zeta_forge.gradle_engine import GradleEngine
 from zeta_forge.rust_engine import RustEngine, RustTarget
 
@@ -145,6 +146,47 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(order, ["native preflight", "other preflight", "native prepare"])
         self.engine.execute.assert_called_once()
         second.execute.assert_called_once()
+
+    def test_rust_fetch_preflight_patch_acquisition_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = RustEngine(
+                root, mock.Mock(), {"crate": RustTarget("crate", root)}, root / "target",
+            )
+            manager = mock.Mock()
+            marker = root / "patch-acquired"
+            second = mock.Mock()
+            second.describe.return_value = {}
+            project = Project(
+                "two",
+                (Product("crate", "rust", "crate", ("fetch",)),
+                 Product("other", "other", "other", ("fetch",))),
+                {"rust": rust, "other": second},
+                ("crate", "other"),
+            )
+
+            def reject_preflight(*args: object) -> None:
+                # Known Stage 3.1 behavior. Stage 3.7 must reverse both
+                # acquisition assertions and retain the failing second engine.
+                self.assertTrue(marker.is_file())
+                raise RuntimeError("later engine preflight failed")
+
+            second.preflight.side_effect = reject_preflight
+            with (
+                mock.patch.object(rust, "manager", return_value=manager),
+                mock.patch.object(rust, "prepare") as prepare,
+                mock.patch.object(rust, "execute") as execute,
+                mock.patch("zeta_forge.rust_patches.prepare_patches",
+                           side_effect=lambda *_: marker.touch()) as acquire,
+            ):
+                self.project = project
+                status, output = self.invoke("fetch")
+                self.assertEqual(status, 1)
+                self.assertIn("later engine preflight failed", output)
+                acquire.assert_called_once_with(manager.project, rust.config)
+                prepare.assert_not_called()
+                execute.assert_not_called()
+            second.execute.assert_not_called()
 
 
 class AdapterTests(unittest.TestCase):
@@ -529,6 +571,39 @@ class AdapterTests(unittest.TestCase):
 
 
 class ForgeEntrypointTests(unittest.TestCase):
+    def test_config_precedence_is_independent_of_sibling_contents(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            workspace = root / "workspace"
+            forge = workspace / "zeta_forge"
+            (forge / "common/zeta_forge").mkdir(parents=True)
+            (forge / "common/zeta_forge/config.py").touch()
+            (forge / "builder").mkdir()
+            (forge / "3rd").mkdir()
+            project = root / "application"
+            project.mkdir()
+            environment = {
+                "HOME": str(root),
+                "ZETAX_ROOT": str(workspace),
+                "ZETA_3RD_DIR": "$HOME/sources",
+                "ZETA_GRPC_SRC_DIR": "$HOME/custom-grpc",
+                "ZETA_INSTALL_PREFIX": "~/.fixture",
+                "ZETA_CXX_STANDARD": "23",
+                "ZETA_APP_SRC_DIR": "",
+            }
+            with mock.patch.dict(os.environ, environment, clear=True):
+                config = load_repo_config(
+                    project / "zbuild.py",
+                    project_source_defaults={"ZETA_APP_SRC_DIR": project / "src"},
+                )
+            self.assertEqual(config.forge_root, forge)
+            self.assertEqual(config.install_prefix, root / ".fixture")
+            self.assertEqual(config.cxx_standard, "23")
+            self.assertEqual(config.source_dir("ZETA_GRPC_SRC_DIR"), root / "custom-grpc")
+            self.assertEqual(config.source_dir("ZETA_NNG_SRC_DIR"), root / "sources/nng")
+            self.assertEqual(config.source_dir("ZETA_APP_SRC_DIR"), project / "src")
+            self.assertFalse(config.install_prefix.exists())
+
     def test_launcher_is_read_only_and_rejects_legacy_flags(self) -> None:
         for args, expected in (
             (("--help",), 0),

@@ -263,7 +263,7 @@ implementation on baseline =3eb9474da9b751e76356ec66c6b68a67642641e0=.
 | [[file:en/phase3_build_modularity.org::#stage-3-3][3.3]] / Forge state I/O | delivered | Neutral persistence mechanisms | None | v1.19.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-4][3.4]] / Forge native | delivered | Composition and staging ownership | None | v1.20.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-5][3.5]] / Forge CMake | delivered | Configuration and dependency seam | None | v1.21.0 |
-| [[file:en/phase3_build_modularity.org::#stage-3-6][3.6]] / Forge Rust governance | planned | Project/catalog and validation | 3.1, 3.2 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-6][3.6]] / Forge Rust governance | delivered | Project/catalog and validation | None | v1.22.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-7][3.7]] / Forge Rust delivery | planned | Tool preparation and delivery lifecycle | 3.2, 3.6 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-8][3.8]] / Forge processes | planned | Process ownership and diagnostics | 3.1, 3.2 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-9][3.9]] / Forge integration | planned | Architecture gates and overall matrix | 3.3-3.8, then user overall acceptance | unset |
@@ -361,8 +361,21 @@ Debug/Release ordered CMake arguments, paths with spaces, Folly's semicolon
 prefix, HPX provenance, gRPC archive fallback, legacy preparation hooks and
 install components. Ruff import checks passed. No full build ran.
 
-Next action: Stage 3.6, separating Rust project/catalog parsing and governance
-from the manager's Cargo and tool lifecycle responsibilities.
+Stage 3.6: =rust_project= owns descriptor/catalog/registry loading and
+=rust_governance= owns manifest, local source and lock report policy.
+=rust_tool_recipe= validates tool repair declarations without installing tools.
+Audit and update use these interfaces directly; offline audit command
+construction uses =rust_commands=. The original =rust_workspace= manager and
+public imports remain available. Catalog, repair, manifest and lock formats
+and ownership are unchanged.
+
+Validation for v1.22.0: 156 default tooling tests passed over =1be4014=.
+The 26 policy and audit fixture tests also passed with real tool lookup
+forbidden. Ruff import checks passed on touched files. No real Rustup, Cargo
+build or consumer audit ran for this Stage.
+
+Next action: Stage 3.7, moving Rust fetch acquisition into preparation and
+verifying prepared artifacts before any target cleanup or execution.
 
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /

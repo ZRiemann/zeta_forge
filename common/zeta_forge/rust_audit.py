@@ -3,73 +3,22 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
-from pathlib import Path
 from typing import Mapping, TypedDict
 
 from .build_contract import Request
 from .build_log import log
 from .config import RepoConfig
 from .process import run_command
+from .rust_commands import rustup_command, with_manifest
 from .rust_dependencies import DependencyReport, resolved_dependency_report
-from .rust_patches import patch_environment, verify_resolved_patches
-from .rust_workspace import (
-    PROJECT_CONFIG_NAME,
-    RustProject,
-    RustWorkspaceManager,
-    _project_path,
-    _read_toml,
-    _string_list,
-    load_rust_project,
+from .rust_governance import (
     locked_dependency_report,
     validate_rust_project,
     workspace_dependencies,
 )
-
-
-def registered_projects(config: RepoConfig) -> list[RustProject]:
-    path = config.forge_root / "rust" / "projects.toml"
-    document = _read_toml(path)
-    records = document.get("projects")
-    if document.get("schema") != 1 or set(document) != {"schema", "projects"} or not isinstance(records, list):
-        raise RuntimeError(f"Invalid Rust consumer registry: {path}")
-    projects: list[RustProject] = []
-    roots: set[Path] = set()
-    manifests: set[Path] = set()
-    for record in records:
-        if not isinstance(record, dict) or set(record) - {"path", "additional-manifests", "local-dependencies"}:
-            raise RuntimeError(f"Invalid Rust consumer entry in {path}: {record!r}")
-        relative = record.get("path")
-        if not isinstance(relative, str) or Path(relative).is_absolute() or len(Path(relative).parts) != 1:
-            raise RuntimeError(f"Rust consumer must name a workspace sibling in {path}: {relative!r}")
-        root = _project_path(config.zetax_root, relative, "consumer", path)
-        if root in roots:
-            raise RuntimeError(f"Duplicate Rust consumer: {root}")
-        roots.add(root)
-        project = load_rust_project(root, config.forge_root)
-        candidates = [project]
-        for extra in _string_list(record.get("additional-manifests", []), "additional-manifests", path):
-            if Path(extra).is_absolute():
-                raise RuntimeError(f"Additional manifest must be relative: {extra}")
-            manifest = _project_path(root, extra, "additional manifest", path)
-            if manifest.name != "Cargo.toml":
-                raise RuntimeError(f"Expected Cargo.toml for additional manifest: {manifest}")
-            candidates.append(replace(project, manifest=manifest, capabilities=(), native_dependencies=()))
-        for candidate in candidates:
-            if candidate.manifest in manifests:
-                raise RuntimeError(f"Duplicate Rust consumer manifest: {candidate.manifest}")
-            manifests.add(candidate.manifest)
-            projects.append(candidate)
-    discovered = {
-        child.resolve() for child in config.zetax_root.iterdir()
-        if child.is_dir() and (child / PROJECT_CONFIG_NAME).is_file()
-    }
-    missing = discovered - roots
-    if missing:
-        raise RuntimeError("Unregistered Rust projects: " + ", ".join(str(root) for root in sorted(missing)))
-    if not projects:
-        raise RuntimeError(f"Rust consumer registry is empty: {path}")
-    return projects
+from .rust_patches import patch_environment, verify_resolved_patches
+from .rust_project import RustProject
+from .rust_project import registered_projects as registered_projects
 
 
 class ProjectInspection(TypedDict):
@@ -103,9 +52,9 @@ def inspect_project(project: RustProject) -> ProjectInspection:
 
 
 def resolved_metadata(project: RustProject, config: RepoConfig, *, timeout: float | None = None) -> dict[str, object]:
-    manager = RustWorkspaceManager(project, config)
     completed = run_command(
-        manager.cargo_command("metadata", "--format-version", "1", "--locked", "--offline"),
+        with_manifest(rustup_command(project, "cargo"), project.manifest,
+                      ("metadata", "--format-version", "1", "--locked", "--offline")),
         cwd=project.workspace_dir, env={**config.env, **patch_environment(project, config)},
         check=False, capture_output=True, timeout=timeout,
     )

@@ -8,17 +8,17 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-from pathlib import Path
 import re
 import tarfile
 import tempfile
 import tomllib
-from typing import Mapping, NotRequired, TYPE_CHECKING, TypedDict
+from pathlib import Path
+from typing import TYPE_CHECKING, Mapping, NotRequired, TypedDict
 from urllib.request import urlopen
 
 if TYPE_CHECKING:
     from .config import RepoConfig
-    from .rust_workspace import RustProject
+    from .rust_project import RustProject
 
 PATCH_NAME = "wry-0.53.5-gtk-ipc-weak"
 

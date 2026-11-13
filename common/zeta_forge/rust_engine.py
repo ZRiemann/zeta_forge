@@ -12,14 +12,13 @@ from .build_ops import remove_generated, run_program, validate_generated_path
 from .config import RepoConfig
 from .process import require_command, run_command
 from .run_spec import RunSpec, launch_run
-from .rust_workspace import (
-    RustWorkspaceManager,
-    _native_environment,
-    load_rust_project,
+from .rust_governance import (
     locked_dependency_report,
     validate_rust_project,
     workspace_dependencies,
 )
+from .rust_project import load_rust_project
+from .rust_workspace import RustWorkspaceManager, native_environment
 
 RUST_ACTIONS = ("doctor", "check", "build", "rebuild", "test", "run", "dev", "clean", "fetch")
 PREPARE_CARGO_TOOLS_ACTIONS = {"check", "build", "rebuild", "test", "dev", "fetch"}
@@ -198,7 +197,7 @@ class RustEngine:
         return result
 
     def environment(self, request: Request, manager: RustWorkspaceManager) -> dict[str, str]:
-        environment = _native_environment(manager.project, self.config)
+        environment = native_environment(manager.project, self.config)
         environment.update(
             CARGO_TARGET_DIR=str(self.target_dir),
             CARGO_BUILD_JOBS=str(request.jobs),

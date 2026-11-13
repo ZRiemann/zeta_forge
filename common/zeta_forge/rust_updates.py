@@ -19,6 +19,8 @@ from .rust_dependencies import (
     owned_manifest,
     resolved_dependency_report,
 )
+from .rust_governance import validate_rust_project
+from .rust_project import RustProject, load_catalog
 from .rust_releases import (
     TIMEOUT_SECONDS,
     SemVer,
@@ -26,7 +28,6 @@ from .rust_releases import (
     registry_releases,
     rust_version,
 )
-from .rust_workspace import RustProject, load_catalog, validate_rust_project
 
 MAX_CONCURRENT_QUERIES = 4
 

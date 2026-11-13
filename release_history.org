@@ -5,6 +5,17 @@
 
 * Release History
 
+** v1.22.0 - 2026-11-13T12:48:40Z
+:PROPERTIES:
+:CUSTOM_ID: v1.22.0
+:END:
+
+*** Changes
+- Deliver Phase 3 Stage 3.6. Separate Rust project loading and governance from tool execution while preserving the workspace facade.
+
+*** Validation
+- All 156 tooling tests passed. The 26 governance and audit fixture checks also passed with real tool lookup disabled. No real Rust build ran.
+
 ** v1.21.0 - 2026-11-13T12:45:59Z
 :PROPERTIES:
 :CUSTOM_ID: v1.21.0

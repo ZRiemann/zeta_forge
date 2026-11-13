@@ -22,10 +22,24 @@ sys.path.insert(0, str(FORGE / "common"))
 import test_rust_workspace as fixtures
 from zeta_forge.build_cli import Product, Project, Request, cli
 from zeta_forge.config import load_repo_config
-from zeta_forge.rust_audit import RustDependencyAudit, registered_projects, resolved_project
-from zeta_forge.rust_dependencies import CRATES_IO_SOURCE, compatibility_series, dependency_report, package_identity, resolved_dependency_report
+from zeta_forge.rust_audit import (
+    RustDependencyAudit,
+    registered_projects,
+    resolved_project,
+)
+from zeta_forge.rust_dependencies import (
+    CRATES_IO_SOURCE,
+    compatibility_series,
+    dependency_report,
+    package_identity,
+    resolved_dependency_report,
+)
 from zeta_forge.rust_engine import RustEngine, RustTarget
-from zeta_forge.rust_workspace import load_catalog, load_rust_project, validate_rust_project
+from zeta_forge.rust_workspace import (
+    load_catalog,
+    load_rust_project,
+    validate_rust_project,
+)
 
 
 def request(action: str) -> Request:
@@ -278,14 +292,20 @@ class AuditTests(unittest.TestCase):
                 "resolve": {"nodes": [dict(id="sample", deps=[dict(pkg="tokio")]), dict(id="tokio", deps=[])]},
             }
             result = subprocess.CompletedProcess([], 0, json.dumps(metadata), "")
-            with mock.patch("zeta_forge.rust_audit.run_command", return_value=result) as run:
+            with (
+                mock.patch("zeta_forge.rust_commands.shutil.which", return_value="/fixture/rustup"),
+                mock.patch("zeta_forge.rust_audit.run_command", return_value=result) as run,
+            ):
                 report = resolved_project(project, config)
                 self.assertEqual(report["direct_edges"][0]["chain"], ["sample@0.1.0", "tokio@1.54.0"])
                 self.assertIn("--locked", run.call_args.args[0])
                 self.assertIn("--offline", run.call_args.args[0])
                 self.assertNotIn("--no-deps", run.call_args.args[0])
             result = subprocess.CompletedProcess([], 101, "", "package not cached")
-            with mock.patch("zeta_forge.rust_audit.run_command", return_value=result):
+            with (
+                mock.patch("zeta_forge.rust_commands.shutil.which", return_value="/fixture/rustup"),
+                mock.patch("zeta_forge.rust_audit.run_command", return_value=result),
+            ):
                 with self.assertRaisesRegex(RuntimeError, "owning project's ./zbuild.py fetch"):
                     resolved_project(project, config)
 

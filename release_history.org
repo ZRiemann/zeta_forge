@@ -5,6 +5,18 @@
 
 * Release History
 
+** v1.23.0 - 2026-11-13T12:51:56Z
+:PROPERTIES:
+:CUSTOM_ID: v1.23.0
+:END:
+
+*** Changes
+- Deliver Phase 3 Stage 3.7. Acquire approved Rust fetch sources during preparation and verify state before rebuild cleanup.
+- Separate native environment and Cargo/Dioxus command policy.
+
+*** Validation
+- All 157 tooling tests passed, including zero acquisition on preflight failure and preservation of outputs on preparation failure. No real Cargo fetch or full build ran.
+
 ** v1.22.0 - 2026-11-13T12:48:40Z
 :PROPERTIES:
 :CUSTOM_ID: v1.22.0

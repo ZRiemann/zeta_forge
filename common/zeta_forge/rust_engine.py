@@ -3,37 +3,30 @@
 from __future__ import annotations
 
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Mapping
 
 from .build_contract import Request
+from .build_invocation import invocation_snapshot
 from .build_ops import remove_generated, run_program, validate_generated_path
 from .config import RepoConfig
 from .process import require_command, run_command
 from .run_spec import RunSpec, launch_run
+from .rust_environment import native_environment
 from .rust_governance import (
     locked_dependency_report,
     validate_rust_project,
     workspace_dependencies,
 )
+from .rust_patches import validate_patch_inputs
 from .rust_project import load_rust_project
-from .rust_workspace import RustWorkspaceManager, native_environment
+from .rust_variants import RustTarget as RustTarget
+from .rust_variants import cargo_build_flags, dioxus_command
+from .rust_workspace import RustWorkspaceManager
 
 RUST_ACTIONS = ("doctor", "check", "build", "rebuild", "test", "run", "dev", "clean", "fetch")
 PREPARE_CARGO_TOOLS_ACTIONS = {"check", "build", "rebuild", "test", "dev", "fetch"}
-
-
-@dataclass(frozen=True)
-class RustTarget:
-    package: str
-    directory: Path
-    kind: str = "cargo"
-    platforms: tuple[str, ...] = ()
-    web_release_debug_symbols: bool | None = None
-    artifact_name: str | None = None
-    features: tuple[str, ...] = ()
-    example: str | None = None
 
 
 @dataclass(frozen=True)
@@ -72,11 +65,15 @@ class RustEngine:
 
     def manager(self) -> RustWorkspaceManager:
         return RustWorkspaceManager(
-            load_rust_project(self.root, self.config.forge_root), self.config
+            load_rust_project(self.root, self.config.forge_root),
+            replace(self.config, env=dict(self.config.env)),
         )
 
+    def invocation_manager(self) -> RustWorkspaceManager:
+        return invocation_snapshot(self, self.manager)
+
     def platform(self, request: Request, target: RustTarget) -> str | None:
-        return RustOptions.from_request(request).platform or (
+        return invocation_snapshot((self, "options"), lambda: RustOptions.from_request(request)).platform or (
             target.platforms[0] if target.platforms else None
         )
 
@@ -114,7 +111,7 @@ class RustEngine:
         return RunSpec(artifact, request.arguments, directory, environment)
 
     def validate_request(self, request: Request, names: tuple[str, ...]) -> None:
-        platform = RustOptions.from_request(request).platform
+        platform = invocation_snapshot((self, "options"), lambda: RustOptions.from_request(request)).platform
         for name in names:
             target = self.targets[name]
             if target.example is not None:
@@ -197,7 +194,7 @@ class RustEngine:
         return result
 
     def environment(self, request: Request, manager: RustWorkspaceManager) -> dict[str, str]:
-        environment = native_environment(manager.project, self.config)
+        environment = native_environment(manager.project, manager.repo_config)
         environment.update(
             CARGO_TARGET_DIR=str(self.target_dir),
             CARGO_BUILD_JOBS=str(request.jobs),
@@ -213,12 +210,8 @@ class RustEngine:
                 validate_generated_path(path, self.root)
         if request.action == "clean":
             return
-        manager = self.manager()
+        manager = self.invocation_manager()
         manager.validate()
-        if request.action == "fetch":
-            from .rust_patches import prepare_patches
-
-            prepare_patches(manager.project, self.config)
         for name in names:
             target = self.targets[name]
             if target.kind == "cargo":
@@ -238,9 +231,11 @@ class RustEngine:
             if self.application_environment:
                 self.application_environment(request, names[0])
         else:
+            doctor_options = {"pending_source": True} if request.action == "fetch" else {}
             manager.doctor(
                 application_tools=any(self.targets[name].kind != "cargo" for name in names),
                 check_cargo_tools=request.action not in PREPARE_CARGO_TOOLS_ACTIONS,
+                **doctor_options,
             )
             if (
                 request.action != "fetch"
@@ -261,7 +256,20 @@ class RustEngine:
     def prepare(self, request: Request, names: tuple[str, ...]) -> None:
         if request.action not in PREPARE_CARGO_TOOLS_ACTIONS:
             return
-        manager = self.manager()
+        manager = self.invocation_manager()
+        if request.action == "fetch":
+            from .rust_patches import prepare_patches
+
+            validate_patch_inputs(manager.project, manager.repo_config)
+            prepare_patches(manager.project, manager.repo_config)
+        for cargo_tool in self.cargo_tools(manager, request, names):
+            manager.ensure_cargo_tool(cargo_tool)
+        manager.validate_snapshot()
+        self.environment(request, manager)
+
+    def cargo_tools(
+        self, manager: RustWorkspaceManager, request: Request, names: tuple[str, ...],
+    ) -> tuple[str, ...]:
         cargo_tools: set[str] = set()
         for name in names:
             target = self.targets[name]
@@ -272,8 +280,7 @@ class RustEngine:
                 else "dioxus-desktop"
             )
             cargo_tools.add(str(manager.project.catalog.capabilities[capability]["cargo-tool"]))
-        for cargo_tool in sorted(cargo_tools):
-            manager.ensure_cargo_tool(cargo_tool)
+        return tuple(sorted(cargo_tools))
 
     def cargo(self, manager: RustWorkspaceManager, request: Request, *args: str) -> None:
         run_command(
@@ -285,26 +292,10 @@ class RustEngine:
     def dx(
         self, manager: RustWorkspaceManager, request: Request, target: RustTarget, action: str
     ) -> None:
-        command = [
-            manager.require_cargo_tool("dioxus-cli"),
-            action,
-            "--locked",
-            "--package",
-            target.package,
-        ]
-        command.append(f"--{self.platform(request, target) or 'desktop'}")
-        if request.profile == "release":
-            command.append("--release")
-            if (
-                action == "build"
-                and self.platform(request, target) == "web"
-                and target.web_release_debug_symbols is not None
-            ):
-                command.extend(
-                    ("--debug-symbols", str(target.web_release_debug_symbols).lower())
-                )
-        if target.kind == "fullstack":
-            command.extend(("--fullstack", "true", "--force-sequential", "true"))
+        command = dioxus_command(
+            manager.require_cargo_tool("dioxus-cli"), request, target,
+            self.platform(request, target), action,
+        )
         if action == "serve":
             run_program(command, cwd=target.directory, env=self.environment(request, manager))
         else:
@@ -346,14 +337,6 @@ class RustEngine:
             if target.kind == "fullstack" or platform not in {None, "desktop"}:
                 self.dx(manager, request, target, "build")
             else:
-                features = (
-                    ("--no-default-features", "--features", "desktop")
-                    if platform == "desktop"
-                    else ()
-                )
-                if target.features:
-                    features += ("--features", ",".join(target.features))
-                selector = ("--example", target.example) if target.example is not None else ()
                 self.cargo(
                     manager,
                     request,
@@ -363,8 +346,7 @@ class RustEngine:
                     request.cargo_profile,
                     "-p",
                     target.package,
-                    *selector,
-                    *features,
+                    *cargo_build_flags(target, platform),
                 )
 
     def validate_code(
@@ -424,11 +406,16 @@ class RustEngine:
                     )
 
     def execute(self, request: Request, names: tuple[str, ...]) -> None:
-        if request.action in {"clean", "rebuild"}:
+        if request.action == "clean":
             self.clean(request)
-            if request.action == "clean":
-                return
-        manager = self.manager()
+            return
+        manager = self.invocation_manager()
+        if request.action == "rebuild":
+            manager.validate_snapshot()
+            self.environment(request, manager)
+            for cargo_tool in self.cargo_tools(manager, request, names):
+                manager.require_cargo_tool(cargo_tool)
+            self.clean(request)
         if request.action == "doctor":
             return
         if request.action == "fetch":

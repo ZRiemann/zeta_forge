@@ -185,7 +185,7 @@ class ContractTests(unittest.TestCase):
         self.engine.execute.assert_called_once()
         second.execute.assert_called_once()
 
-    def test_rust_fetch_preflight_patch_acquisition_baseline(self) -> None:
+    def test_later_preflight_failure_never_acquires_rust_fetch_patch(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             rust = RustEngine(
@@ -204,9 +204,7 @@ class ContractTests(unittest.TestCase):
             )
 
             def reject_preflight(*args: object) -> None:
-                # Known Stage 3.1 behavior. Stage 3.7 must reverse both
-                # acquisition assertions and retain the failing second engine.
-                self.assertTrue(marker.is_file())
+                self.assertFalse(marker.exists())
                 raise RuntimeError("later engine preflight failed")
 
             second.preflight.side_effect = reject_preflight
@@ -221,10 +219,37 @@ class ContractTests(unittest.TestCase):
                 status, output = self.invoke("fetch")
                 self.assertEqual(status, 1)
                 self.assertIn("later engine preflight failed", output)
-                acquire.assert_called_once_with(manager.project, rust.config)
+                acquire.assert_not_called()
                 prepare.assert_not_called()
                 execute.assert_not_called()
             second.execute.assert_not_called()
+            self.assertFalse(marker.exists())
+
+    def test_failed_rust_preparation_preserves_rebuild_outputs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            rust = RustEngine(
+                root, mock.Mock(), {"crate": RustTarget("crate", root)}, root / "target",
+            )
+            existing = rust.artifact(request("build"), "crate")
+            existing.parent.mkdir(parents=True)
+            existing.write_bytes(b"existing")
+            manager = mock.Mock()
+            self.project = Project(
+                "fixture", (Product("crate", "rust", "crate", ("rebuild",)),),
+                {"rust": rust}, ("crate",),
+            )
+            with (
+                mock.patch.object(rust, "manager", return_value=manager) as create,
+                mock.patch.object(rust, "environment", side_effect=RuntimeError("prepared state drift")),
+                mock.patch.object(rust, "build") as build,
+            ):
+                status, output = self.invoke("rebuild")
+                self.assertEqual(status, 1)
+                self.assertIn("prepared state drift", output)
+                create.assert_called_once()
+                build.assert_not_called()
+            self.assertEqual(existing.read_bytes(), b"existing")
 
 
 class AdapterTests(unittest.TestCase):
@@ -480,7 +505,11 @@ class AdapterTests(unittest.TestCase):
                 description["affected_artifacts"]["logging"],
                 str(root / "build/cargo/debug/examples/logging"),
             )
-            with mock.patch.object(engine, "manager"), mock.patch.object(engine, "build") as build:
+            with (
+                mock.patch.object(engine, "manager"),
+                mock.patch.object(engine, "environment", return_value={}),
+                mock.patch.object(engine, "build") as build,
+            ):
                 engine.execute(req, ("logging",))
                 self.assertEqual(build.call_args.args[2], ("logging",))
             for name in engine.targets:
@@ -498,7 +527,10 @@ class AdapterTests(unittest.TestCase):
             )
             manager = mock.Mock()
             manager.project.capabilities = ()
-            with mock.patch.object(engine, "manager", return_value=manager):
+            with (
+                mock.patch.object(engine, "manager", return_value=manager),
+                mock.patch.object(engine, "environment", return_value={}),
+            ):
                 with self.assertRaisesRegex(RuntimeError, "requires capability"):
                     engine.preflight(request("doctor"), ("app",))
                 manager.project.capabilities = ("dioxus-web-fullstack",)

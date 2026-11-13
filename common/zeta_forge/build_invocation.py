@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Iterator, Mapping
+from typing import Callable, Iterator, Mapping, TypeVar, cast
 
 from .build_contract import Engine, Product, Request
 from .build_log import log
+
+_Snapshot = TypeVar("_Snapshot")
+_invocation_snapshots: ContextVar[dict[object, object] | None] = ContextVar(
+    "build_invocation_snapshots", default=None,
+)
+
+
+def invocation_snapshot(key: object, create: Callable[[], _Snapshot]) -> _Snapshot:
+    snapshots = _invocation_snapshots.get()
+    if snapshots is None:
+        return create()
+    if key not in snapshots:
+        snapshots[key] = create()
+    return cast(_Snapshot, snapshots[key])
 
 
 @dataclass(frozen=True)
@@ -41,16 +56,20 @@ def execute_invocation(
     steps: tuple[InvocationStep, ...], request: Request,
 ) -> Iterator[InvocationStep]:
     """Yield completed steps. Preparation is an optional adapter capability."""
-    for step in steps:
-        step.engine.preflight(request, step.names)
-    for step in steps:
-        prepare = getattr(step.engine, "prepare", None)
-        if prepare is not None:
-            prepare(request, step.names)
-    for index, step in enumerate(steps, 1):
-        log(
-            "I",
-            f"step={index}/{len(steps)} action={request.action} engine={step.key} profile={request.profile}",
-        )
-        step.engine.execute(request, step.names)
-        yield step
+    token = _invocation_snapshots.set({})
+    try:
+        for step in steps:
+            step.engine.preflight(request, step.names)
+        for step in steps:
+            prepare = getattr(step.engine, "prepare", None)
+            if prepare is not None:
+                prepare(request, step.names)
+        for index, step in enumerate(steps, 1):
+            log(
+                "I",
+                f"step={index}/{len(steps)} action={request.action} engine={step.key} profile={request.profile}",
+            )
+            step.engine.execute(request, step.names)
+            yield step
+    finally:
+        _invocation_snapshots.reset(token)

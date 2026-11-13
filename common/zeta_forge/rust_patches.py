@@ -167,11 +167,7 @@ def prepare_patches(project: RustProject, config: RepoConfig) -> None:
     patch_environment(project, config, prepare=True)
 
 
-def patch_environment(project: RustProject, config: RepoConfig, *, prepare: bool = False) -> dict[str, str]:
-    if not project.source_patches:
-        return {}
-    recipe, source = patch_recipe(config.forge_root, project.source_patches)
-    verify_source(recipe, source)
+def _patch_cargo_config(config: RepoConfig) -> tuple[Path, Path | None]:
     base = Path(config.env.get("CARGO_HOME", str(Path.home() / ".cargo"))).expanduser().resolve()
     # Keep user settings at their original location so include-relative paths retain meaning.
     user_config = next((base / name for name in ("config", "config.toml") if (base / name).is_file()), None)
@@ -179,6 +175,24 @@ def patch_environment(project: RustProject, config: RepoConfig, *, prepare: bool
         document = tomllib.loads(user_config.read_text(encoding="utf-8"))
         if user_config.suffix != ".toml" or set(document) & {"patch", "paths", "source", "include"}:
             raise RuntimeError("Managed Rust source repairs require config.toml without source/patch/paths/include overrides")
+    return base, user_config
+
+
+def validate_patch_inputs(project: RustProject, config: RepoConfig) -> None:
+    if project.source_patches:
+        recipe, source = patch_recipe(config.forge_root, project.source_patches)
+        recipe_files(recipe)
+        _patch_cargo_config(config)
+        if source.exists() or source.is_symlink():
+            verify_source(recipe, source)
+
+
+def patch_environment(project: RustProject, config: RepoConfig, *, prepare: bool = False) -> dict[str, str]:
+    if not project.source_patches:
+        return {}
+    recipe, source = patch_recipe(config.forge_root, project.source_patches)
+    verify_source(recipe, source)
+    base, user_config = _patch_cargo_config(config)
     identity = hashlib.sha256((str(base) + str(source)).encode()
                               + (user_config.read_bytes() if user_config else b"")).hexdigest()
     home = config.forge_root / "build/rust/cargo-homes" / identity

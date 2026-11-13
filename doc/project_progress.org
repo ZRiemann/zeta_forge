@@ -264,7 +264,7 @@ implementation on baseline =3eb9474da9b751e76356ec66c6b68a67642641e0=.
 | [[file:en/phase3_build_modularity.org::#stage-3-4][3.4]] / Forge native | delivered | Composition and staging ownership | None | v1.20.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-5][3.5]] / Forge CMake | delivered | Configuration and dependency seam | None | v1.21.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-6][3.6]] / Forge Rust governance | delivered | Project/catalog and validation | None | v1.22.0 |
-| [[file:en/phase3_build_modularity.org::#stage-3-7][3.7]] / Forge Rust delivery | planned | Tool preparation and delivery lifecycle | 3.2, 3.6 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-7][3.7]] / Forge Rust delivery | delivered | Tool preparation and delivery lifecycle | None | v1.23.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-8][3.8]] / Forge processes | planned | Process ownership and diagnostics | 3.1, 3.2 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-9][3.9]] / Forge integration | planned | Architecture gates and overall matrix | 3.3-3.8, then user overall acceptance | unset |
 
@@ -374,8 +374,22 @@ The 26 policy and audit fixture tests also passed with real tool lookup
 forbidden. Ruff import checks passed on touched files. No real Rustup, Cargo
 build or consumer audit ran for this Stage.
 
-Next action: Stage 3.7, moving Rust fetch acquisition into preparation and
-verifying prepared artifacts before any target cleanup or execution.
+Stage 3.7: Rust fetch preflight validates pending source declarations, existing
+sources and native prerequisites without acquisition. Preparation acquires and
+verifies approved sources, managed Cargo configuration and tools. The invocation
+shares its selected Rust configuration and revalidates it and prepared artifacts
+before rebuild cleanup. The native environment and Cargo/Dioxus command variants
+have separate owners; legacy RustTarget and manager imports remain available.
+
+Validation for v1.23.0: 157 tooling tests passed over =0c61b46=. The prior
+two-engine reproducer now asserts zero acquisition after later preflight failure.
+The suite covers preparation failure preserving outputs, missing pending source
+validation, verified repair materialization, Cargo example/features, Dioxus
+variants and other-profile cleanup. Ruff import checks passed. No real Cargo
+fetch, Dioxus build or native dependency build ran.
+
+Next action: Stage 3.8, specifying process ownership and log visibility and
+exercising interruption of a foreground process group.
 
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /

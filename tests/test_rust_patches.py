@@ -3,18 +3,25 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-from pathlib import Path
 import sys
 import tarfile
 import tempfile
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "common"))
 from zeta_forge.rust_patches import (  # noqa: E402
-    PATCH_NAME, materialize, patch_environment, patch_recipe, prepare_patches,
-    tree_digest, verify_resolved_patches, verify_source,
+    PATCH_NAME,
+    materialize,
+    patch_environment,
+    patch_recipe,
+    prepare_patches,
+    tree_digest,
+    validate_patch_inputs,
+    verify_resolved_patches,
+    verify_source,
 )
 
 
@@ -64,6 +71,7 @@ class RustSourcePatchTests(unittest.TestCase):
 
     def test_missing_source_is_not_acquired_during_read_only_checks(self) -> None:
         with mock.patch("zeta_forge.rust_patches.urlopen") as download:
+            validate_patch_inputs(self.project, self.config)
             with self.assertRaisesRegex(RuntimeError, "fetch"):
                 patch_environment(self.project, self.config)
             download.assert_not_called()

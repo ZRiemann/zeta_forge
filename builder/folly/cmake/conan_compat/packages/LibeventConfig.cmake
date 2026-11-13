@@ -7,32 +7,25 @@ endif()
 include("${CMAKE_CURRENT_LIST_DIR}/../../../build/${_folly_build_type}/conan/build/${_folly_build_type}/generators/LibeventConfig.cmake")
 
 if(TARGET libevent::core)
-  set(LIBEVENT_INCLUDE_DIRS "${libevent_libevent_core_INCLUDE_DIRS_RELEASE}")
-  if(LIBEVENT_INCLUDE_DIRS AND NOT "${LIBEVENT_INCLUDE_DIRS}" STREQUAL "include")
-    set(LIBEVENT_INCLUDE_DIR "${LIBEVENT_INCLUDE_DIRS}")
-  endif()
-
+  string(TOUPPER "${_folly_build_type}" _folly_build_type_upper)
+  set(_libevent_include_dir "${libevent_libevent_core_INCLUDE_DIRS_${_folly_build_type_upper}}")
   set(_libevent_targets "${libevent_libevent_core_LIBRARIES_TARGETS}")
   if(_libevent_targets)
     list(GET _libevent_targets 0 _libevent_target)
-    string(TOUPPER "${_folly_build_type}" _folly_build_type_upper)
     get_target_property(_libevent_location "${_libevent_target}" "IMPORTED_LOCATION_${_folly_build_type_upper}")
     if(NOT _libevent_location)
       get_target_property(_libevent_location "${_libevent_target}" IMPORTED_LOCATION_NOCONFIG)
     endif()
   endif()
-
-  if(_libevent_location AND NOT TARGET event)
-    add_library(event UNKNOWN IMPORTED)
-    set_target_properties(event PROPERTIES IMPORTED_LOCATION "${_libevent_location}")
-    if(LIBEVENT_INCLUDE_DIRS)
-      set_target_properties(event PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${LIBEVENT_INCLUDE_DIRS}")
-    endif()
-  endif()
-
-  if(_libevent_location)
-    set(LIBEVENT_LIB "${_libevent_location}")
-  endif()
 endif()
 
+if(NOT EXISTS "${_libevent_location}" OR NOT EXISTS "${_libevent_include_dir}/event.h")
+  message(FATAL_ERROR "Folly requires the Conan Libevent library and headers for ${_folly_build_type}")
+endif()
+
+# FindLibEvent reuses these values in find_path/find_library. Creating an event
+# target would make it explicitly select CMP0026 OLD, removed in CMake 4.
+set(LIBEVENT_INCLUDE_DIRS "${_libevent_include_dir}")
+set(LIBEVENT_INCLUDE_DIR "${_libevent_include_dir}")
+set(LIBEVENT_LIB "${_libevent_location}")
 set(Libevent_FOUND TRUE)

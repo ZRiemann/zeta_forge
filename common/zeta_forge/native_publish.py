@@ -63,6 +63,20 @@ def relocate_metadata(
     return data
 
 
+def normalize_hpx_metadata(data: bytes, relative: str, build: Path) -> bytes:
+    """Remove HPX's build-tree settings from its installed package config."""
+    if relative == "lib/cmake/HPX/HPXCacheVariables.cmake":
+        binary_dir = re.escape(os.fsencode(build))
+        return re.sub(rb'^set\(HPX_BINARY_DIR "?' + binary_dir + rb'"?\)\n', b"", data, flags=re.M)
+    if relative == "lib/cmake/HPX/HPXConfig.cmake":
+        stdexec = re.escape(os.fsencode(build / "_deps" / "stdexec-src"))
+        # The installed Stdexec target already points to the packaged headers.
+        return re.sub(
+            rb'^  set\(Stdexec_ROOT "' + stdexec + rb'"\)\n', b"", data, flags=re.M,
+        )
+    return data
+
+
 def normalized_name(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
@@ -161,7 +175,14 @@ def collect_owner(
         if entry["kind"] == "file" and candidate.suffix in {".cmake", ".pc"}:
             data = candidate.read_bytes()
             metadata.append(data)
-            updated = relocate_metadata(data, selected, prefix, forge_root)
+            updated = data
+            if selected.target == "hpx":
+                build = forge_root / "builder" / "hpx" / "build" / selected.profile.capitalize()
+                updated = normalize_hpx_metadata(data, relative, build)
+            try:
+                updated = relocate_metadata(updated, selected, prefix, forge_root)
+            except RuntimeError as error:
+                raise RuntimeError(f"{error}: {relative}") from error
             if updated != data:
                 candidate.write_bytes(updated)
         files[relative] = transaction.file_identity(candidate)

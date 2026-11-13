@@ -86,6 +86,27 @@ class NativePublishTests(unittest.TestCase):
             self.install(bad)
         self.assertEqual((self.prefix / path).read_text(), f"prefix={self.prefix}\n")
 
+    def test_hpx_build_tree_settings_are_removed_without_allowing_other_paths(self) -> None:
+        build = self.root / "builder" / "hpx" / "build" / "Release"
+        cache = "lib/cmake/HPX/HPXCacheVariables.cmake"
+        config = "lib/cmake/HPX/HPXConfig.cmake"
+        files = {
+            cache: f"set(HPX_BINARY_DIR {build})\nset(HPX_WITH_FETCH_STDEXEC ON)\n".encode(),
+            config: (
+                'include("HPXStdexecTarget.cmake")\n'
+                f'  set(Stdexec_ROOT "{build}/_deps/stdexec-src")\n'
+            ).encode(),
+        }
+        stage = self.stage("hpx", files)
+        self.install(stage)
+        self.assertEqual((self.prefix / cache).read_text(), "set(HPX_WITH_FETCH_STDEXEC ON)\n")
+        self.assertEqual((self.prefix / config).read_text(), 'include("HPXStdexecTarget.cmake")\n')
+        self.assertEqual((stage[2] / config).read_bytes(), files[config])
+
+        files[config] += f'set(UNKNOWN_BUILD_PATH "{build}/include")\n'.encode()
+        with self.assertRaisesRegex(RuntimeError, f"Unresolved Forge.*{config}"):
+            self.install(self.stage("hpx", files))
+
     def test_install_rolls_back_before_and_during_receipt_commit(self) -> None:
         for failure_path in ("lib/a", "share/zeta_forge/native/owners.json"):
             with self.subTest(failure_path=failure_path):

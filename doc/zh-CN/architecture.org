@@ -136,3 +136,10 @@ Conan 锁文件与包身份保存在目标清理范围之外。原生构建记�
 [[file:phase2_native_delivery.org][Phase 2]] 设计 Conan 策略与会话、确定的原生计划、产物记录和可恢复发布边界，
 保留当前 install 仅发布契约及原生构建依赖图。
 实际实现与验证状态见[[file:../project_progress.org][统一进度台账]]。
+
+* 构建框架模块化提案
+
+[[file:phase3_build_modularity.org][Phase 3]] 提议将稳定契约放到 CLI 下层，建立独立回归
+fixture，明确 native/Rust 生命周期 owner，提取中立的状态/进程机制并逐步消除重复策略。
+保留公开 CLI、消费者 API 和 Phase 2 交付格式。这些是建议边界，不是当前实现目录。
+实施前需完成 Phase 2 总验收、固定基线并评审批准提案。

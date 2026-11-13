@@ -1,0 +1,426 @@
+#+TITLE: Phase 3 - 构建框架模块化
+
+[[file:readme.org][文档首页]] | [[file:../en/phase3_build_modularity.org][English]] | [[file:../project_progress.org][状态与交付证据]]
+
+* 目标与评审边界
+
+渐进调整现有 zbuild 框架，减少重复策略，分离配置、校验、执行和状态所有权，
+同时保留受支持的命令与消费者接口。本文件是待评审提案，不表示已获准开始实现。
+
+2026-11-13 的评审覆盖 =zbuild.py=、=builder/=、共享 Python 库、代表性适配器
+测试和架构/构建文档。基线为 HEAD =e74ac83e0cc963c6a776dc60bbff0731a9402931=
+加 Phase 2 暂存改动，不能仅用 HEAD 复现。暂存区二进制 diff 的 SHA-256 为
+=b5f132cbf744f8c599c9af27e5fbba9082b1a7d5837aa8a438b0cecf1d7ca58d=。
+用户正在执行 Phase 2 总验收，本次方案工作保持其实现及暂存区不变。
+
+静态统计：=common/zeta_forge/= 与 =builder/= 共 37 个 Python 文件、6,388 行，
+不含根入口和测试。其中 =rust_workspace.py= 878 行、=rust_engine.py= 445 行、
+=conan_session.py= 310 行、=builder/project.py= 248 行。行数用于定位评审区域，
+不单独构成缺陷，也不是裁减指标。本方案不承诺构建加速。
+本轮没有穷尽审计第三方源码、所有 CMake helper、所有消费仓库、跨平台或并发执行。
+
+* 发现与优先级
+
+** P1：校验与准备的副作用边界不一致
+
+CLI 的顺序是全部 engine 完成 preflight，再全部 prepare，最后 execute。
+但 =RustEngine.preflight(fetch)= 会调用 =prepare_patches=，可能下载并生成源码、
+Cargo 配置。因此，后一个 engine 的 preflight 失败时，前一个已产生修改。
+这是确认的生命周期边界不一致，没有据此推断已发生数据丢失。
+
+证据：[[file:../../common/zeta_forge/build_cli.py::def cli][CLI 生命周期]]、
+[[file:../../common/zeta_forge/rust_engine.py::def preflight][Rust preflight]]、
+[[file:../../common/zeta_forge/rust_patches.py::def prepare_patches][补丁准备]]。
+将获取资源移入显式 prepare，区分“声明有效”和“资源待准备”。用两个 engine 的
+失败场景证明：全部静态 preflight 通过前，不下载、不落盘、不清理。
+
+** P1：默认测试结果受兄弟仓库当前 revision 影响
+
+[[file:../../tests/test_cmake_consumers.py::SOURCES =][CMake 消费者测试]]直接加载四个兄弟
+仓库的 builder，缺少任意一个时跳过整组。因此，覆盖范围和结果随工作区内容改变，
+与[[file:architecture.org][架构文档]]承诺的 Forge 测试独立性不一致。
+Phase 2 台账记录了 zgent API 不匹配，以及使用兼容工作区通过测试的历史证据，
+这些结果不是本次方案任务重新执行的验收。
+
+默认测试使用 Forge 自有的最小契约 fixture。真实消费者集成测试保留为显式选择，
+记录仓库 revision 并报告缺失条件。不用无条件 skip 掩盖不兼容，也不借此恢复已移除
+的 =run_targets= API。
+
+** P2：策略和基础操作反向依赖 CLI
+
+=build_cli.py= 同时拥有 Product、Request、Engine、Project、参数解析、分发、
+输出和日志。12 个生产模块导入它，包括原生纯计划器、文件操作、Conan session
+和发布事务。=Request.options= 还将 =argparse.Namespace= 传入各适配器。
+
+把稳定契约和日志放到 CLI 下层，适配器在入口一次性转换自己的选项。
+通过薄门面保留已有公开 import、构造签名和位置参数派生类兼容性。
+
+** P2：通用状态机制放在 Conan 语义模块中
+
+原生产物与发布代码从 =conan_inputs= 复用摘要，从 =conan_state= 复用 JSON/锁。
+后者 =read_json= 即使读取发布状态，也报告“Conan state”。机制复用合理，
+但所有权和诊断上下文需要调整。
+
+仅提取规范化编码/摘要、原子 JSON 替换、writer lock。Conan generation、native
+receipt、ownership 和 journal recovery 各自保留。原子替换与持久事务提交是不同
+保证，通用 JSON helper 不接管领域事务的 fsync 顺序。
+
+** P2：Rust 配置与执行职责集中
+
+=rust_workspace.py= 同时负责 catalog/TOML、项目加载、本地源码授权、manifest
+治理、锁报告、native 环境、工具验证/安装和 Cargo 调用。=rust_audit.py= 导入其
+私有解析 helper，=rust_engine.py= 导入 =_native_environment=，并在描述、校验、
+准备和执行阶段重复创建 manager。build/check/test 又分别分支处理平台和 features。
+
+分离项目/catalog 数据、治理、工具准备和交付策略。语义一致的目标/variant 选择只
+维护一份，build、lint、test 的实际命令仍各自明确。使用一次调用内的配置快照，
+准备完成后显式复验，不引入全局隐式缓存。
+
+** P2：Forge 组装入口承担原生执行细节
+
+=builder/project.py= 除产品注册外，还管理锁、builder 环境、candidate 目录、
+receipt 和 promotion。目标信息分散在 =native_plan.py= 的 =TARGETS= 与
+=project.py= 的 =BUILDERS=。已有 NativePlan、receipt 和独立 publisher 是有效边界。
+
+将执行与 staging 移到 Forge 自有的 executor/service。目标 descriptor 与 builder
+factory 在组装时统一注册，派生纯计划器输入。Forge 目标名称和 Folly/gRPC 规则
+继续归 Forge 所有，不放入通用 CMake adapter。
+
+** P3：CMake 重复和进程接口需要有范围的整理
+
+四个源码库 builder 重复拼接 CMake 基础参数。=CMakeProjectBuilder= 同时承载旧
+mtime Conan hook，而 Forge 已使用 ConanSession。=process.run_command= 输出
+构建命令，=build_ops.run_program= 管理前台进程组并隐藏运行参数，部分探测直接
+使用 =subprocess=。这些接口用途不同，不能直接合并为同一种行为。
+
+提取基础 CMake 参数，保持每个库的选项和签名顺序。先调查外部派生类，再隔离旧
+Conan hook。进程机制明确 capture、日志可见性和进程组策略，继续区分工具命令与
+应用启动接口。Gradle/Zig adapter 已较小，无需引入新的继承框架。
+
+* 范围、保留契约与非目标
+
+- 保留 action-first CLI、默认目标、去重、profile、显式 install 选择、透传参数
+  保密以及退出码 0/1/2/130。
+- 保留 metadata 字段语义、=ZETA_BUILD_DONE=、公开 Python import、构造签名和
+  受支持的派生类 hook。
+- Forge =install= 仍只发布 staging。外部 CMake adapter 的 build 后按 component
+  install 是另一份既有契约，不能统一成 Forge 的行为。
+- 保留源码/环境覆盖、显式代理继承、C++ 标准、依赖版本、Conan lock 身份/刷新规则、
+  staging 与输出路径。
+- 保留 receipt schema/规范化身份、ownership、legacy adoption、发布恢复、锁顺序
+  和另一 profile 产物保护。
+- 保留 Rust catalog、Cargo locked resolution、修补工具身份、OpenSSL/NNG 来源、
+  Web/server profile 与应用资源 hook。
+- 构建依赖图继续由 CMake/Cargo/Gradle/Zig 拥有。不引入新 resolver、通用工作流 DSL、
+  plugin 自动发现、DI 容器或调度器。
+- 不升级依赖/Python 版本，不改第三方/消费者源码，不重设计主机准备，不全面重写
+  CMake helper。现有 run metadata 和 target-based CMake 接口仍纳入回归。
+
+* 目标设计与状态归属
+
+以下是 =common/zeta_forge/= 下建议的内部组织。Stage 内可细化名称，验收依据是
+职责和依赖方向。只在能力实际迁移时建立 package，不预先创建空目录层次。
+
+| 边界 | 拥有 | 不拥有 |
+|------+-------+--------|
+| =contracts.py= | 稳定 request/product/project/engine 数据 | argparse 解析、执行、adapter 导入 |
+| =build_cli.py= 与 dispatch | 解析、选择、全局阶段顺序、输出状态 | native 构建策略、持久状态 |
+| =diagnostics.py= | 既有日志和状态输出契约 | 工具执行、生命周期决策 |
+| =state_io.py= | 摘要、规范编码、原子替换、锁 | Conan 策略、receipt schema、恢复决策 |
+| =process.py= 与前台 runner | 执行、capture、中断、参数可见性 | 目标选择、依赖升级 |
+| =cmake/= | configure/build/install 机制、显式依赖 hook | Forge 目标目录、包版本 |
+| =conan/= | 策略、输入身份、保留的解析结果、generator 验证 | native 发布归属 |
+| =native/= | inventory/receipt、发布计划、journal 事务 | install 时解析/构建缺失依赖 |
+| =rust/= | 项目/catalog、治理、工具、native 环境、交付 variant | 消费者业务策略、Cargo 依赖图解析 |
+| =builder/project.py= | Forge 组装、产品注册 | staging 事务、通用 helper |
+| =builder/native_executor.py= | Forge 计划执行、staging 生命周期 | CLI 解析、外部项目编排 |
+
+依赖方向：
+
+#+begin_example
+项目组装 -> CLI/dispatch + 选定的 engine
+CLI/dispatch -> contracts + diagnostics
+engine/executor -> contracts + 能力服务 + process/state 操作
+能力策略 -> 自有数据 + 窄范围 reader/adapter
+process/state I/O -> 标准库 + diagnostics，不导入 CLI/engine
+
+Conan resolution -> 显式传递 dependency identity -> native receipt/publication
+Rust project/catalog -> governance + tool requirements -> delivery execution
+#+end_example
+
+箭头表示依赖及显式数据传递，不建立新的统一执行图。NativePlan 保持 native 专用。
+Rust 可用自己的交付计划描述 profile/features/cleanup variant，不要求所有 adapter
+实现通用步骤语言。
+
+可变状态和生命周期各有一个 owner：
+
+- Dispatch 拥有本次调用及全局 preflight/prepare/execute 顺序。engine plan 在本次
+  调用内不可变，准备后的资源在 cleanup/execute 前复验，不增加跨调用配置缓存。
+- Conan 拥有 lock generation 和 generator receipt。staging service 拥有 candidate
+  promotion 和 build receipt，按排序取得 stage lock。
+- Publication 拥有 prefix lock、文件替换、ownership commit 和恢复。State I/O 只
+  提供机制。不能反转 stage/prefix 锁顺序，也不跨 native 发布持有无关 Rust 工具锁。
+- Rust 工具服务拥有隔离安装和 repair receipt，项目 adapter 拥有资源及应用环境。
+  进程服务负责子进程组，直到退出或有限中断升级完成。
+
+* 后续 Agent 的关键实现提示
+:PROPERTIES:
+:CUSTOM_ID: implementation-guidance
+:END:
+
+本节记录跨实现任务交接时需要保留的设计意图。保留契约和验收门槛属于方案要求；
+建议的文件名、服务名和签名属于实现选择，不要求为每项职责都建立一个 class。
+实施前先读当前台账和真实调用者，后续已接受的修复可能改变 Phase 2 基线。
+本节不构成开始实现的授权。
+
+** 契约提取与兼容性（3.1、3.2）
+
+- 先移动已有公开 dataclass/protocol，再考虑字段设计。旧 import 尽量直接 re-export
+  同一个 class 对象，避免 isinstance 和派生类面对两种类型身份。测试构造签名、默认值
+  和派生类位置参数，保留 Phase 2 为 CommonBuildArgs 新字段采用的 keyword-only 约束。
+- 保持旧 Request 构造方式可用。既有 options 可经门面传递，各 adapter 只转换自己
+  已知的选项为有类型的不可变值。不能为保留具体注解让 contracts 导入 argparse，
+  也不能在统一解析中丢弃项目扩展选项。frozen dataclass 不保证内部 dict/Namespace
+  不可变，执行计划使用的字段需要复制并规范化。
+- 保留既有 Engine 入口。通过窄能力接口/dispatch adapter 表达可选 prepare，不要求
+  所有外部 engine 同时实现新方法。避免统一 Engine 基类。
+
+** 调用生命周期与待准备资源（3.2、3.7）
+
+预期顺序：
+
+#+begin_example
+解析/选择 -> 规范化并描述计划
+  -> 全部只读 preflight
+  -> 准备选定资源，并验证准备结果
+  -> 全部 prepare 成功后：执行选定 engine
+       -> 按需清理选定范围 -> 原生操作
+#+end_example
+
+help/list/metadata/dry-run 不进入 prepare/execute。只读表示不下载、不安装、
+不生成配置、不清理；doctor 可以执行有限的版本/依赖探测，不等于禁止所有子进程。
+
+Rust fetch 先验证 recipe 身份、路径和声明结构。允许准备但尚不存在的源码/工具，
+应表示为“待准备需求”，不能冒充已就绪。prepare 获取资源后验证内容、receipt 和
+native 环境，再允许执行。doctor 报告缺失但不获取资源。调整已有 doctor/native
+环境检查时，既不能暗中生成资源，也不能把合法的待准备资源一律判为失败。
+
+配置快照只在一次调用中复用；prepare 后复验可变产物，需要时在所属锁内验证。
+不能跨资源获取继续使用旧 receipt 或缓存的存在性判断。后续 prepare 失败可以留下
+前面已准备好的可复用工具，但必须发生在目标 cleanup/build 之前，不承诺跨独立
+工具安装回滚。项目资源 hook 的既有调用顺序需要在 Rust 测试中明确保留。
+
+** 目标注册与 CMake 变化点（3.4、3.5）
+
+- 在组装时单处注册纯 TargetSpec 和 builder factory，派生 Project products、顺序
+  和 planner descriptors。planner 只接收 descriptor，不导入或构造 builder。
+  副作用开始前验证重复目标和未知前置依赖。
+- executor 消费 NativePlan 和 factory。deps 的 generator-copy 与源码库的 DESTDIR
+  是明确的 staging 变化点。仅针对这些真实变化选择小 callable/protocol，不为假想
+  backend 设计 hook，也不堆出几十个无关可选字段。同一变化类型内新增目标只需注册
+  和目标策略，不应再增加按目标名判断的 executor 分支。
+- 首次提取 configure 参数保持顺序和值不变，当前参数签名参与重新配置判断。保留
+  分号路径、HPX toolchain blocks/source commit、gRPC fallback 和各库 warning 参数。
+  明确重复选项的优先级，不能通过 dict 静默覆盖 -D 参数。
+- 外部 CMake 派生类 hook 是兼容边界。新的内部依赖准备组件不能绕过已覆盖的
+  validate/should_run_conan/run_conan/configure_command。删除旧路径前测试无 Conan、
+  Forge ConanSession、外部旧 hook 三类情况。
+
+** 状态 I/O、身份与恢复（3.3、3.4）
+
+- 先提取字节一致的规范化编码和摘要函数，保持 encoding、分隔符、key 排序和
+  inventory 身份规则。原始 JSON 读取与领域 schema 校验分开，错误带上对应产物/路径，
+  native 状态不再被诊断为 Conan 状态。
+- 通用原子替换只拥有临时文件清理与替换，事务 owner 继续负责 fsync、journal 顺序、
+  commit 判定和回滚。不能顺手移动 fsync 或简化 recovery。
+- 保留 stage lock 排序和现有 prefix lock 范围。拆分后 receipt 读取、candidate
+  promotion、发布验证仍须在正确锁范围内。注入 I/O 测试接口不能替代真实锁/恢复场景。
+- 新实现读取旧格式 lock/receipt/journal fixture，并用隔离副本验证新旧 revision 的
+  恢复。schema 变化需要单独设计，不是引入内部类型的前提。
+
+** Rust 边界与进程接口（3.6–3.8）
+
+- project/catalog loader 可以读取指定文件；治理针对已提供的数据/manifest 判断，
+  不安装工具。工具服务拥有可用性、获取与绑定 executable 的 receipt。native 环境
+  构造验证已安装 OpenSSL/NNG 的来源，保留显式环境冲突检查，不解析替代 native 依赖图。
+- 目标/platform/features/profile 的共同选择逻辑派生一次，再构造 action-specific
+  命令。build/check/test 的 variant 本就不同，必须保留 fullstack server/Web 检查、
+  host test 排除、example selector、locked 参数和 Web debug-symbol 策略。
+  命令片段相似不代表行为等价。
+- 保留 run_command 的 capture/check/timeout/返回值语义，以及 run_program 的前台
+  进程组和参数保密语义。若共享机制有收益，可在两个接口后用小型私有 runner 接受显式
+  策略。CommandError、KeyboardInterrupt、CLI 状态映射各有 owner，不能用统一命令
+  日志输出应用运行参数。
+
+** 测试迁移、架构检查与交接（3.1、3.9）
+
+- 先刻画已有行为，再移动。3.1 记录已知 preflight 副作用的 reproducer，3.7 将其
+  转成通过的“零修改”回归。不能留下无说明的失败默认套件，也不能删除场景宣称 3.1 通过。
+- Forge fixture 描述受支持契约，不复制整个消费者 builder。真实兄弟仓库集成移出
+  默认 discovery，保留显式调用方式和 revision 证据。除策略测试外，继续用子进程/
+  临时文件测试中断、锁和恢复。
+- 架构检查解析相对 import 和 package re-export，也检查延迟 import，不能把 import
+  移进函数就绕过规则。区分仅类型依赖与运行时依赖，临时例外记录 owner 和移除 Stage。
+  不使用容易失效的文件数量门槛。
+- 每次交接记录转移的职责、新旧入口映射、兼容面、状态/锁 owner、准确检查、缺口和
+  下一 Stage。分别记录生产/测试代码量、删除的重复策略、扩展需要修改的位置。
+  门面变小本身不证明简化，新增模块必须带来独立可测边界或降低耦合。
+- 一次完成一个可运行的职责提取。可在上述约束内调整名字和内部布局。公开行为、
+  状态格式/路径、依赖版本或消费者源码范围改变，需先明确范围决策、更新设计证据，
+  再进入越过该边界的实现。
+
+* Stage 划分与依赖
+
+全部 Stage 的 owner 为 =zeta_forge=。当前状态和实际交付版本只记录在
+[[file:../project_progress.org::*Phase 3 proposal][进度台账]]。
+实现前置条件：用户完成 Phase 2 总验收、固定可复现的 Phase 2 基线、评审批准本提案。
+写完本文不代表任何实现 Stage 已开始或通过，交付版本均未指定。
+
+** Stage 3.1 - 独立的回归基线
+:PROPERTIES:
+:CUSTOM_ID: stage-3-1
+:END:
+前置：上述 Phase 条件。
+交付：盘点公开 import/hook、命令、路径、schema、环境优先级；用 Forge 自有最小
+fixture 替代默认测试对实时兄弟仓库的依赖，真实消费者测试改为显式选择并记录 revision。
+先补两个 engine 的 preflight/prepare 失败场景，再修正行为。
+验收：无兄弟仓库、无网络时默认工具测试运行，不因缺兄弟仓库跳过覆盖；存在任意
+revision 的兄弟仓库也不改变结果。可选集成测试明确报告不可用/不兼容条件。
+
+** Stage 3.2 - CLI 下层契约与显式生命周期
+:PROPERTIES:
+:CUSTOM_ID: stage-3-2
+:END:
+前置：3.1。
+交付：提取稳定数据、日志输出和调用分发。CLI 负责解析，adapter 负责转换扩展选项。
+将可选 prepare 定义为显式能力，同时兼容未实现 prepare 的现有 engine。
+验收：策略/状态模块不导入 CLI；help/list/metadata/dry-run 不修改状态、不启动构建；
+构造/import/退出状态契约通过。全部 preflight 先于 prepare，全部 prepare 先于 execute。
+Rust 具体的 preflight 副作用在 3.7 消除，此处不提前宣称修复。
+
+** Stage 3.3 - 中立的状态 I/O 边界
+:PROPERTIES:
+:CUSTOM_ID: stage-3-3
+:END:
+前置：3.1、3.2。
+交付：提取摘要/JSON/锁机制，读取错误带正确领域上下文；native 不再从 Conan 模块
+获取通用机制。Conan 解析和 generation 策略保留在其边界内，不统一各领域 schema。
+验收：规范化字节和既有 ID 与基线 fixture 相同；错误指向正确状态。锁竞争、中断
+写入和 Phase 2 事务恢复通过，不扩大 cleanup/cache 范围。
+
+** Stage 3.4 - Forge 原生组装与 staging
+:PROPERTIES:
+:CUSTOM_ID: stage-3-4
+:END:
+前置：3.2、3.3。
+交付：从组装入口提取 native 执行/staging，通过单处注册生成纯计划输入。库特定
+配置保留在 builder，receipt 与 publisher 各自拥有自己的状态。
+验收：预演与 build/clean/publish 实际范围一致；新增第六个 native fixture target
+只需注册，不修改 planner/executor 分支。deps 特例和 Folly 约束仍显式存在。
+receipt-last promotion、失败回滚、无工具 staged install 通过。
+
+** Stage 3.5 - CMake 配置与依赖准备边界
+:PROPERTIES:
+:CUSTOM_ID: stage-3-5
+:END:
+前置：3.1、3.4。
+交付：共享基础 configure 参数和有序库选项，将可选依赖准备与 configure/build/
+install 分离，覆盖实际存在的无 Conan、Forge session 和受支持外部 builder。
+除独立确认的缺陷修复外，保持现有 mtime/configure 失效规则。
+验收：代表性命令/选项、HPX 源码身份、gRPC fallback、外部派生类分派和 install
+component 与基线一致。增加库选项只修改该库 builder。未证明受支持消费者不再需要
+旧 hook 前，不删除它。
+
+** Stage 3.6 - Rust 项目与治理边界
+:PROPERTIES:
+:CUSTOM_ID: stage-3-6
+:END:
+前置：3.1、3.2；不依赖 3.4/3.5。
+交付：分离 project/catalog 加载、manifest/本地源码校验、lock 报告与工具执行。
+用窄接口代替跨模块私有 helper 导入，保留公开 RustWorkspaceManager 门面。
+验收：catalog/schema、受管依赖、local roots、patch 声明、lock 报告与 fixture 一致；
+策略测试无需 Rustup 或 native 安装。audit/update 不导入工具安装内部实现。
+
+** Stage 3.7 - Rust 交付与准备生命周期
+:PROPERTIES:
+:CUSTOM_ID: stage-3-7
+:END:
+前置：3.2、3.6；只在语义一致处复用 3.3 的机制。
+交付：分离工具链/工具准备、native 环境和 Cargo/Dioxus variant，共享本次调用的
+配置和目标选择。fetch 获取源码移出 preflight，将待准备资源显式建模，让只读检查
+可验证声明而无需先下载。prepare 后、cleanup/execute 前验证所需文件和 receipt。
+验收：后续 engine preflight 失败时零获取/零修改；prepare 失败保留产物。Cargo
+features/examples、Dioxus desktop/web/fullstack、资源顺序、locked fetch、repair
+身份和另一 profile 清理保护均通过，准备前快照不会未经复验继续使用。
+
+** Stage 3.8 - 进程所有权与诊断
+:PROPERTIES:
+:CUSTOM_ID: stage-3-8
+:END:
+前置：3.1、3.2；可按需要先于 3.4–3.7 执行。
+交付：进程边界显式声明 capture、环境、timeout、可见性和前台进程组行为，按收益
+迁移直接 probe。run_command/run_program 保留公开语义并委托单一实现，不要求每个
+简单只读 probe 都创建进程组。
+验收：子/孙进程中断及回收、130 映射、stdout/stderr capture、超时和命令失败通过。
+运行参数不泄露，显式代理/环境继承不变，构建诊断保留有用命令而不增加凭据或环境转储。
+
+** Stage 3.9 - 集成与架构约束
+:PROPERTIES:
+:CUSTOM_ID: stage-3-9
+:END:
+前置：3.3–3.8。
+交付：可执行 import 约束、核对调用者后清除重复内部路径、更新扩展示例和中英文架构。
+保留仍受支持的公开门面，每个门面背后只有一份实现。
+验收：下述总矩阵通过，代表性扩展无需修改核心，证据区分 Forge fixture 和真实消费者。
+Phase 3 最终总验收由用户执行，仅完成 Stage 检查不能关闭 Phase。
+
+* 整体验收与可衡量收益
+
+1. 使用隔离临时前缀，无兄弟仓库、无网络执行默认工具测试，再在存在无关兄弟仓库
+   时执行，结果一致。CMake/Rust/Gradle/Zig fixture 覆盖 action、只读、无效请求、
+   失败顺序和 profile 隔离。
+2. 下层策略/I/O 对 =build_cli= 或具体 engine 的反向 import 为零，能力 package 间
+   无依赖环。兼容门面只 re-export/委托，内部模块不绕回门面。
+3. 重跑 Phase 2 lock 复用/刷新、身份/篡改、staging/publish 分离、ownership 冲突、
+   恢复及并发 fixture。新代码读取 Phase 2 receipt/lock/journal，在隔离副本上演练
+   回退；本计划不引入 schema migration。
+4. 隔离执行真实 native 总验收：完整 Release 依赖构建/发布、五个 C++ consumer、
+   Rust OpenSSL probe、Debug/Release NNG 清理隔离，并验证缺少构建工具时 staged install。
+5. 在记录 revision 的实际消费者上验证 CMake、Cargo、Dioxus desktop/Web/fullstack、
+   Gradle、Zig 的受支持场景。未运行 SDK/browser/runtime 检查仍为未完成，不以 mock
+   代替。消费者仓库自己的验证或迁移需在对应仓库范围内处理。
+6. 新 native fixture target、新 Cargo/Dioxus fixture delivery 通过注册/策略数据接入，
+   无需修改无关 CLI/executor。可以增加测试 fixture，不增加虚构生产目标或语言栈。
+7. 对比 import、重复策略分支和典型变更涉及范围。已识别的重复策略必须只有一份
+   权威实现，不设置任意行数/文件大小下降比例。同环境重复测量 metadata/dry-run 启动，
+   记录明显退化；构建速度改善必须另有实测。
+
+实施开始后的现有轻量验证入口：
+
+#+begin_src bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=common:tests python3 -m unittest \
+  test_build_contract test_native_plan test_native_conan_session \
+  test_native_delivery test_native_publish test_conan_openssl
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=common:tests python3 -m unittest \
+  test_rust_workspace test_rust_governance test_rust_edges \
+  test_rust_local_dependencies test_rust_patches test_rust_tool_patches \
+  test_run_spec test_zig_engine
+./zbuild.py test build-tools
+#+end_src
+
+最后一条当前仍包含实时兄弟仓库测试，3.1 必须解除这一隐式耦合。以上命令不能代替
+真实集成矩阵。新边界/契约测试接入既有 unittest 工具，交付记录准确命令、revision 和结果。
+
+* 迁移、取舍与交付
+
+按 Stage 提取能力：先固定契约，再一次转移一个 owner，迁移调用者，最后删除旧内部
+实现。避免仅改目录或一次性重写。内部临时桥接在 3.9 收束，受支持的外部 import 门面
+保留到另行约定 API 迁移。不能为了消除少量 action 分支而引入统一 Engine 基类，
+因为各栈 cleanup/install 语义不同。
+
+保持 schema 和状态路径，让每轮交付可回退到前一份代码。先用隔离副本验证跨新旧
+代码 journal recovery，再确认回退安全。不双写状态，不为方便重构而清空已验收
+Conan cache。发现需要改变外部契约的缺陷时独立评审，不藏在文件移动中。
+
+不指定行数裁减目标、固定完成版本或工期。通过验收的 Stage 可按仓库版本规则合并
+交付。本提案只改变文档，不完成 Phase 3、不启动无人值守实现，也不改变 Phase 2 验收状态。

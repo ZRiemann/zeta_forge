@@ -370,6 +370,11 @@ Run from the Forge checkout with the normal Conan profile and source checkouts.
 The commands publish into fresh, build-local prefixes. Keep the acceptance
 directory and logs with the tested staged diff.
 
+Run [[file:../../tests/manual/native_delivery/acceptance.sh][the acceptance script]]
+with =bash tests/manual/native_delivery/acceptance.sh= to run the sequence and
+capture each step's log. Pass =--rebuild-release= to clear the selected Release
+build and staging directories before the first build.
+
 #+begin_src bash
 (
   set -euo pipefail

@@ -25,6 +25,8 @@ Publication reads the stage even if the original build directory has been
 removed. It records owners and recovers interrupted writes under
 =<prefix>/share/zeta_forge/native/=. Use a fresh prefix for the first install
 if legacy files conflict. Folly requires a matching published gRPC stage.
+HPX publication removes build-tree settings for HPX and its bundled Stdexec
+from the installed CMake configuration.
 =clean/rebuild= affect the named native
 build directories and target staging for one profile, not installations or shared
 Conan/Cargo caches. =rebuild= then rebuilds selected outputs and required dependencies.
@@ -45,6 +47,10 @@ Conan cache before resolution. Boost.Cobalt TLS uses the Conan OpenSSL selected
 by =ZETA_OPENSSL_VERSION= (default =3.6.2=). The generated
 =Boost::cobalt_io_ssl= target carries its Cobalt I/O and OpenSSL dependencies.
 Other =ZETA_BOOST_VERSION= selections use the corresponding upstream recipe.
+
+For Folly, Forge passes the Conan Libevent library and headers directly to
+Folly's find module, avoiding the legacy CMP0026 branch on CMake 4. The same
+configuration is used after a clean rebuild.
 
 Forge =check= configures and compiles selected native libraries.
 Explicit =doctor rust-deps= performs static offline dependency governance;

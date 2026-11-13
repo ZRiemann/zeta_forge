@@ -16,6 +16,7 @@ Zeta Forge has three explicit roles:
 
 - [[file:architecture.org][Architecture]]
 - [[file:phase2_native_delivery.org][Phase 2 native dependency build and delivery design]]
+- [[file:phase3_build_modularity.org][Phase 3 build framework modularity proposal]]
 - [[file:../project_progress.org][Project progress and agent handoff]]
 - [[file:third_party_usage.org][External Project Integration]]
 - [[file:rust_workspace.org][Rust Workspace Governance]]
@@ -75,6 +76,24 @@ Public users can prepare the same host packages manually, then prepare the =zeta
 #+end_src
 
 =./common/prepare_debian.sh= focuses on =zeta_forge=-local toolchain management: build dependencies, Conan 2, and submodule initialization. By default it follows the active ZetaX/uv Python environment prepared by =zsa=; pass =--python-version X.Y= only when a project needs an explicit Conan Python runtime. =zsa= is optional for public users. If Python is not available yet, the wrapper prints the minimal host packages that must be installed first; when a sibling =zsa= checkout exists, it also shows the optional =../zsa/util/bootstrap_debian.sh --minimal= helper.
+
+The preparation script installs =libopenmpi-dev= and =openmpi-bin= because
+Forge enables HPX's MPI parcelport. Open MPI is the default system MPI
+implementation for this Debian/Ubuntu preparation path; its development
+headers/libraries and compiler wrappers are required before configuring HPX.
+These host packages are installed only by explicit preparation, not by
+=zbuild.py build= or =install=.
+
+For an existing environment missing only MPI, install the packages directly
+instead of rerunning the full toolchain/submodule preparation:
+
+#+begin_src bash
+sudo apt-get update
+sudo apt-get install libopenmpi-dev openmpi-bin
+#+end_src
+
+Then resume the failed HPX build and the remaining acceptance steps with the
+same environment and installation prefix. No Conan cache reset is required.
 
 * Unified Build Entry
 

@@ -30,7 +30,8 @@ previously built targets of the same profile. See [[file:BUILD.org][the build co
 
 - [[file:doc/en/readme.org][English documentation]] is primary; [[file:doc/zh-CN/readme.org][简体中文文档]] is maintained alongside it.
 - [[file:VERSION][VERSION]] records the current project version.
-- [[file:doc/project_progress.org][Project progress and agent handoff]] tracks the planned native delivery refactor.
+- [[file:doc/project_progress.org][Project progress and agent handoff]] tracks native delivery and subsequent design proposals.
+- [[file:doc/en/phase3_build_modularity.org][Phase 3 modularity proposal]] | [[file:doc/zh-CN/phase3_build_modularity.org][模块化提案]]
 - [[file:release_history.org][Release history]] | [[file:doc/zh-CN/release_history.org][发布历史]]
 
 Architecture, integration, Rust, NNG, build and CMake helper guides are listed in

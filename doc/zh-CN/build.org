@@ -23,6 +23,7 @@ Forge 在发布前核验暂存产物清单及其外部引用。只有旧完成�
 原构建目录移除后，仍可从 stage 发布。Forge 在 =<prefix>/share/zeta_forge/native/=
 记录文件归属并恢复中断的发布。旧安装文件冲突时，首次安装请使用新前缀。
 发布 Folly 需要先发布或同时发布与其构建记录匹配的 gRPC。
+发布 HPX 时会从安装后的 CMake 配置中去除 HPX 和随包安装的 Stdexec 的构建目录设置。
 =clean/rebuild= 仅影响一个 profile 下指定的原生构建目录及目标 staging，
 不影响安装内容或共享 Conan/Cargo 缓存。=rebuild= 随后重建所选产物及必要依赖。
 
@@ -39,6 +40,9 @@ Forge 配方。Forge 在解析依赖前将补丁后的配方导出到本机 Cona
 Boost.Cobalt TLS 使用 =ZETA_OPENSSL_VERSION= 选定的 Conan OpenSSL（默认 =3.6.2=）。
 生成的 =Boost::cobalt_io_ssl= 目标传递 Cobalt I/O 和 OpenSSL 链接依赖。
 =ZETA_BOOST_VERSION= 选用其他版本时使用对应的上游配方。
+
+Forge 将 Conan 的 Libevent 库和头文件路径直接传给 Folly 的查找模块，
+避开 CMake 4 中已移除的 CMP0026 旧行为。清理后重建仍使用同一配置。
 
 Forge =check= 配置并编译所选原生库。显式 =doctor rust-deps= 离线静态审计，
 =check rust-deps= 另外完整执行固定工具链的 =--locked --offline= 解析，不编译。

@@ -1,0 +1,529 @@
+#+TITLE: Phase 3 - Build Framework Modularity
+
+[[file:readme.org][Documentation]] | [[file:../zh-CN/phase3_build_modularity.org][简体中文]] | [[file:../project_progress.org][Status and delivery evidence]]
+
+* Goal and review boundary
+
+Propose an incremental restructuring of the existing zbuild framework, reducing
+duplicated policy and separating configuration, validation, execution and state
+ownership. Preserve supported commands and consumers throughout the migration.
+This is a proposal for review, not authorization to start implementation.
+
+The review dated 2026-11-13 covers =zbuild.py=, =builder/=, the shared Python
+library, representative adapter tests and architecture/build documentation.
+The baseline is HEAD =e74ac83e0cc963c6a776dc60bbff0731a9402931= plus the staged
+Phase 2 changes, not HEAD alone. The staged binary diff SHA-256 is
+=b5f132cbf744f8c599c9af27e5fbba9082b1a7d5837aa8a438b0cecf1d7ca58d=.
+Phase 2 overall acceptance is being performed by the user. Its implementation
+and index must remain unchanged during this proposal task.
+
+Static inventory: 37 Python files and 6,388 physical lines under
+=common/zeta_forge/= and =builder/=, excluding the root launcher and tests.
+=rust_workspace.py= contains 878 lines, =rust_engine.py= 445,
+=conan_session.py= 310 and =builder/project.py= 248. These are inspection
+signals, not defects or reduction targets. No build-speed improvement is claimed.
+This review does not exhaustively audit upstream sources, every CMake helper,
+every consumer checkout, platform portability or concurrent execution.
+
+* Findings and priorities
+
+** P1: validation and preparation are not consistently separated
+
+The CLI validates/preflights all engines, then prepares all engines, then executes
+them. However, =RustEngine.preflight(fetch)= calls =prepare_patches=, which can
+download and materialize source and Cargo configuration. A later engine's
+preflight failure can therefore occur after mutations. This is a confirmed
+lifecycle inconsistency, not a demonstrated data-loss incident.
+
+Evidence: [[file:../../common/zeta_forge/build_cli.py::def cli][CLI lifecycle]],
+[[file:../../common/zeta_forge/rust_engine.py::def preflight][Rust preflight]] and
+[[file:../../common/zeta_forge/rust_patches.py::def prepare_patches][patch preparation]].
+Move acquisition to explicit preparation and distinguish valid declarations
+from resources awaiting preparation. Test a two-engine failure with no download,
+source materialization or cleanup before all static preflights succeed.
+
+** P1: default tests depend on live sibling revisions
+
+[[file:../../tests/test_cmake_consumers.py::SOURCES =][CMake consumer tests]] load
+builders directly from four sibling repositories and skip the group when any
+required checkout is absent. Thus both coverage and results depend on workspace
+contents. This conflicts with the independence promised in
+[[file:architecture.org][the architecture]]. The Phase 2 ledger records the concrete
+zgent API mismatch and the separate compatible-workspace pass; those are
+historical evidence, not tests rerun for this proposal.
+
+Make Forge-owned contract fixtures the default. Retain real consumer integration
+as an explicitly selected suite with repository revisions and visible missing
+prerequisites. Do not hide incompatibilities with unconditional skips or restore
+the retired =run_targets= API as part of a structural cleanup.
+
+** P2: policy and infrastructure depend on the CLI module
+
+=build_cli.py= owns Product, Request, Engine, Project, argument parsing, dispatch,
+rendering and logging. Twelve production modules import it. These include pure
+native planning, build filesystem operations, Conan sessions and publication
+transactions. A CLI dependency is therefore pulled into lower-level mechanisms.
+=Request.options= also exposes =argparse.Namespace= throughout the adapters.
+
+Extract stable contracts and reporting below the CLI. Convert adapter-specific
+options once at their boundary. Preserve existing public constructors/imports
+through thin facades, including positional subclass compatibility.
+
+** P2: general state mechanisms are owned by Conan-named modules
+
+Native artifacts and publication reuse hashing from =conan_inputs= and JSON/locks
+from =conan_state=. =read_json= reports every failure as Conan state, even when
+reading publication metadata. Shared mechanisms are useful, but ownership and
+diagnostic context are misplaced.
+
+Extract only canonical bytes/digests, atomic JSON replacement and writer locks.
+Keep Conan generations, native receipts, ownership and journal recovery distinct.
+Atomic replacement and durable transaction commit are different guarantees;
+generic JSON helpers must not silently assume responsibility for fsync ordering.
+
+** P2: Rust configuration and execution change together
+
+=rust_workspace.py= combines catalog/TOML parsing, project loading, local source
+authorization, manifest governance, lock reports, native environments, tool
+verification/installation and Cargo invocation. =rust_audit.py= imports private
+parsing helpers, while =rust_engine.py= imports =_native_environment= and repeatedly
+constructs managers across description, preflight, preparation and execution.
+Build/check/test also branch separately over Cargo/Dioxus platforms and features.
+
+Separate project/catalog data, governance, tool preparation and delivery policy.
+Share target/variant selection where semantics agree, while retaining distinct
+build, lint and test commands. Use an invocation-scoped snapshot and explicit
+post-preparation verification instead of an implicit global cache.
+
+** P2: composition and native execution are mixed
+
+=builder/project.py= registers products and also owns locks, builder environment
+rewrites, candidate directories, receipts and promotion. Target metadata is
+split between =TARGETS= in =native_plan.py= and =BUILDERS= in =project.py=.
+The existing immutable NativePlan, receipts and separate publisher are valuable
+boundaries and should be retained.
+
+Move Forge execution to a Forge-owned executor and staging service. Keep a
+single composition-time registration of descriptor plus builder factory and
+derive pure planner descriptors from it. Do not move Forge-specific target names
+or Folly/gRPC policy into the generic CMake adapter.
+
+** P3: CMake duplication and process conventions need bounded cleanup
+
+The four source-library builders repeat base CMake command construction.
+=CMakeProjectBuilder= also contains legacy mtime-based Conan hooks alongside the
+Forge ConanSession integration. =process.run_command= prints full build commands,
+whereas =build_ops.run_program= owns foreground process groups and hides runtime
+arguments. Some probes call =subprocess= directly. These APIs serve different
+purposes; replacing them with one behavior would regress logging or interruption.
+
+Extract common CMake command values while preserving target flags and signature
+ordering. Audit external subclass hooks before isolating legacy Conan behavior.
+Consolidate process mechanisms with explicit capture/logging/process-group policy,
+retaining distinct command and application-launch interfaces. Gradle/Zig adapters
+are already small and do not justify a new inheritance framework.
+
+* Scope, preserved contracts and non-goals
+
+- Preserve action-first CLI, defaults, selection/deduplication, profiles, explicit
+  install selection, forwarded-argument privacy and exit codes 0/1/2/130.
+- Preserve metadata field meanings and =ZETA_BUILD_DONE= behavior. Stable public
+  Python imports, constructor signatures and supported subclass hooks remain.
+- Preserve Forge's staged-only =install=. The external CMake adapter's
+  build-then-install-components workflow remains a separate contract.
+- Preserve source/environment overrides, explicit proxy inheritance, C++ standard,
+  package versions, Conan lock identity/refresh rules, staging and output paths.
+- Preserve receipt schema/canonical identity, ownership checks, legacy adoption,
+  publication journal recovery, lock order and other-profile cleanup protection.
+- Preserve Rust catalog rules, locked Cargo resolution, repaired tool identity,
+  native OpenSSL/NNG provenance, Web/server profiles and application asset hooks.
+- Native build graphs remain CMake/Cargo/Gradle/Zig-owned. No new dependency
+  resolver, generic workflow DSL, plugin discovery, DI container or scheduler.
+- No dependency upgrades, Python-version increase, third-party edits, consumer
+  source migration, host preparation redesign or CMake-helper wholesale rewrite.
+  Existing run metadata/target-based CMake interfaces remain in the regression set.
+
+* Target design and state ownership
+
+Suggested internal organization below =common/zeta_forge/=. Names may be refined
+within a Stage; responsibility and import direction are the acceptance contract.
+Create a package only when moving its implemented capability, not empty scaffolds.
+
+| Boundary | Owns | Must not own |
+|----------+------+--------------|
+| =contracts.py= | Stable request/product/project/engine values | argparse parsing, execution, adapter imports |
+| =build_cli.py= and dispatch | Parse, select, validate ordering, output/status | Native build policy or persistent state |
+| =diagnostics.py= | Existing log/status rendering contract | Tool execution or lifecycle decisions |
+| =state_io.py= | Hashing, canonical encoding, atomic replacement, locks | Conan policy, receipt schemas, recovery decisions |
+| =process.py= and foreground runner | Execution, capture, interruption, explicit argument visibility | Target selection or dependency upgrades |
+| =cmake/= | Configure/build/install mechanics and explicit dependency hook | Forge target catalog or package versions |
+| =conan/= | Policy, input identity, retained resolutions and generator verification | Native publication ownership |
+| =native/= | Inventories/receipts, publication planning and journal transactions | Resolving/building missing dependencies at install |
+| =rust/= | Project/catalog, governance, toolchain/tools, native environment, delivery variants | Consumer business policy or Cargo graph resolution |
+| =builder/project.py= | Forge composition and product registration | Staging transactions or generic helpers |
+| =builder/native_executor.py= | Forge plan execution and staging lifecycle | CLI parsing or external project orchestration |
+
+Dependency direction:
+
+#+begin_example
+project composition -> CLI/dispatch + selected engines
+CLI/dispatch        -> contracts + diagnostics
+engine/executor     -> contracts + capability services + process/state operations
+capability policy   -> owned values + narrowly scoped readers/adapters
+process/state I/O   -> standard library + diagnostics (no CLI/engine imports)
+
+Conan resolution -> supplied dependency identity -> native receipt/publication
+Rust project/catalog -> governance + tool requirements -> delivery execution
+#+end_example
+
+The arrows denote dependencies/data supplied at boundaries, not a new universal
+execution graph. The NativePlan remains native-specific. A Rust delivery plan
+may express its actual profile/features/cleanup variants without making every
+adapter implement a generic step language.
+
+Mutable-state owners remain explicit:
+
+- Dispatch owns one invocation and the global preflight/prepare/execute order.
+  Engine plans are immutable per invocation. Prepared resources are verified
+  before cleanup/execution; no cross-invocation configuration cache is introduced.
+- Conan owns retained lock generations and generator receipts. The staging
+  service owns candidate promotion and build receipts, with sorted stage locks.
+- Publication owns prefix locking, file replacement, ownership commit and
+  recovery. State I/O provides mechanisms only. Never reverse stage/prefix lock
+  acquisition order or hold unrelated Rust/tool locks across native publication.
+- Rust tool services own isolated Cargo tool installations/repair receipts.
+  Project adapters own assets and application environment. Process services own
+  child groups until exit or bounded interrupt escalation completes.
+
+* Implementation guidance for subsequent agents
+:PROPERTIES:
+:CUSTOM_ID: implementation-guidance
+:END:
+
+This section records design intent to carry across implementation handoffs.
+Preserved contracts and acceptance gates are requirements of the proposal.
+Suggested filenames, service names and signatures are implementation choices,
+not a requirement to create a class for every responsibility. Read the current
+ledger and actual callers before applying these notes; later accepted fixes may
+change the Phase 2 baseline. This section does not authorize implementation.
+
+** Contract extraction and compatibility (3.1, 3.2)
+
+- Move existing public dataclasses/protocols before redesigning their fields.
+  Keep old import paths as re-exports of the same class objects where possible,
+  so isinstance checks and subclassing do not acquire two competing identities.
+  Test constructor signatures, defaults and positional subclass fields. Preserve
+  the keyword-only additions to CommonBuildArgs introduced during Phase 2.
+- Keep legacy Request construction usable. Its existing options object may pass
+  through the facade; adapters convert only their own known options into typed
+  immutable values. Do not make contracts import argparse merely to preserve a
+  concrete annotation, or discard project extension options in a global parser.
+  A frozen dataclass does not make nested dictionaries/Namespace immutable:
+  copy and normalize values used by an execution plan.
+- Preserve the existing Engine entrypoints. Expose optional preparation through
+  a narrowly scoped capability/dispatch adapter, without requiring all external
+  engines to implement a new method at once. Avoid a universal Engine base class.
+
+** Invocation lifecycle and pending resources (3.2, 3.7)
+
+The intended sequence is:
+
+#+begin_example
+parse/select -> normalize and describe
+  -> all read-only preflights
+  -> prepare selected resources and verify preparation results
+  -> after every preparation succeeds: execute selected engines
+       -> selected cleanup, when requested -> native work
+#+end_example
+
+Help/list/metadata/dry-run stop before preparation/execution. Read-only means no
+downloads, installation, generated config or cleanup; doctor may run bounded
+version/dependency probes. Do not confuse read-only with forbidding all processes.
+
+For Rust fetch, validate recipe identity, paths and declaration structure first.
+Represent a missing allowed-to-be-prepared source/tool as a preparation requirement,
+not a successful readiness check. Preparation acquires it and verifies content,
+receipt and native environment before execution. Doctor reports missing inputs
+without acquiring them. Prevent existing doctor/native-environment checks from
+accidentally materializing inputs or rejecting every valid pending resource.
+
+Keep one invocation-scoped configuration snapshot; revalidate mutable artifacts
+after preparation and under the owning lock when required. Do not retain a stale
+receipt or cached existence check across acquisition. A later preparation failure
+may leave already prepared reusable tools, but must precede any target cleanup or
+build. Do not promise rollback across independent tool installations. Preserve
+project asset hooks and their established ordering explicitly in the Rust tests.
+
+** Target registration and CMake variation (3.4, 3.5)
+
+- One composition-time registration pairs a pure TargetSpec with its builder
+  factory. Project products, order and planner descriptors derive from it.
+  The planner receives descriptors only; it neither imports nor constructs
+  builders. Validate duplicate names and unknown prerequisites before effects.
+- The executor consumes a NativePlan and factories. Keep the deps generator-copy
+  path and source-library DESTDIR path as explicit staging variations. A small
+  callable/protocol is appropriate only where those real variants need it;
+  do not invent hooks for hypothetical backends or a descriptor with dozens of
+  unrelated optional fields. New targets within an existing variation should
+  require registration and target policy, not another executor name branch.
+- Initially extract configure arguments without changing their sequence or
+  values. The current argument signature participates in reconfiguration checks.
+  Preserve semicolon-valued paths, HPX toolchain blocks/source commit, gRPC
+  fallback and per-library warning flags. Specify duplicate-option precedence
+  explicitly rather than silently letting a dict overwrite -D values.
+- Keep external CMake subclass hooks as the compatibility boundary. The new
+  internal dependency-preparation collaborator must not bypass an overridden
+  validate/should_run_conan/run_conan/configure_command method. Test no-Conan,
+  Forge ConanSession and external legacy-hook cases before removing old paths.
+
+** State I/O, identities and recovery (3.3, 3.4)
+
+- Extract byte-identical canonical encoding and digest functions first. Keep
+  encoding, separators, key ordering and inventory identity rules stable.
+  Separate raw JSON loading from domain schema validation and attach the owning
+  artifact/path to errors. Native state must not be diagnosed as Conan state.
+- Shared atomic replacement owns temporary-file cleanup and replacement only.
+  The transaction owner retains fsync, journal ordering, commit detection and
+  rollback decisions. Do not move fsync or simplify recovery as incidental cleanup.
+- Preserve the sorted stage-lock order and existing prefix-lock scope. Receipt
+  reads, candidate promotion and publication verification must stay inside the
+  appropriate lock scope after extraction. An injected I/O seam must not make
+  tests pass by eliminating the real locking/recovery scenario.
+- Test old-format lock/receipt/journal fixtures with the new implementation and
+  recovery using both revisions on isolated copies. A schema change is a separate
+  design decision, not a prerequisite for creating typed internal values.
+
+** Rust boundaries and process interfaces (3.6-3.8)
+
+- Project/catalog loading may read supplied files; governance evaluates supplied
+  values/manifests without tool installation. Tool services own availability,
+  acquisition and executable-bound receipts. Native environment construction
+  verifies installed OpenSSL/NNG provenance and preserves explicit environment
+  conflicts. It must never resolve a replacement native graph.
+- Derive common target/platform/features/profile selection once, then construct
+  action-specific commands. Build, check and test variants intentionally differ:
+  preserve fullstack server/Web checks, host test exclusions, example selectors,
+  locked flags and Web debug-symbol policy. Identical-looking command fragments
+  alone do not prove equivalent behavior.
+- Preserve run_command capture/check/timeout/result behavior and run_program's
+  foreground group ownership and argument privacy. Prefer a small private runner
+  with explicit policies behind these interfaces, if sharing mechanisms helps.
+  CommandError handling, KeyboardInterrupt and CLI status mapping have separate
+  owners. Do not log application arguments through a generic command logger.
+
+** Test migration, architecture checks and handoff (3.1, 3.9)
+
+- Characterize existing behavior before moving it. Record the known preflight
+  mutation as a reproducer in 3.1, then turn it into the passing no-mutation
+  regression in 3.7. Do not leave an unexplained failing default suite or remove
+  the scenario to claim 3.1 is green.
+- Forge fixtures describe supported contracts, not copies of whole consumer
+  builders. Move real-sibling integration out of default discovery, preserving
+  an explicit invocation and revision evidence. Keep subprocess/temporary-file
+  integration tests for interruption, locks and recovery alongside policy tests.
+- Architecture checks resolve relative imports and package re-exports. Cover
+  deferred imports too; moving an import into a function must not evade the rule.
+  Distinguish type-only edges from runtime edges, and document any temporary
+  exception with its owner and removal Stage. Avoid brittle file-count gates.
+- Each handoff records the moved responsibility, old-to-new entrypoints,
+  compatibility surface, state/lock ownership, exact checks, remaining gaps and
+  next Stage. Record before/after production and test lines separately, duplicate
+  policy removed and extension touchpoints. A smaller facade alone is not proof
+  of simplification; extra modules must buy a testable boundary or less coupling.
+- Prefer one runnable extraction at a time. Names and internal layout may change
+  within these constraints. Changes to public behavior, state formats/paths,
+  dependency versions or consumer-owned code require an explicit scope decision
+  and updated design evidence before implementation proceeds beyond that boundary.
+
+* Stages and dependencies
+
+All Stages are owned by =zeta_forge=. Live state and actual delivery versions are
+recorded only in [[file:../project_progress.org::*Phase 3 proposal][the ledger]].
+Implementation prerequisites are Phase 2 user overall acceptance, a fixed
+reproducible Phase 2 baseline, and approval of this proposal. No Stage is started
+or accepted merely by writing this document. Version numbers remain unset.
+
+** Stage 3.1 - Independent regression baseline
+:PROPERTIES:
+:CUSTOM_ID: stage-3-1
+:END:
+Prerequisite: Phase prerequisites above.
+Deliver: inventory public imports/hooks, commands, paths, schemas and environment
+precedence; replace implicit live-sibling coverage with minimal Forge-owned
+fixtures. Keep opt-in real-consumer tests with explicit revision reporting.
+Add the two-engine preflight/preparation failure scenario before changing it.
+Acceptance: default tooling suite runs with no siblings or network and no missing
+sibling skips; arbitrary sibling revisions do not change its results. Optional
+integration reports unavailable/incompatible consumers rather than claiming a pass.
+
+** Stage 3.2 - Contracts below CLI and explicit lifecycle
+:PROPERTIES:
+:CUSTOM_ID: stage-3-2
+:END:
+Prerequisite: 3.1.
+Deliver: extract stable values, log rendering and invocation dispatch. Keep CLI
+parsing at the edge, normalize extension options inside adapters. Make optional
+preparation an explicit capability while supporting existing engines that omit it.
+Acceptance: no policy/state module imports CLI; help/list/metadata/dry-run cannot
+mutate state or launch builds; constructor/import tests and exit/status contracts
+pass. All preflights precede any preparation, all preparations precede execution.
+Rust's concrete preflight mutation is resolved in 3.7, not declared fixed here.
+
+** Stage 3.3 - Neutral state I/O boundary
+:PROPERTIES:
+:CUSTOM_ID: stage-3-3
+:END:
+Prerequisites: 3.1 and 3.2.
+Deliver: extract shared digest/JSON/lock mechanisms, contextualize read errors and
+redirect native consumers away from Conan mechanisms. Keep Conan parsing and
+generation policy behind its boundary; do not unify domain state schemas.
+Acceptance: canonical bytes and existing IDs match baseline fixtures; malformed
+state diagnostics name the correct artifact. Lock contention, interrupted writes
+and Phase 2 transaction recovery tests pass, with no new cleanup/cache scope.
+
+** Stage 3.4 - Forge native composition and staging
+:PROPERTIES:
+:CUSTOM_ID: stage-3-4
+:END:
+Prerequisites: 3.2 and 3.3.
+Deliver: extract native execution/staging from the project composition root;
+derive pure planner inputs from one target registration. Keep library-specific
+configuration hooks in their builders and receipt/publication owners separate.
+Acceptance: previews agree with actual build/clean/publish scope; a synthetic
+sixth native target is registered without editing planner/executor branches.
+Existing deps specialization and Folly dependency constraints remain explicit.
+Receipt-last promotion, failure rollback and tool-free staged install tests pass.
+
+** Stage 3.5 - CMake configuration and dependency seam
+:PROPERTIES:
+:CUSTOM_ID: stage-3-5
+:END:
+Prerequisites: 3.1 and 3.4.
+Deliver: share base configure arguments with ordered library options. Separate
+optional dependency preparation from configure/build/install mechanics, using
+the actual no-Conan, Forge-session and supported external-builder variants.
+Preserve current mtime/configure invalidation unless a separate bug fix is needed.
+Acceptance: representative commands/options, HPX source identity, gRPC fallback,
+external subclass dispatch and install components match baseline. Adding a
+library-specific flag changes only its builder. Do not remove old hooks until
+consumer inventory demonstrates no supported caller still requires them.
+
+** Stage 3.6 - Rust project and governance boundary
+:PROPERTIES:
+:CUSTOM_ID: stage-3-6
+:END:
+Prerequisites: 3.1 and 3.2; independent of 3.4/3.5.
+Deliver: separate project/catalog loading, manifest/local-source validation and
+lock reports from tool execution. Replace cross-module private-helper imports
+with narrow owned interfaces. Keep the public RustWorkspaceManager facade.
+Acceptance: catalog/schema, approved dependencies, local roots, patch declarations
+and lock reports match fixtures; policy tests need neither Rustup nor native
+installations. Audit/update modules do not import tool-installation internals.
+
+** Stage 3.7 - Rust delivery and preparation lifecycle
+:PROPERTIES:
+:CUSTOM_ID: stage-3-7
+:END:
+Prerequisites: 3.2 and 3.6; use 3.3 mechanisms only where semantics already match.
+Deliver: separate toolchain/tool preparation, native environment and Cargo/Dioxus
+delivery variants; share invocation-scoped configuration and target selection.
+Move fetch source acquisition out of preflight. Model pending prepared inputs so
+read-only validation can check declarations without demanding a download first.
+After preparation, verify required files/receipts before cleanup and execution.
+Acceptance: later-engine preflight failure causes zero acquisition/mutation;
+failed preparation preserves existing outputs. Cargo features/examples, Dioxus
+desktop/web/fullstack flags, assets ordering, locked fetch, repair identity and
+other-profile cleanup all pass. No stale snapshot survives preparation unchecked.
+
+** Stage 3.8 - Process ownership and diagnostics
+:PROPERTIES:
+:CUSTOM_ID: stage-3-8
+:END:
+Prerequisites: 3.1 and 3.2; may precede 3.4-3.7 when useful.
+Deliver: make capture, environment, timeout, visibility and foreground-group
+behavior explicit at process boundaries; migrate direct probes where beneficial.
+Keep public run_command/run_program semantics through delegating interfaces.
+Do not require every trivial read-only probe to create a process group.
+Acceptance: child/grandchild interruption and reaping, 130 mapping, captured
+stdout/stderr, timeouts and command failures are tested. Runtime arguments remain
+hidden; explicit proxy/environment routing survives. Build diagnostics retain
+actionable commands without adding credentials or dumping environment values.
+
+** Stage 3.9 - Integration and architecture gates
+:PROPERTIES:
+:CUSTOM_ID: stage-3-9
+:END:
+Prerequisites: 3.3-3.8.
+Deliver: enforce allowed imports, consolidate duplicate internal paths after
+caller verification, update public extension examples and bilingual architecture.
+Retain supported public facades with one implementation behind each.
+Acceptance: overall matrix below passes, representative extension exercises avoid
+core changes, and evidence distinguishes Forge fixtures from actual consumers.
+The user owns final Phase 3 overall acceptance. Stage checks alone cannot close it.
+
+* Overall acceptance and measurable outcome
+
+1. Run the default tooling suite with isolated temporary prefixes, without sibling
+   checkouts or network access; run the same suite with unrelated siblings present.
+   Results must agree. Representative CMake/Rust/Gradle/Zig fixtures cover actions,
+   read-only behavior, invalid requests, failure ordering and profile isolation.
+2. Enforce zero imports from lower-level policy/I/O into =build_cli= or concrete
+   engines, and zero dependency cycles between capability packages. Compatibility
+   facades only re-export/delegate, and internal modules do not import them.
+3. Re-run Phase 2 fixture coverage for lock reuse/refresh, identity/tampering,
+   staging/publish separation, ownership conflicts, recovery and concurrency.
+   Consume Phase 2 receipts/locks/journals with the new code and rehearse rollback
+   using isolated copies; no schema migration is planned.
+4. Perform isolated real native acceptance: full Release dependency build and
+   publication, five C++ consumers, Rust OpenSSL probe, and Debug/Release NNG
+   cleanup isolation as in Phase 2. Include staged install with build tools absent.
+5. Validate representative actual consumers at recorded revisions: CMake, Cargo,
+   Dioxus desktop/Web/fullstack, Gradle and Zig where supported. Native SDK/browser
+   or runtime checks not performed remain explicitly open, not replaced by mocks.
+   Consumer-owned verification/migrations require their own repository scope.
+6. Demonstrate a new native fixture target and a new Cargo/Dioxus fixture delivery
+   using registration/policy data without unrelated CLI/executor modifications.
+   The test may introduce fixture code, not a production target or invented stack.
+7. Compare before/after imports, duplicate policy branches and representative
+   change surface. Require the identified duplications to have one authoritative
+   implementation, but set no arbitrary line-count/file-size reduction quota.
+   Compare repeated metadata/dry-run startup under the same environment and record
+   any material slowdown; build-speed claims require separate measurement.
+
+Existing focused starting commands, run only when implementation begins:
+
+#+begin_src bash
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=common:tests python3 -m unittest \
+  test_build_contract test_native_plan test_native_conan_session \
+  test_native_delivery test_native_publish test_conan_openssl
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=common:tests python3 -m unittest \
+  test_rust_workspace test_rust_governance test_rust_edges \
+  test_rust_local_dependencies test_rust_patches test_rust_tool_patches \
+  test_run_spec test_zig_engine
+./zbuild.py test build-tools
+#+end_src
+
+The final command currently includes live-sibling tests; 3.1 must remove that
+implicit coupling. These commands do not replace the real integration matrix.
+Future boundary/contract tests will be added to the existing unittest tooling.
+The implementation delivery records exact commands, revisions and results.
+
+* Migration, alternatives and delivery
+
+Prefer Stage-sized extractions over a directory-only rewrite or one large
+replacement. Tests first, one owner transferred at a time, callers redirected,
+then obsolete internal implementation removed. Temporary internal bridges end
+in 3.9; supported external facade paths remain until an explicitly agreed API
+migration. Do not add a universal Engine base class merely to remove a few
+action branches with different cleanup/install semantics.
+
+Keep schemas and state paths stable so each local delivery can be reverted using
+the preceding code. Exercise journal recovery across the old/new code boundary
+before declaring this safe. Do not dual-write state or invalidate accepted
+Conan caches as a convenient refactor shortcut. Separately review any discovered
+behavioral bug requiring a contract change rather than hiding it in a move.
+
+No line-count target, fixed completion version or promised duration is assigned.
+Accepted Stages may be delivered together under the repository's version policy.
+This proposal changes documentation only, does not complete Phase 3, and does not
+start unattended execution or change the Phase 2 acceptance state.

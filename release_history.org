@@ -5,6 +5,20 @@
 
 * Release History
 
+** v1.16.0 - 2026-11-13T11:22:38Z
+:PROPERTIES:
+:CUSTOM_ID: v1.16.0
+:END:
+
+*** Changes
+- Repair Folly Libevent discovery with CMake 4 and remove HPX build-tree references during native publication.
+- Add a Phase 2 acceptance script and configure native C++ consumers with the required Forge dependencies.
+- Document the Phase 3 build framework modularity proposal and its planned Stages 3.1–3.9.
+
+*** Validation
+- The Phase 2 Release rebuild, Conan lock reuse, isolated publication, five C++ consumer tests, Rust OpenSSL probe and Debug NNG isolation passed across the original run and resumed steps. The final worktree was not rebuilt from scratch again.
+- Nine focused native publication tests passed during the repair. No additional tests or builds ran for this commit. Phase 3 remains a proposal.
+
 ** v1.15.0 - 2026-11-13T02:51:09Z
 :PROPERTIES:
 :CUSTOM_ID: v1.15.0

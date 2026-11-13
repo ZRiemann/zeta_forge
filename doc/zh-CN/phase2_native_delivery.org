@@ -296,6 +296,10 @@ Stage 测试通过后仍需整条链路验收。设计不预定版本，不授�
 在 Forge 工作区使用正常的 Conan profile 和源码 checkout 执行。
 以下命令发布到 =build= 下的新前缀，请保留验收目录和日志以对应本次测试的改动。
 
+运行 =bash tests/manual/native_delivery/acceptance.sh= 可用
+[[file:../../tests/manual/native_delivery/acceptance.sh][验收脚本]] 执行整套流程并逐步记录日志。
+加上 =--rebuild-release= 会先清理本次选定的 Release 构建和暂存目录，再进行构建。
+
 #+begin_src bash
 (
   set -euo pipefail

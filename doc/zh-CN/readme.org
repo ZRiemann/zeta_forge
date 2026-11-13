@@ -16,6 +16,7 @@ Zeta Forge 有三个明确用途：
 
 - [[file:architecture.org][架构设计]]
 - [[file:phase2_native_delivery.org][Phase 2 原生依赖构建与交付设计]]
+- [[file:phase3_build_modularity.org][Phase 3 构建框架模块化提案]]
 - [[file:../project_progress.org][统一进度与 agent 交接]]
 - [[file:third_party_usage.org][外部项目接入]]
 - [[file:rust_workspace.org][Rust 工程治理]]
@@ -73,6 +74,20 @@ git submodule update --init --recursive
 #+end_src
 
 =./common/prepare_debian.sh= 专注于 =zeta_forge= 内部工具链管理：构建依赖、Conan 2 和 submodule 初始化。默认跟随 =zsa= 准备好的 ZetaX/uv Python 环境；只有项目确实需要固定 Conan Python runtime 时，才传入 =--python-version X.Y=。=zsa= 对公共用户不是必需前置条件。如果当前系统还没有 Python，这个 wrapper 会提示需要先安装的最小宿主机依赖；当存在兄弟目录 =zsa= 时，也会提示可选的 =../zsa/util/bootstrap_debian.sh --minimal= 辅助入口。
+
+准备脚本安装 =libopenmpi-dev= 和 =openmpi-bin=，因为 Forge 启用了 HPX 的 MPI
+parcelport。Open MPI 是此 Debian/Ubuntu 准备流程默认使用的系统 MPI 实现；
+配置 HPX 前需要其开发头文件/库和编译器 wrapper。这些系统包只在显式执行环境
+准备时安装，=zbuild.py build= 或 =install= 不安装系统包。
+
+已有环境如果仅缺少 MPI，可直接补包，无需重新执行完整工具链/submodule 准备：
+
+#+begin_src bash
+sudo apt-get update
+sudo apt-get install libopenmpi-dev openmpi-bin
+#+end_src
+
+之后保持同一环境和安装前缀，继续失败的 HPX 构建及剩余验收步骤，无需清空 Conan 缓存。
 
 * 顶层统一构建入口
 

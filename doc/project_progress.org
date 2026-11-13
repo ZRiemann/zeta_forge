@@ -185,6 +185,116 @@ config.py. Follow Stage prerequisites, preserve other agents' edits, and update
 this ledger with exact commands/results and missing gates. This handoff itself
 does not start agents, authorize commits, mutate consumer repositories or publish.
 
+* Phase 2 acceptance follow-up: missing MPI
+
+2026-11-13: the user's overall acceptance stopped during HPX Release configure
+with =MPI_CXX_FOUND= missing. Local CMake evidence shows =mpi.h= not found,
+=MPI_CXX_COMPILER-NOTFOUND= and =MPIEXEC_EXECUTABLE-NOTFOUND=. Package inspection
+confirmed =libopenmpi-dev= and =openmpi-bin= were not installed. Forge explicitly
+enables =HPX_WITH_PARCELPORT_MPI=ON=; disabling it would change the intended build.
+Evidence: =builder/hpx/build/Release/CMakeFiles/CMakeConfigureLog.yaml= and
+=CMakeCache.txt=. This failed run does not complete Stage 2.7 or Phase acceptance.
+
+The Debian preparation package list now includes both Open MPI packages, and
+the bilingual guide documents the minimal package repair. Preparation's next-step
+summary now instructs build before staged publication. This does not install
+packages automatically during build or change the HPX configuration. Early MPI
+preflight detection remains a separate gap, not fixed by this package-list change.
+Next: install the missing packages, resume HPX/Folly/NNG with the original
+acceptance environment, then complete publication and the full consumer matrix.
+Verification: Python AST parsing, =prepare_debian.py --help=, Ruff import checks
+and unstaged whitespace checks passed. No apt installation, full preparation,
+HPX compilation or renewed overall acceptance was performed for this change.
+
+* Phase 2 acceptance follow-up: Folly on CMake 4
+
+2026-11-13: Folly's Libevent find module failed on CMake 4.3.4 when
+Forge's compatibility config created the =event= target and triggered
+=CMP0026 OLD=. The Forge config now supplies the Conan library and
+profile-specific include paths directly to the module. The Folly submodule
+is unchanged.
+
+A fresh Release configure and a repeat configure passed using the existing
+Conan toolchain and staged gRPC. The generated CMake export and pkg-config
+metadata reference Conan's =libevent_core.a=. A minimal fixture verified
+Debug path selection. No full Folly build, real Debug build, publication,
+or consumer acceptance ran. Continue with the Folly build in the original
+Phase 2 acceptance environment.
+
+* Phase 2 acceptance follow-up: HPX publication
+
+2026-11-13: =build/phase2-acceptance.SUMiRy= records a clean rebuild of all
+five Release targets, generator reuse after changing the jobs budget and
+regeneration with the retained Conan lock. Publication initially rejected
+two HPX CMake settings that referred to the original build tree.
+
+Forge now removes the exported =HPX_BINARY_DIR= and the fetched
+=Stdexec_ROOT= from the HPX publication candidate. The installed Stdexec
+target already points to packaged headers. Other unexpected build paths
+remain errors, with the affected metadata filename in the diagnostic.
+The stage is unchanged. Nine publication tests passed.
+
+The retry published all five Release targets into the isolated prefix
+from the existing stages. The CMake fixture now uses the existing Forge
+HPX compatibility configs, loads Protobuf before gRPC, and selects the
+published Conan OpenSSL config and LibLZMA for Folly. All five CTest
+consumers and the Rust OpenSSL probe passed. Debug NNG was built, published
+and cleaned. SHA-256 checks passed for both Release NNG archives and the
+Release stage receipt, and the Debug publication survived cleanup.
+The acceptance matrix passed across the original run and the resumed
+steps, with logs and ownership receipts in the same evidence directory.
+The final worktree was not rebuilt from scratch a second time.
+
+* Phase 3 proposal
+
+2026-11-13: the user requested an architecture optimization proposal while
+performing Phase 2 overall acceptance. See
+[[file:en/phase3_build_modularity.org][Phase 3 build framework modularity]] /
+[[file:zh-CN/phase3_build_modularity.org][中文提案]]. This extends the ledger's scope
+to future build-framework modularity without changing Phase 2 acceptance.
+
+| Stage / owner | State | Scope | Missing gate / next action | Delivery |
+|---------------+-------+-------+----------------------------+----------|
+| [[file:en/phase3_build_modularity.org::#stage-3-1][3.1]] / Forge tests | planned | Independent contract baseline | Phase 2 user acceptance, fixed baseline and proposal approval | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-2][3.2]] / Forge CLI | planned | Contracts and explicit lifecycle | 3.1 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-3][3.3]] / Forge state I/O | planned | Neutral persistence mechanisms | 3.1, 3.2 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-4][3.4]] / Forge native | planned | Composition and staging ownership | 3.2, 3.3 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-5][3.5]] / Forge CMake | planned | Configuration and dependency seam | 3.1, 3.4 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-6][3.6]] / Forge Rust governance | planned | Project/catalog and validation | 3.1, 3.2 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-7][3.7]] / Forge Rust delivery | planned | Tool preparation and delivery lifecycle | 3.2, 3.6 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-8][3.8]] / Forge processes | planned | Process ownership and diagnostics | 3.1, 3.2 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-9][3.9]] / Forge integration | planned | Architecture gates and overall matrix | 3.3-3.8, then user overall acceptance | unset |
+
+Evidence: read-only source/test inspection and AST inventory on HEAD =e74ac83=
+plus staged Phase 2 diff SHA-256
+=b5f132cbf744f8c599c9af27e5fbba9082b1a7d5837aa8a438b0cecf1d7ca58d=.
+37 production Python files under =common/zeta_forge/= and =builder/= contain
+6,388 physical lines; 12 modules import =build_cli=. Findings and limits are
+recorded in the proposal. No implementation, tool tests, native build or consumer
+execution was performed for this design review. Documentation additions remain
+outside the existing Phase 2 index. No delivery version or commit is created.
+
+Design verification passed: eight documentation files, 111 local links/anchors,
+nine matching Stage identifiers per language, identical bilingual command blocks
+and whitespace checks. The existing Phase 2 index digest and the production
+Python content digest remained unchanged; all new work is documentation only.
+
+Next proposed action after Phase 2 acceptance and design approval: establish
+the independent contract baseline in Stage 3.1. The existing Phase 2 user
+acceptance and single-local-commit handoff above remains the active delivery gate.
+
+The Phase 3 proposal now includes
+[[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /
+[[file:zh-CN/phase3_build_modularity.org::#implementation-guidance][关键实现提示]]
+for subsequent agents: compatible contract extraction, pending-resource
+preparation, target registration, CMake hooks, state identity/recovery, Rust
+variants, process semantics and test migration. These clarify implementation
+choices and required invariants without starting a Stage or changing its scope.
+Guidance verification passed for eight documents and 113 local links/anchors,
+matching bilingual guidance/Stage anchors and command blocks, and whitespace.
+Phase 2 index and production Python digests remain unchanged; no builds or
+implementation tests were run for this documentation-only addition.
+
 * Design decisions still requiring bounded implementation evidence
 
 - Overall acceptance still needs real gRPC, HPX and Folly builds, their

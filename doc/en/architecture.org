@@ -163,3 +163,12 @@ prefix and commits the ownership index after the file replacements.
 native planning, artifact receipts and recoverable publication boundaries.
 It preserves the publish-only install contract and native build graphs.
 Implementation and verification status live in [[file:../project_progress.org][the shared progress ledger]].
+
+* Proposed Build Framework Modularity
+
+[[file:phase3_build_modularity.org][Phase 3]] proposes contracts below the CLI,
+independent regression fixtures, explicit native and Rust lifecycle owners,
+neutral state/process mechanisms and incremental removal of duplicated policy.
+It preserves the current public CLI, consumer APIs and Phase 2 delivery formats.
+These are proposed boundaries, not the current implementation layout. Execution
+requires Phase 2 overall acceptance, a fixed baseline and proposal approval.

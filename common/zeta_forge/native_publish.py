@@ -12,8 +12,8 @@ from pathlib import Path
 from . import native_transaction as transaction
 from .build_log import log
 from .build_ops import validate_generated_path
-from .conan_state import writer_lock
 from .native_artifacts import relative_link_target, require_receipt
+from .state_io import writer_lock
 
 LINK_NAMES = re.compile(
     rb'find_(?:dependency|package)\s*\(\s*"?([\w.+-]+)|\b([\w.+-]+)::',

@@ -15,14 +15,13 @@ from .cmake_builder import CMakeProjectBuilder, CommonBuildArgs
 from .conan_inputs import (
     compiler_inputs,
     conan_probe,
-    digest_json,
-    file_digest,
     profile_inputs,
     sanitize_profiles,
     toolchain_inputs,
 )
 from .config import RepoConfig
 from .process import run_command
+from .state_io import digest_json, file_digest, write_json, writer_lock
 
 POLICY_SNAPSHOT = "native-policy.json"
 
@@ -122,6 +121,7 @@ class ConanSession:
             Path(conan_boost.__file__),
             Path(conan_state.__file__),
             Path(__file__).with_name("conan_inputs.py"),
+            Path(__file__).with_name("state_io.py"),
         ]
         managed_boost = {}
         if boost == conan_policy.MANAGED_BOOST_VERSION:
@@ -193,7 +193,7 @@ class ConanSession:
         return not self.output_matches(conan_state.active_generation(self.state_dir))
 
     def ensure_generators(self) -> None:
-        with conan_state.writer_lock(self.state_root / ".writer.lock"):
+        with writer_lock(self.state_root / ".writer.lock"):
             try:
                 previous = conan_state.active_generation(self.state_dir)
             except RuntimeError:
@@ -255,13 +255,13 @@ class ConanSession:
                 "generators": inventory,
             }
             generation = conan_state.store_generation(self.state_dir, lock, receipt)
-            conan_state.write_json(self.output_receipt, {
+            write_json(self.output_receipt, {
                 "schema": conan_state.SCHEMA,
                 "generation": generation,
                 "input_fingerprint": self.fingerprint,
                 "output_folder": str(self.output_folder.resolve()),
             })
-            conan_state.write_json(
+            write_json(
                 self.state_dir / "active.json",
                 {"schema": conan_state.SCHEMA, "generation": generation},
             )

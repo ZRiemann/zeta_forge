@@ -9,8 +9,7 @@ import stat
 from pathlib import Path, PurePosixPath
 
 from .build_log import log
-from .conan_inputs import file_digest
-from .conan_state import read_json, write_json
+from .state_io import file_digest, read_json, write_json
 
 STATE_PATH = PurePosixPath("share/zeta_forge/native")
 SCHEMA = 1
@@ -87,7 +86,7 @@ def ownership_index(state: Path) -> dict:
         raise RuntimeError(f"Unsafe native ownership index: {index}")
     if not index.exists():
         return {"schema": SCHEMA, "transaction": None, "owners": {}}
-    data = read_json(index)
+    data = read_json(index, artifact="native ownership index")
     if data.get("schema") != SCHEMA or not isinstance(data.get("owners"), dict):
         raise RuntimeError(f"Unsupported native ownership index: {index}")
     for key, owner in data["owners"].items():
@@ -136,7 +135,7 @@ def prepare_transaction(
 
 
 def apply_transaction(prefix: Path, state: Path, pending: Path) -> None:
-    journal = read_json(pending / "journal.json")
+    journal = read_json(pending / "journal.json", artifact="native publication journal")
     for operation in journal["operations"]:
         relative = operation["path"]
         destination = public_path(prefix, relative)
@@ -162,7 +161,7 @@ def recover_transaction(prefix: Path, state: Path) -> None:
     if not pending.exists():
         return
     try:
-        journal = read_json(pending / "journal.json")
+        journal = read_json(pending / "journal.json", artifact="native publication journal")
         if (
             journal.get("schema") != SCHEMA
             or not isinstance(journal.get("transaction"), str)

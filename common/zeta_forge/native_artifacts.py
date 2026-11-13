@@ -8,9 +8,9 @@ import stat
 import subprocess
 from pathlib import Path, PurePosixPath
 
-from .conan_inputs import digest_json, file_digest
 from .conan_openssl import MANIFEST_NAME, validate_openssl_package
-from .conan_state import active_generation, read_json, write_json
+from .conan_state import active_generation
+from .state_io import digest_json, file_digest, read_json, write_json
 
 RECEIPT_NAME = ".zeta-build-complete.json"
 RECEIPT_SCHEMA = 1
@@ -92,7 +92,7 @@ def source_identity(root: Path, env: dict[str, str]) -> dict:
 
 
 def conan_identity(forge_root: Path, target: str, profile: str, output_folder: Path) -> dict:
-    receipt = read_json(output_folder / ".forge-conan-receipt.json")
+    receipt = read_json(output_folder / ".forge-conan-receipt.json", artifact="Conan output receipt")
     fingerprint = receipt.get("input_fingerprint")
     if (
         not isinstance(fingerprint, str) or len(fingerprint) != 64
@@ -123,7 +123,7 @@ def external_references(
             refs.append({"kind": "conan", "path": package, "ref": node["ref"]})
     if target == "deps":
         manifest = candidate / "lib" / "cmake" / "zeta_deps" / native_profile / MANIFEST_NAME
-        data = read_json(manifest)
+        data = read_json(manifest, artifact="staged OpenSSL manifest")
         package = data.get("package_dir")
         expected = {
             node.get("package_folder") for node in graph
@@ -200,7 +200,7 @@ def require_receipt(stage: Path, target: str, profile: str) -> dict:
     path = stage / RECEIPT_NAME
     if stage.is_symlink() or path.is_symlink():
         raise RuntimeError(f"Unsafe native build receipt: {path}")
-    receipt = read_json(path)
+    receipt = read_json(path, artifact="native build receipt")
     if (
         receipt.get("schema") != RECEIPT_SCHEMA
         or receipt.get("target") != target

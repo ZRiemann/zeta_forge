@@ -2,58 +2,24 @@
 
 from __future__ import annotations
 
-import json
-import os
 import re
 import tempfile
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
-from .conan_inputs import canonical_json, digest_json, file_digest, safe_value
+from .conan_inputs import safe_value
+from .state_io import canonical_json as canonical_json
+from .state_io import digest_json as digest_json
+from .state_io import file_digest as file_digest
+from .state_io import read_json as read_state_json
+from .state_io import write_json as write_json
+from .state_io import writer_lock as writer_lock
 
 SCHEMA = 1
 LOCK_SCHEMA = "0.5"
 
 
-@contextmanager
-def writer_lock(path: Path) -> Iterator[None]:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+b") as stream:
-        if os.name == "nt":
-            import msvcrt
-
-            if stream.tell() == 0:
-                stream.write(b"\0")
-                stream.flush()
-            stream.seek(0)
-            msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(stream, fcntl.LOCK_EX)
-        yield
-
-
-def read_json(path: Path) -> dict:
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as error:
-        raise RuntimeError(f"Cannot read Conan state at {path}: {error}") from error
-    if not isinstance(value, dict):
-        raise RuntimeError(f"Invalid Conan state object at {path}")
-    return value
-
-
-def write_json(path: Path, value: object) -> None:
-    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as stream:
-        temporary = Path(stream.name)
-        try:
-            stream.write((canonical_json(value) + "\n").encode())
-            stream.close()
-            temporary.replace(path)
-        finally:
-            temporary.unlink(missing_ok=True)
+def read_json(path: Path) -> dict[str, object]:
+    return read_state_json(path, artifact="Conan state")
 
 
 def validate_lock(path: Path) -> None:

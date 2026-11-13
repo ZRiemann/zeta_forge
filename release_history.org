@@ -5,6 +5,18 @@
 
 * Release History
 
+** v1.19.0 - 2026-11-13T12:41:51Z
+:PROPERTIES:
+:CUSTOM_ID: v1.19.0
+:END:
+
+*** Changes
+- Deliver Phase 3 Stage 3.3. Share canonical state encoding, atomic JSON replacement and writer locks between native and Conan code.
+- Identify the owning artifact in native state read errors.
+
+*** Validation
+- The tooling suite passed 152 tests. Phase 2 and Stage 3.3 exchanged Conan locks and native receipts and recovered interrupted publication in both directions. No full build ran.
+
 ** v1.18.0 - 2026-11-13T12:39:08Z
 :PROPERTIES:
 :CUSTOM_ID: v1.18.0

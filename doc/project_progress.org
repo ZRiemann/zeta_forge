@@ -260,7 +260,7 @@ implementation on baseline =3eb9474da9b751e76356ec66c6b68a67642641e0=.
 |---------------+-------+-------+----------------------------+----------|
 | [[file:en/phase3_build_modularity.org::#stage-3-1][3.1]] / Forge tests | delivered | Independent contract baseline and explicit CMake consumer probe | None | v1.17.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-2][3.2]] / Forge CLI | delivered | Contracts and explicit lifecycle | None | v1.18.0 |
-| [[file:en/phase3_build_modularity.org::#stage-3-3][3.3]] / Forge state I/O | planned | Neutral persistence mechanisms | 3.1, 3.2 | unset |
+| [[file:en/phase3_build_modularity.org::#stage-3-3][3.3]] / Forge state I/O | delivered | Neutral persistence mechanisms | None | v1.19.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-4][3.4]] / Forge native | planned | Composition and staging ownership | 3.2, 3.3 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-5][3.5]] / Forge CMake | planned | Configuration and dependency seam | 3.1, 3.4 | unset |
 | [[file:en/phase3_build_modularity.org::#stage-3-6][3.6]] / Forge Rust governance | planned | Project/catalog and validation | 3.1, 3.2 | unset |
@@ -316,8 +316,25 @@ ordering, and execution of engines without a preparation hook. Existing
 preview, status and failure-ordering tests passed. Ruff import checks passed
 on touched Python files. No full build or live consumer checks ran.
 
-Next action: Stage 3.3, moving persistence mechanisms below Conan and native
-publication while retaining existing on-disk state and recovery contracts.
+Stage 3.3: =state_io= owns canonical JSON and digests, atomic replacement and
+writer locks. Native artifact and publication code uses that module for shared
+I/O, retaining its explicit Conan generation dependency for dependency evidence.
+Conan generation policy and native transaction ordering/fsync remain with their
+existing owners. Native JSON errors identify the owning artifact and path.
+Conan input fingerprints include the moved helper source and change when tracked
+implementation files change, as before. Existing stored generation identities
+remain readable and native state paths and schemas are unchanged.
+
+Validation for v1.19.0: =PYTHONDONTWRITEBYTECODE=1 ./zbuild.py test build-tools=
+passed 152 tests on the Stage 3.3 worktree over =d3996ed=, including writer
+contention, atomic replacement failure and transaction recovery. A temporary
+archive of =3eb9474= and the new worktree produced identical staged receipt and
+journal bytes and Conan generation IDs. Each read the other's receipts and
+Conan lock and recovered an interrupted native publication on a temporary
+prefix. Ruff import checks passed. No full build or real publication ran.
+
+Next action: Stage 3.4, isolating target registration and native staging
+lifecycle behind the Forge composition root.
 
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /

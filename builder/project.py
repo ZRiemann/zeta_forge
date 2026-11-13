@@ -19,11 +19,11 @@ from zeta_forge.build_ops import (
     validate_generated_path,
 )
 from zeta_forge.cmake_builder import CommonBuildArgs
-from zeta_forge.conan_state import writer_lock
 from zeta_forge.config import load_repo_config
 from zeta_forge.process import require_command, run_command
 from zeta_forge.rust_audit import RustDependencyAudit
 from zeta_forge.rust_updates import RustUpdates
+from zeta_forge.state_io import writer_lock
 
 from builder.deps.project import DepsBuilder
 from builder.folly.project import FollyBuilder

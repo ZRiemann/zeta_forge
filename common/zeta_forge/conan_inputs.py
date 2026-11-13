@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-import hashlib
-import json
 import re
 import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
 from .process import run_command
+from .state_io import canonical_json as canonical_json
+from .state_io import digest_bytes as digest_bytes
+from .state_io import digest_json as digest_json
+from .state_io import file_digest as file_digest
 
 PROFILE_INCLUDE = re.compile(r"^\s*include\(([^)]+)\)\s*$", re.MULTILINE)
 JINJA_INCLUDE = re.compile(r'{%\s*(?:include|import|from|extends)\s+["\']([^"\']+)["\']')
@@ -24,26 +26,6 @@ SAFE_CONF = (
     "tools.cmake.cmakedeps:",
     "tools.cmake:cmake_program",
 )
-
-
-def canonical_json(value: object) -> str:
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-
-
-def digest_bytes(value: bytes) -> str:
-    return hashlib.sha256(value).hexdigest()
-
-
-def file_digest(path: Path) -> str:
-    with path.open("rb") as stream:
-        digest = hashlib.sha256()
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def digest_json(value: object) -> str:
-    return digest_bytes(canonical_json(value).encode())
 
 
 def sensitive_key(name: str) -> bool:

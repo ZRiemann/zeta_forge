@@ -15,9 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "common"))
 
 from zeta_forge import native_transaction as tx
-from zeta_forge.conan_state import write_json, writer_lock
 from zeta_forge.native_artifacts import RECEIPT_NAME, make_receipt
 from zeta_forge.native_publish import compatible_package, publish
+from zeta_forge.state_io import write_json, writer_lock
 
 
 class NativePublishTests(unittest.TestCase):
@@ -43,6 +43,27 @@ class NativePublishTests(unittest.TestCase):
 
     def install(self, *stages: tuple[str, str, Path]) -> None:
         publish(self.prefix, self.root, stages)
+
+    def test_corrupt_state_names_its_own_artifact(self) -> None:
+        stage = self.stage("nng", {"lib/a": b"new"})
+        receipt = stage[2] / RECEIPT_NAME
+        receipt.write_bytes(b"broken")
+        with self.assertRaisesRegex(RuntimeError, r"native build receipt.*\.zeta-build-complete"):
+            self.install(stage)
+        self.assertFalse((self.prefix / "lib/a").exists())
+
+        self.state.mkdir(parents=True, exist_ok=True)
+        (self.state / "owners.json").write_bytes(b"[]")
+        with self.assertRaisesRegex(RuntimeError, r"native ownership index.*owners\.json"):
+            tx.ownership_index(self.state)
+        (self.state / "owners.json").unlink()
+
+        pending = self.state / "pending"
+        pending.mkdir()
+        (pending / "journal.json").write_bytes(b"\xff")
+        with self.assertRaisesRegex(RuntimeError, r"native publication journal.*journal\.json"):
+            tx.recover_transaction(self.prefix, self.state)
+        self.assertTrue(pending.exists())
 
     def test_legacy_conflict_does_not_write_and_identical_file_is_adopted(self) -> None:
         existing = self.prefix / "lib/a"

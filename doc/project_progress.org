@@ -266,7 +266,7 @@ implementation on baseline =3eb9474da9b751e76356ec66c6b68a67642641e0=.
 | [[file:en/phase3_build_modularity.org::#stage-3-6][3.6]] / Forge Rust governance | delivered | Project/catalog and validation | None | v1.22.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-7][3.7]] / Forge Rust delivery | delivered | Tool preparation and delivery lifecycle | None | v1.23.0 |
 | [[file:en/phase3_build_modularity.org::#stage-3-8][3.8]] / Forge processes | delivered | Process ownership and diagnostics | None | v1.24.0 |
-| [[file:en/phase3_build_modularity.org::#stage-3-9][3.9]] / Forge integration | in-progress | Architecture gates, extension fixtures and isolated native matrix passed | Android, Trader Web and zgent consumer follow-up; user overall acceptance | v1.24.1 (verified subset) |
+| [[file:en/phase3_build_modularity.org::#stage-3-9][3.9]] / Forge integration | in-progress | Architecture gates, extension fixtures, isolated native matrix and actual consumer checks passed | User overall acceptance | v1.24.1 and v1.24.2 |
 
 Evidence: read-only source/test inspection and AST inventory on HEAD =e74ac83=
 plus staged Phase 2 diff SHA-256
@@ -429,8 +429,16 @@ Actual consumer probes (temporary install prefix and bytecode writes disabled):
   =zeta_cat@0fbd0a3= Gradle dry run and =zzg@2b9735c= Zig dry run passed.
 - The live =zpp@d060043= tree lacked a run metadata token. An isolated clone
   built =zpp_core= in Release against the earlier Phase 2 acceptance prefix
-  and then passed =metadata zpp_core=. The earlier =zgent= compatibility issue
-  remains open.
+  and then passed =metadata zpp_core=. The explicit CMake consumer probe
+  (=python3 tests/manual/cmake_consumers.py=) passed all four tests on Forge
+  =c9aba98= with clean isolated checkouts of =zpp@d060043=, =zgent@2ee9bca=,
+  =zeta_agent@9565b02= and =zeta_vault@43aaa17=. Evidence:
+  =build/phase3-native.9K6jLZ/cmake-consumers.RcH7Jg/results.log=.
+  =zgent/main@e424a54= migrated to the explicit CMake target registration.
+  The same four consumer checks passed with that commit in place of
+  =2ee9bca=, and the migrated zgent Release build and metadata succeeded.
+  Evidence under the same root: =cmake-consumers.RcH7Jg/main-committed.log=
+  and =zgent-main-committed.log=.
 - With isolated Rust 1.97.1 and prepared caches, =zust@3c27f5e= compiled and
   passed its default doctest. =python3 tests/check_rust_consumer.py= passed
   locked offline metadata and one integration test using =zust@3c27f5e=
@@ -443,14 +451,23 @@ Actual consumer probes (temporary install prefix and bytecode writes disabled):
   Its separate Dioxus Web spike passed locked fetch but failed compiling
   =dioxus-web= because =web_sys::Window::location()= was unavailable. A
   locked offline Cargo feature tree with the managed Cargo home confirmed that
-  =web-sys/Location= was absent. The consumer's Web target remains open.
+  =web-sys/Location= was absent. Trader commits =df080b5= and =bee1c44=
+  enabled Location, omitted Release Web debug symbols and selected browser
+  clocks and timers on Wasm. The locked Release Web build passed and headless
+  Chrome mounted the app and rendered its content. Evidence:
+  =build/phase3-native.9K6jLZ/trader-web-v0.81.2.log=.
 - =zeta_practice@9985aa4= passed its Dioxus Release fullstack build. A temporary
   loopback server served HTML and the compiled Wasm bundle; Chrome headless
   returned the application DOM. No external service or existing database was used.
-- =zeta_cat@0fbd0a3= passed Gradle dry run. Debug host test preflight initially
-  lacked Java and, after adding isolated OpenJDK 21, stopped at missing zsa
-  Android client materials. Android SDK-backed compilation and unit tests
-  remain open.
+- =zeta_cat@0fbd0a3= passed Gradle dry run and the real =test android=
+  and =build android= commands with =--profile debug --host-id 13=. The
+  isolated checkout used OpenJDK 21, the old booster system's SDK mounted
+  read-only, the pinned native submodules and the existing zsa test-client
+  materials. All 17 JVM unit tests passed. Gradle assembled the Debug APK
+  for =arm64-v8a= and =x86_64=. Device installation and VPN connectivity
+  were outside this build and unit-test run. Evidence under
+  =build/phase3-native.9K6jLZ/=: =gradle-debug-host13-trust.log= and
+  =gradle-debug-apk-host13-complete.log=.
 
 The native acceptance script passed on =d94a034=, using a copied source tree
 and Conan home with a disposable publication prefix. The initial clean Release
@@ -465,14 +482,14 @@ An additional =./zbuild.py install grpc --profile release= with only Python on
 PATH published the same stage successfully; the archive and ownership index
 were present. Evidence: =build/phase3-native.9K6jLZ/native-resume.log= and
 =zeta_forge/build/phase2-acceptance.FnUZw1/= beneath that directory.
-The later Stage 3.9 production diff is limited to Rust registry parsing.
-The 162-test suite and the real static =./zbuild.py doctor rust-deps= probe
-passed with that diff applied.
+The Stage 3.9 Forge changes share Rust registry parsing and approve the
+Trader pins for =web-sys= and =web-time=. With the new pins applied, the
+162-test tooling suite and the real =./zbuild.py doctor rust-deps= audit
+passed. Evidence under =build/phase3-native.9K6jLZ/=:
+=phase3-final-tooling.log= and =phase3-final-rust-doctor.log=.
 
-Next: resolve or obtain acceptance evidence for the Android, Trader Web and
-=zgent= consumer gates within their owners' scope, and obtain the user's
-Phase 3 overall acceptance. The v1.24.1 commit records verified implementation
-and checks, not Stage 3.9 completion.
+Next: obtain the user's Phase 3 overall acceptance. The user owns the Stage
+3.9 closure decision.
 
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /
@@ -488,9 +505,8 @@ implementation tests were run for this documentation-only addition.
 
 * Design decisions still requiring bounded implementation evidence
 
-- The Phase 3 native matrix passed. The remaining consumer gates and final
-  user acceptance are tracked in Stage 3.9 above. Focused dependency checks and
-  published deps/NNG evidence do not complete those gates.
+- Phase 3 native and consumer verification passed. Final user acceptance
+  remains tracked in Stage 3.9 above.
 
 These are scoped investigation tasks with specified decision criteria, not
 permission to change the agreed public install or cleanup contracts.

@@ -114,6 +114,14 @@ version = "=0.1.44"
 name = "tracing-subscriber"
 version = "=0.3.23"
 
+[[dependencies]]
+name = "web-sys"
+version = "=0.3.105"
+
+[[dependencies]]
+name = "web-time"
+version = "=1.1.0"
+
 [[cargo-tools]]
 name = "dioxus-cli"
 version = "0.7.10"

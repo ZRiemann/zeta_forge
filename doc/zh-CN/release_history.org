@@ -5,6 +5,19 @@
 
 * 发布历史
 
+** v1.24.2 - 2026-11-14T03:05:20Z
+:PROPERTIES:
+:CUSTOM_ID: v1.24.2
+:END:
+
+*** 变更
+- 在 Rust 目录中登记 Trader Web 使用的 web-sys 和 web-time 锁定版本。
+- 在 Stage 3.9 台账中记录 Android Debug、Trader Release Web 和 zgent CMake 消费者验证结果。
+
+*** 验证
+- 162 项工具测试与 Rust 依赖审计通过。Android 完成 Debug APK 构建并通过 17 项单元测试。无头 Chrome 成功渲染使用锁定依赖构建的 Trader Release Web 页面。迁移后的 zgent 完成 Release 构建并通过全部 4 项 CMake 消费者检查。
+- Phase 3 等待用户整体验收。
+
 ** v1.24.1 - 2026-11-13T15:56:01Z
 :PROPERTIES:
 :CUSTOM_ID: v1.24.1

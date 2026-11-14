@@ -5,6 +5,19 @@
 
 * Release History
 
+** v1.24.2 - 2026-11-14T03:05:20Z
+:PROPERTIES:
+:CUSTOM_ID: v1.24.2
+:END:
+
+*** Changes
+- Admit the pinned web-sys and web-time dependencies used by Trader Web.
+- Record the Android Debug, Trader Release Web and zgent CMake consumer results for Stage 3.9.
+
+*** Validation
+- The 162 tooling tests and the Rust dependency audit passed. Android assembled its Debug APK and passed 17 unit tests. Headless Chrome rendered the locked Trader Release Web bundle. The migrated zgent built in Release and the CMake consumer probe passed all four checks.
+- Phase 3 still awaits final user acceptance.
+
 ** v1.24.1 - 2026-11-13T15:56:01Z
 :PROPERTIES:
 :CUSTOM_ID: v1.24.1

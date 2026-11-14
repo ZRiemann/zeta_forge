@@ -1,0 +1,400 @@
+#+TITLE: Phase 3 整体验收操作手册
+#+STARTUP: indent
+
+[[file:phase3_build_modularity.org::*整体验收与可衡量收益][Phase 3 验收标准]] | [[file:../project_progress.org::*Phase 3 proposal][项目台账]]
+
+验收候选为 Forge =51694be=（v1.24.2），对照基线为 =3eb9474=。以下各段在同一
+Bash 会话中按顺序执行。若失败后退出 Bash，在新终端把 =PHASE3_ACCEPTANCE_DIR=
+设为第 1 步打印的目录，重跑第 1 步，再从中断步骤继续。消费者步骤用到的环境
+变量也要重新设置。
+原生脚本会构建五套 Release 依赖。首次执行可能需要下载依赖、耗时数小时。
+
+* 1. 创建验收目录
+
+以下命令从现有本地 Git 对象检出固定 revision。嵌套子模块也按父仓库记录的
+commit 检出到验收目录。需要 Bash、Git、Python 3、CMake、CTest 和支持
+=unshare --user --map-root-user --net= 的 Linux。原生构建另需 Conan 2、Ninja、C++
+编译器和 Rust。脚本默认复制上一轮准备好的 Conan、Cargo 和 Gradle 缓存，
+请预留相应空间。所有构建、安装前缀及日志均在验收目录内。
+
+#+begin_src bash
+set -euo pipefail
+umask 077
+forge_source=/home/zetax/git/zeta_forge
+source_root=$(dirname "$forge_source")
+previous="$forge_source/build/phase3-native.9K6jLZ"
+if [[ -n ${PHASE3_ACCEPTANCE_DIR:-} ]]; then
+    acceptance=$(realpath -e "$PHASE3_ACCEPTANCE_DIR")
+    case "$acceptance" in
+        "$forge_source"/build/phase3-user-acceptance.*) ;;
+        *) printf 'Invalid acceptance directory: %s\n' "$acceptance" >&2; exit 2 ;;
+    esac
+else
+    acceptance=$(mktemp -d "$forge_source/build/phase3-user-acceptance.XXXXXX")
+fi
+logs="$acceptance/logs"
+workspace="$acceptance/workspace"
+mkdir -p "$logs" "$workspace" "$acceptance/offline/alone" "$acceptance/offline/siblings"
+printf 'Acceptance directory: %s\n' "$acceptance"
+
+checkout() {
+    local source=$1 revision=$2 dest=$3
+    if [[ -e "$dest/.git" ]]; then
+        if [[ $(git -C "$dest" rev-parse HEAD) != $(git -C "$source" rev-parse "$revision^{commit}") ]]; then
+            printf 'Existing checkout has a different revision: %s\n' "$dest" >&2
+            return 1
+        fi
+    else
+        git clone --quiet --shared --no-checkout "$source" "$dest"
+        git -C "$dest" checkout --quiet --detach "$revision"
+    fi
+    git -C "$dest" rev-parse HEAD
+}
+
+checkout_submodules() {
+    local source=$1 dest=$2 entry header path mode kind revision
+    git -C "$dest" ls-tree -rz HEAD | while IFS= read -r -d '' entry; do
+        header=${entry%%$'\t'*}
+        path=${entry#*$'\t'}
+        read -r mode kind revision <<< "$header"
+        if [[ $kind == commit ]]; then
+            if [[ ! -e "$source/$path/.git" ]]; then
+                printf 'Required local submodule missing: %s\n' "$source/$path" >&2
+                return 1
+            fi
+            printf '%s ' "${dest#"$workspace/"}"/"$path"
+            checkout "$source/$path" "$revision" "$dest/$path"
+            checkout_submodules "$source/$path" "$dest/$path"
+        fi
+    done
+}
+
+in_repo() (
+    cd "$workspace/$1"
+    shift
+    "$@"
+)
+
+log_step() {
+    local label=$1
+    shift
+    "$@" 2>&1 | tee "$logs/$label.log"
+}
+
+export PYTHONDONTWRITEBYTECODE=1
+export ZETAX_ROOT="$workspace" ZETA_INSTALL_PREFIX="$acceptance/fixture-prefix"
+unset ZETA_3RD_DIR ZETA_GRPC_SRC_DIR ZETA_HPX_SRC_DIR ZETA_FOLLY_SRC_DIR \
+    ZETA_NNG_SRC_DIR ZETA_TASKFLOW_SRC_DIR ZETA_RAPIDJSON_SRC_DIR
+checkout "$forge_source" 51694be "$workspace/zeta_forge" | tee "$logs/forge-revision.log"
+checkout "$forge_source" 3eb9474 "$acceptance/baseline" | tee "$logs/baseline-revision.log"
+#+end_src
+
+* 2. 离线工具、架构和 Phase 2 状态兼容
+
+两轮隔离测试应各通过 162 项。默认工具套件已包含架构约束、扩展注册和 Phase 2
+状态回归。第二轮加入会在被导入时立即失败的无关兄弟项目。网络 namespace 内
+只有未启用的 loopback，测试仍可运行本地进程和 Unix socket。
+
+#+begin_src bash
+for layout in alone siblings; do
+    offline="$acceptance/offline/$layout"
+    checkout "$forge_source" 51694be "$offline/zeta_forge"
+    if [[ $layout == siblings ]]; then
+        for peer in zpp zgent zeta_agent zeta_vault zust zeta_cat zeta_trader zeta_practice zzg; do
+            mkdir -p "$offline/$peer/builder"
+            printf 'raise AssertionError("unrelated sibling was loaded")\n' > "$offline/$peer/zbuild.py"
+            cp "$offline/$peer/zbuild.py" "$offline/$peer/builder/$peer.py"
+        done
+    fi
+    log_step "offline-$layout" unshare --user --map-root-user --net -- \
+        env "ZETAX_ROOT=$offline" "ZETA_INSTALL_PREFIX=$offline/prefix" \
+        "$offline/zeta_forge/zbuild.py" test build-tools
+    grep -Eq '^Ran 162 tests ' "$logs/offline-$layout.log"
+    grep -q '^OK$' "$logs/offline-$layout.log"
+done
+#+end_src
+
+跨版本复核使用两个独立 Python 进程。两边分别写入后互读 stage receipt 和 Conan
+lock，并回滚对方写到一半的发布事务。下面的探针只写入验收目录；重复执行时，
+每轮创建新的事务样本。
+
+#+begin_src bash
+cat > "$acceptance/state_compat.py" <<'PY'
+import sys
+from pathlib import Path
+
+from zeta_forge import conan_state as conan
+from zeta_forge import native_transaction as tx
+from zeta_forge.native_artifacts import RECEIPT_NAME, make_receipt, require_receipt
+
+mode, root = sys.argv[1], Path(sys.argv[2])
+stage = root / "stage"
+prefix = root / "prefix"
+state = prefix / tx.STATE_PATH
+relative = "lib/phase3-probe"
+published = prefix / relative
+candidate = root / "candidate"
+generation = root / "input-fingerprint"
+lock = root / "conan.lock"
+
+if mode == "write":
+    stage.mkdir(parents=True)
+    (stage / "probe").write_bytes(b"phase3")
+    conan.write_json(stage / RECEIPT_NAME, make_receipt(
+        stage, "nng", "release", sources=[], conan=None, references=[], dependencies={},
+    ))
+    conan.write_json(lock, {"version": "0.5", "requires": [], "build_requires": [],
+                            "python_requires": [], "config_requires": []})
+    identity = conan.store_generation(generation, lock, {
+        "schema": 1, "input_fingerprint": generation.name, "generators": {},
+        "graph": [], "lock_sha256": conan.file_digest(lock),
+    })
+    conan.write_json(generation / "active.json", {"schema": 1, "generation": identity})
+    published.parent.mkdir(parents=True)
+    published.write_bytes(b"before")
+    candidate.write_bytes(b"interrupted")
+    tx.prepare_transaction(prefix, state / "pending", {
+        relative: (tx.file_identity(published), tx.file_identity(candidate), candidate),
+    }, {"schema": 1, "transaction": "a" * 32, "owners": {}})
+    tx.replace_entry(state / "pending" / "new" / relative, published)
+else:
+    require_receipt(stage, "nng", "release")
+    found = conan.active_generation(generation)
+    assert found is not None and found[1].read_bytes() == lock.read_bytes()
+    assert published.read_bytes() == b"interrupted"
+    tx.recover_transaction(prefix, state)
+    assert published.read_bytes() == b"before" and not (state / "pending").exists()
+    print(f"Receipt, lock and rollback passed: {root.name}")
+PY
+
+state_run=$(mktemp -d "$acceptance/state-check.XXXXXX")
+for writer in baseline candidate; do
+    before="$acceptance/baseline"
+    after="$workspace/zeta_forge"
+    if [[ $writer == candidate ]]; then
+        before="$workspace/zeta_forge"
+        after="$acceptance/baseline"
+    fi
+    PYTHONPATH="$before/common" python3 "$acceptance/state_compat.py" write "$state_run/state-$writer"
+    log_step "state-$writer" env "PYTHONPATH=$after/common" \
+        python3 "$acceptance/state_compat.py" read "$state_run/state-$writer"
+done
+cmp "$state_run/state-baseline/stage/.zeta-build-complete.json" \
+    "$state_run/state-candidate/stage/.zeta-build-complete.json"
+cmp "$state_run/state-baseline/input-fingerprint/active.json" \
+    "$state_run/state-candidate/input-fingerprint/active.json"
+#+end_src
+
+* 3. 原生 Release 矩阵
+
+复用 =tests/manual/native_delivery/acceptance.sh=。它会构建及发布 =deps grpc hpx
+folly nng=，检查 Conan generator 复用和保留 lock 的重新生成，运行 5 项 CTest 与
+Rust OpenSSL probe，并用 SHA-256 核对 Debug NNG 构建、发布和清理前后的 Release 文件。
+=--rebuild-release= 会先清理 Release 构建。本次由空 checkout 起步，直接运行即可。
+如果原生构建被中断，在同一验收 workspace 直接重跑该脚本可增量续跑；使用最后一次
+成功日志打印的证据目录设置 =native_evidence=。
+
+#+begin_src bash
+checkout_submodules "$forge_source" "$workspace/zeta_forge" | tee "$logs/forge-submodules.log"
+if [[ ! -d "$acceptance/conan" ]]; then
+    cp -a --reflink=auto "$previous/conan" "$acceptance/conan"
+fi
+export CONAN_HOME="$acceptance/conan"
+log_step native in_repo zeta_forge bash tests/manual/native_delivery/acceptance.sh
+native_evidence=$(sed -n 's/^Acceptance evidence: //p' "$logs/native.log" | tail -1)
+export ZETA_INSTALL_PREFIX="$native_evidence/release-prefix"
+test -f "$ZETA_INSTALL_PREFIX/share/zeta_forge/native/owners.json"
+
+mkdir -p "$acceptance/python-only"
+if [[ ! -e "$acceptance/python-only/python3" ]]; then
+    ln -s "$(command -v python3)" "$acceptance/python-only/python3"
+fi
+log_step staged-install in_repo zeta_forge env "PATH=$acceptance/python-only" \
+    "ZETA_INSTALL_PREFIX=$acceptance/staged-only-prefix" ./zbuild.py install grpc --profile release
+test -f "$acceptance/staged-only-prefix/lib/libgrpc.a"
+test -f "$acceptance/staged-only-prefix/share/zeta_forge/native/owners.json"
+#+end_src
+
+通过标准为脚本打印 =Phase 2 overall acceptance commands passed.=（沿用脚本名称），
+=consumer-tests.log= 显示 5/5，=release-nng-verify.log= 中三个摘要校验均为 =OK=，
+以及 Python-only PATH 下的 =staged-install.log= 显示 =status=0=。
+
+* 4. 真实消费者
+
+固定消费者 revision。每条命令的退出码应为 0，已有测试入口需要同时满足下文的计数
+和运行检查。CMake 的 4 项检查覆盖四个真实项目的注册和运行契约，zpp 和 zgent 的
+Release 路径另外实际编译。
+
+#+begin_src bash
+for entry in zpp:d060043 zgent:e424a54 zeta_agent:9565b02 zeta_vault:43aaa17 \
+    zust:3c27f5e zeta_trader:bee1c44 zeta_cat:0fbd0a3 zeta_practice:9985aa4 \
+    zzg:2b9735c zsa:5773b8a; do
+    repo=${entry%:*}
+    printf '%s ' "$repo"
+    checkout "$source_root/$repo" "${entry#*:}" "$workspace/$repo"
+done | tee "$logs/consumer-revisions.log"
+
+log_step cmake-consumers in_repo zeta_forge python3 tests/manual/cmake_consumers.py
+log_step zpp-example in_repo zpp ./zbuild.py build zpp_core --profile release -j4
+log_step zpp-metadata in_repo zpp ./zbuild.py metadata zpp_core --profile release
+log_step zpp-build in_repo zpp ./zbuild.py build zpp --profile release -j4
+log_step zpp-install in_repo zpp ./zbuild.py install zpp --profile release
+log_step zgent-build in_repo zgent ./zbuild.py build zgent --profile release -j4
+log_step zgent-metadata in_repo zgent ./zbuild.py metadata zgent --profile release
+#+end_src
+
+** Rust、Owl 桌面、Trader Web 和 Practice
+
+在当前主机可复用之前的 Rust 1.97.1、Node 24.22.3、WebKitGTK 和 Clang 准备目录。
+在其他主机上使用等效工具链，并准备 WebKitGTK 4.1、libsoup 3.0、libxdo 与
+Clang 开发文件。Rust 消费者探针使用锁定的离线 Cargo 解析，并编译运行集成测试。
+
+#+begin_src bash
+export PATH="$previous/tools/node-v24.22.3-linux-x64/bin:$PATH"
+export RUSTUP_HOME="$previous/rustup" CARGO_HOME="$acceptance/cargo"
+if [[ ! -d "$CARGO_HOME" ]]; then
+    cp -a --reflink=auto "$previous/cargo" "$CARGO_HOME"
+fi
+export npm_config_cache="$acceptance/npm-cache"
+node --version
+rustup run 1.97.1 rustc --version
+web_sysroot="$previous/tools/webkit-root"
+triplet=$(gcc -print-multiarch)
+export PKG_CONFIG_PATH="$web_sysroot/usr/lib/$triplet/pkgconfig:$web_sysroot/usr/share/pkgconfig"
+export PKG_CONFIG_SYSROOT_DIR="$web_sysroot" LIBRARY_PATH="$web_sysroot/usr/lib/$triplet"
+export BINDGEN_EXTRA_CLANG_ARGS="-isystem $previous/tools/clang-root/usr/lib/llvm-22/lib/clang/22/include"
+pkg-config --exists webkit2gtk-4.1 libsoup-3.0
+
+log_step rust-doctor in_repo zeta_forge ./zbuild.py doctor rust-deps
+log_step rust-consumer in_repo zeta_forge python3 tests/check_rust_consumer.py
+log_step owl-build in_repo zeta_trader ./zbuild.py build zeta_owl --platform desktop --profile release -j4
+log_step owl-test in_repo zeta_trader ./zbuild.py test zeta_owl --profile release -j4
+log_step trader-web-build in_repo zeta_trader ./zbuild.py build dioxus_trading_ui --platform web --profile release -j4
+log_step practice-build in_repo zeta_practice ./zbuild.py build --profile release -j4
+#+end_src
+
+如需额外核对全部注册 Rust 项目的锁定离线解析，先通过所属项目的 =zbuild.py fetch=
+准备 Forge 管理的本地 patch 与缺少的 Cargo 缓存，再从 Forge 执行
+=./zbuild.py check rust-deps=。干净验收目录中直接运行这项附加检查可能报告缺少
+Trader 的 Wry patch 和 Cat 服务端的 =aws-lc-rs=。
+
+Trader Web 用本地静态服务器提供 Release 产物。另开浏览器访问
+=http://127.0.0.1:8751/=，确认行情列表等应用内容渲染，开发者工具显示 Wasm 请求
+成功且没有未捕获的启动异常，然后在服务器终端按 Ctrl+C。
+
+#+begin_src bash
+python3 -m http.server 8751 --bind 127.0.0.1 --directory \
+    "$workspace/zeta_trader/build/frontend/cargo-target/dx/dioxus_trading_ui/release/web/public" \
+    || test "$?" -eq 130
+#+end_src
+
+Practice 用临时 SQLite 数据库运行。访问 =http://127.0.0.1:8752/=，确认应用界面渲染、
+Wasm 请求成功，并切换一道练习确认交互生效。验证后按 Ctrl+C 停止服务。手动停止
+这两个前台进程属于预期操作。
+
+#+begin_src bash
+in_repo zeta_practice ./zbuild.py run --profile release --db-path "$acceptance/practice.sqlite" \
+    --ip 127.0.0.1 --port 8752 --public-origin http://127.0.0.1:8752 || test "$?" -eq 130
+#+end_src
+
+** Zig
+
+#+begin_src bash
+export PATH="$previous/tools/zig-x86_64-linux-0.17.0:$PATH"
+export ZIG_GLOBAL_CACHE_DIR="$acceptance/zig-cache"
+zig version
+log_step zig-debug in_repo zzg ./zbuild.py test --profile debug -j4
+log_step zig-release in_repo zzg ./zbuild.py test --profile release -j4
+#+end_src
+
+** Android Debug
+
+使用 JDK 21、Android SDK 36、NDK 28.2.13676358 和已有的 zsa host 13 测试材料。
+如要复用本机旧 booster SDK，可先只读挂载旧系统分区，再按下面设置环境。在已具备
+合格 SDK 的主机上，将 =ANDROID_SDK_ROOT= 和 =ANDROID_HOME= 都设为该 SDK 路径。
+只在验收目录内生成 Debug APK，无需设备或 Release 签名。
+
+#+begin_src bash
+# 仅在本机、且旧 SDK 尚未挂载时执行这条命令。
+udisksctl mount -b /dev/disk/by-id/ata-ST4000VX013-2XG104_ZTT2HW3M-part2 \
+    -o ro,noload --no-user-interaction
+#+end_src
+
+#+begin_src bash
+legacy=/run/media/zetax/2177a646-7122-4b21-b583-785ce4e40054
+export ANDROID_SDK_ROOT="$legacy/home/booster/Android/Sdk" ANDROID_HOME="$legacy/home/booster/Android/Sdk"
+export JAVA_HOME="$previous/tools/jdk-root/usr/lib/jvm/java-21-openjdk-amd64"
+export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:+$JAVA_TOOL_OPTIONS }-Djavax.net.ssl.trustStore=$legacy/etc/ssl/certs/java/cacerts"
+export PATH="$JAVA_HOME/bin:$PATH" GRADLE_USER_HOME="$acceptance/gradle"
+test -d "$ANDROID_SDK_ROOT/platforms/android-36"
+test -x "$ANDROID_SDK_ROOT/ndk/28.2.13676358/ndk-build"
+java -version
+if [[ ! -d "$GRADLE_USER_HOME" ]]; then
+    cp -a --reflink=auto "$previous/gradle-phase3" "$GRADLE_USER_HOME"
+fi
+checkout_submodules "$source_root/zeta_cat" "$workspace/zeta_cat" | tee "$logs/android-submodules.log"
+material=deploy/hosts/13/meta/zeta_cat/android
+mkdir -p "$workspace/zsa/$(dirname "$material")"
+test -r "$source_root/zsa/$material/client.local.properties"
+if [[ ! -e "$workspace/zsa/$material" ]]; then
+    ln -s "$source_root/zsa/$material" "$workspace/zsa/$material"
+fi
+log_step android-test in_repo zeta_cat ./zbuild.py test android --profile debug --host-id 13 -j4
+log_step android-build in_repo zeta_cat ./zbuild.py build android --profile debug --host-id 13 -j4
+python3 - "$workspace/zeta_cat" <<'PY' | tee "$logs/android-results.log"
+import sys
+from pathlib import Path
+from xml.etree import ElementTree
+from zipfile import ZipFile
+
+build = Path(sys.argv[1]) / "android/app/build"
+suites = [ElementTree.parse(path).getroot() for path in
+          (build / "test-results/testDebugUnitTest").glob("TEST-*.xml")]
+totals = {key: sum(int(suite.get(key, "0")) for suite in suites)
+          for key in ("tests", "failures", "errors", "skipped")}
+print(totals)
+assert totals == {"tests": 17, "failures": 0, "errors": 0, "skipped": 0}
+apk = build / "outputs/apk/debug/zeta_cat-debug.apk"
+with ZipFile(apk) as archive:
+    abi = {name.split("/")[1] for name in archive.namelist() if name.startswith("lib/") and name.endswith(".so")}
+assert {"arm64-v8a", "x86_64"} <= abi, sorted(abi)
+print("Debug APK ABI:", ", ".join(sorted(abi)))
+PY
+#+end_src
+
+* 5. 启动性能对照和最终判定
+
+在同一个环境中交替测量，减少冷热启动偏差。每个命令记录 12 组结果和中位数。
+同时对照架构测试及台账，确认 native 注册、CMake 参数、状态 I/O 和 Rust manifest
+命令各由一个实现负责。启动计时的判断依据是有无可复现的明显退化。
+
+#+begin_src bash
+python3 - "$acceptance/baseline" "$workspace/zeta_forge" "$acceptance/startup-prefix" <<'PY' | tee "$logs/startup.log"
+import os
+import statistics
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+baseline, candidate, prefix = map(Path, sys.argv[1:])
+for command in (["metadata", "nng"], ["rebuild", "nng", "--dry-run"]):
+    samples = {repo: [] for repo in (baseline, candidate)}
+    for index in range(12):
+        order = (baseline, candidate) if index % 2 == 0 else (candidate, baseline)
+        for repo in order:
+            env = dict(os.environ, ZETAX_ROOT=str(repo.parent), ZETA_INSTALL_PREFIX=str(prefix))
+            start = time.perf_counter()
+            subprocess.run([str(repo / "zbuild.py"), *command], cwd=repo, env=env,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+            samples[repo].append((time.perf_counter() - start) * 1000)
+    print(" ".join(command))
+    for label, repo in (("baseline", baseline), ("candidate", candidate)):
+        print(f"{label}: median {statistics.median(samples[repo]):.1f} ms, "
+              f"samples {[round(value, 1) for value in samples[repo]]}")
+PY
+#+end_src
+
+核对全部命令日志、两项浏览器结果及启动对照后，把 =Phase 3 整体验收通过= 和验收
+目录发到当前对话即可。若有失败或跳过，附对应步骤或日志文件。Android 真机安装及
+VPN 连通性、实际交易服务均不在这份手册的验证范围内。

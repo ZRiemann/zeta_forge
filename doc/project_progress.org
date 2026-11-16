@@ -491,6 +491,25 @@ passed. Evidence under =build/phase3-native.9K6jLZ/=:
 Next: obtain the user's Phase 3 overall acceptance. The user owns the Stage
 3.9 closure decision.
 
+User acceptance rerun, 2026-11-16: the isolated workspace under
+=build/phase3-user-acceptance.0oA97W/= used Forge =51694be=, Trader
+=bee1c44=, Practice =9985aa4= and zzg =2b9735c=. Both offline tooling
+variants passed 162 tests, cross-revision receipt/lock/rollback checks passed,
+and the full Release native delivery and five CTest consumers passed. The
+staged gRPC install also passed with only Python on PATH. Owl Release build
+and tests passed with 305 tests passed and one ignored. Trader Web and Practice
+Release builds passed; headless Chrome rendered both, loaded both Wasm files
+with HTTP 200 and switched a Practice exercise type using a temporary account
+and database, then started the selected exercise. Zig Debug and Release tests
+passed. Their =NoSpaceLeft= diagnostic comes from the =/dev/full= failure
+scenario. For metadata and rebuild
+dry-run, baseline/candidate median startup times were 107.3/94.3 ms and
+106.7/95.7 ms respectively (12 alternating samples each).
+Evidence is in the workspace's =logs/= directory. This rerun skipped Android
+tests and build at the user's request because host 13 was not ready. The
+earlier Android result above retains its original revision and environment.
+The user is to make the final Phase 3 acceptance decision.
+
 The Phase 3 proposal now includes
 [[file:en/phase3_build_modularity.org::#implementation-guidance][implementation guidance]] /
 [[file:zh-CN/phase3_build_modularity.org::#implementation-guidance][关键实现提示]]

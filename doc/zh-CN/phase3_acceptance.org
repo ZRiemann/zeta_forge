@@ -6,7 +6,8 @@
 验收候选为 Forge =51694be=（v1.24.2），对照基线为 =3eb9474=。以下各段在同一
 Bash 会话中按顺序执行。若失败后退出 Bash，在新终端把 =PHASE3_ACCEPTANCE_DIR=
 设为第 1 步打印的目录，重跑第 1 步，再从中断步骤继续。消费者步骤用到的环境
-变量也要重新设置。
+变量也要重新设置。第 3 步成功后若重开终端，按第 4 步开头的命令从原生验收日志
+恢复 Release 安装前缀。
 原生脚本会构建五套 Release 依赖。首次执行可能需要下载依赖、耗时数小时。
 
 * 1. 创建验收目录
@@ -221,6 +222,16 @@ test -f "$acceptance/staged-only-prefix/share/zeta_forge/native/owners.json"
 
 * 4. 真实消费者
 
+进入本节前从已完成的第 3 步恢复 Release 安装前缀。重开终端时，先重跑第 1 节
+以恢复 =in_repo=、=log_step= 和目录变量。
+
+#+begin_src bash
+grep -Fq 'Phase 2 overall acceptance commands passed.' "$logs/native.log"
+native_evidence=$(sed -n 's/^Acceptance evidence: //p' "$logs/native.log" | tail -1)
+export ZETA_INSTALL_PREFIX="$native_evidence/release-prefix"
+test -f "$ZETA_INSTALL_PREFIX/share/zeta_forge/native/owners.json"
+#+end_src
+
 固定消费者 revision。每条命令的退出码应为 0，已有测试入口需要同时满足下文的计数
 和运行检查。CMake 的 4 项检查覆盖四个真实项目的注册和运行契约，zpp 和 zgent 的
 Release 路径另外实际编译。
@@ -248,6 +259,10 @@ log_step zgent-metadata in_repo zgent ./zbuild.py metadata zgent --profile relea
 在当前主机可复用之前的 Rust 1.97.1、Node 24.22.3、WebKitGTK 和 Clang 准备目录。
 在其他主机上使用等效工具链，并准备 WebKitGTK 4.1、libsoup 3.0、libxdo 与
 Clang 开发文件。Rust 消费者探针使用锁定的离线 Cargo 解析，并编译运行集成测试。
+Owl 首次构建前要运行 =fetch zeta_owl=，将 Forge 管理的 Wry 源码准备到本轮
+验收 checkout。Cargo 缓存不能代替这一步。这里使用已经准备好的 Node，无需 apt 安装。
+首次编译 Forge 管理的 =dioxus-cli= 时，从第 3 步的 Release 清单取 Conan OpenSSL，
+把路径仅传给 =fetch= 命令。这样可在 WebKit sysroot 中缺少 =openssl.pc= 时完成工具编译。
 
 #+begin_src bash
 export PATH="$previous/tools/node-v24.22.3-linux-x64/bin:$PATH"
@@ -264,9 +279,22 @@ export PKG_CONFIG_PATH="$web_sysroot/usr/lib/$triplet/pkgconfig:$web_sysroot/usr
 export PKG_CONFIG_SYSROOT_DIR="$web_sysroot" LIBRARY_PATH="$web_sysroot/usr/lib/$triplet"
 export BINDGEN_EXTRA_CLANG_ARGS="-isystem $previous/tools/clang-root/usr/lib/llvm-22/lib/clang/22/include"
 pkg-config --exists webkit2gtk-4.1 libsoup-3.0
+openssl_package=$(PYTHONPATH="$workspace/zeta_forge/common" python3 - "$ZETA_INSTALL_PREFIX" <<'PY'
+import sys
+from pathlib import Path
+
+from zeta_forge.conan_openssl import read_openssl_manifest
+
+print(read_openssl_manifest(Path(sys.argv[1])))
+PY
+)
 
 log_step rust-doctor in_repo zeta_forge ./zbuild.py doctor rust-deps
 log_step rust-consumer in_repo zeta_forge python3 tests/check_rust_consumer.py
+log_step owl-fetch in_repo zeta_trader env \
+    "OPENSSL_DIR=$openssl_package" "OPENSSL_LIB_DIR=$openssl_package/lib" \
+    "OPENSSL_INCLUDE_DIR=$openssl_package/include" OPENSSL_STATIC=1 OPENSSL_NO_VENDOR=1 \
+    ./zbuild.py fetch zeta_owl --platform desktop --profile release
 log_step owl-build in_repo zeta_trader ./zbuild.py build zeta_owl --platform desktop --profile release -j4
 log_step owl-test in_repo zeta_trader ./zbuild.py test zeta_owl --profile release -j4
 log_step trader-web-build in_repo zeta_trader ./zbuild.py build dioxus_trading_ui --platform web --profile release -j4
@@ -308,6 +336,9 @@ log_step zig-release in_repo zzg ./zbuild.py test --profile release -j4
 #+end_src
 
 ** Android Debug
+
+2026-11-16 本轮验收按用户要求跳过本节，因为 host 13 尚未就绪。先前 Android
+Debug 验证结果见项目台账，本轮未重新执行 Android 构建或测试。
 
 使用 JDK 21、Android SDK 36、NDK 28.2.13676358 和已有的 zsa host 13 测试材料。
 如要复用本机旧 booster SDK，可先只读挂载旧系统分区，再按下面设置环境。在已具备

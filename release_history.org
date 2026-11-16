@@ -5,6 +5,18 @@
 
 * Release History
 
+** v1.24.3 - 2026-11-16T01:21:15Z
+:PROPERTIES:
+:CUSTOM_ID: v1.24.3
+:END:
+
+*** Changes
+- Record the Phase 3 acceptance rerun and document how to resume the consumer checks with Forge-managed OpenSSL.
+
+*** Validation
+- Documentation records the prior isolated native, browser, Zig and tooling checks. Android was skipped in this rerun at the user's request; final Phase 3 acceptance awaits user confirmation.
+- No additional tests or builds ran for this documentation commit.
+
 ** v1.24.2 - 2026-11-14T03:05:20Z
 :PROPERTIES:
 :CUSTOM_ID: v1.24.2

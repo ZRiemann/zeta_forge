@@ -5,6 +5,19 @@
 
 * Release History
 
+** v1.25.0 - 2026-11-20T01:31:01Z
+:PROPERTIES:
+:CUSTOM_ID: v1.25.0
+:END:
+
+*** Changes
+- Add standalone =prepare_debian.py --toolchain= operations for Rust and Zig.
+- Use project-declared Rust requirements and install or reuse the Forge-pinned Zig release with archive verification.
+- Clarify the system Python prerequisite and document both toolchain entry points.
+
+*** Validation
+- Checked staged whitespace. No additional tests or builds ran for this commit.
+
 ** v1.24.3 - 2026-11-16T01:21:15Z
 :PROPERTIES:
 :CUSTOM_ID: v1.24.3

@@ -529,3 +529,14 @@ implementation tests were run for this documentation-only addition.
 
 These are scoped investigation tasks with specified decision criteria, not
 permission to change the agreed public install or cleanup contracts.
+
+* Host toolchain preparation
+
+2026-11-19 development worktree based on =fa30584=. The Debian preparation
+entrypoint can provision Rust for a declared consumer or the shared Zig
+version independently. The Rust preparation command reused the installed
+Rust 1.97.1 and verified Cargo for the actual zeta_cat checkout. The Zig
+installer verified the official 0.17.0 archive, ran the executable, and
+reused it on a second invocation in an isolated directory. The focused
+Rust governance, host toolchain and Zig suites passed 36 tests. The
+downstream clean Ubuntu USB restore remains a zsa integration check.

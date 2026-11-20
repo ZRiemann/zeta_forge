@@ -3,6 +3,8 @@
 
 [[file:readme.org][Back to Documentation]] | [[file:../zh-CN/rust_workspace.org][Chinese Version]]
 
+Run =python3 common/prepare_debian.py --toolchain rust --rust-project ../zeta_cat= from the Forge checkout to install a project's exact approved channel, components and declared capability targets. The host entrypoint preserves the default toolchain and existing channels.
+
 * Goals and Ownership
 
 =zeta_forge= approves Rust toolchains, exact third-party direct-crate versions and

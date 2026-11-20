@@ -65,7 +65,7 @@ git submodule update --init --recursive
 如果 =zsa= 与 =zeta_forge= 以兄弟目录方式检出，可以先执行：
 
 #+begin_src bash
-../zsa/util/bootstrap_debian.sh --minimal
+python3 ../zsa/util/zeta_ubuntu.py prepare --host
 #+end_src
 
 公共用户也可以手动准备同样的宿主机依赖，然后再执行 =zeta_forge= 仓库内准备脚本：
@@ -74,7 +74,7 @@ git submodule update --init --recursive
 ./common/prepare_debian.sh
 #+end_src
 
-=./common/prepare_debian.sh= 专注于 =zeta_forge= 内部工具链管理：构建依赖、Conan 2 和 submodule 初始化。默认跟随 =zsa= 准备好的 ZetaX/uv Python 环境；只有项目确实需要固定 Conan Python runtime 时，才传入 =--python-version X.Y=。=zsa= 对公共用户不是必需前置条件。如果当前系统还没有 Python，这个 wrapper 会提示需要先安装的最小宿主机依赖；当存在兄弟目录 =zsa= 时，也会提示可选的 =../zsa/util/bootstrap_debian.sh --minimal= 辅助入口。
+无参数的 =./common/prepare_debian.sh= 准备原生构建依赖、Conan 和子模块。=--python-version X.Y= 可单独指定 Conan Python 版本。该命令支持独立于 zsa 运行。
 
 准备脚本安装 =libopenmpi-dev= 和 =openmpi-bin=，因为 Forge 启用了 HPX 的 MPI
 parcelport。Open MPI 是此 Debian/Ubuntu 准备流程默认使用的系统 MPI 实现；

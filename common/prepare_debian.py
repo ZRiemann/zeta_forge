@@ -10,6 +10,7 @@ sys.path.insert(0, str(FORGE_ROOT / "common"))
 
 from zeta_forge.config import load_repo_config
 from zeta_forge.debian_prep import DebianPreparer
+from zeta_forge.host_toolchains import ensure_rust_toolchain, ensure_zig_toolchain
 
 
 def parse_args() -> argparse.Namespace:
@@ -21,11 +22,30 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional Python version passed to uv for Conan tooling. By default, follow the active ZetaX/uv environment.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--toolchain", choices=("rust", "zig"),
+        help="Install only the selected Forge-approved toolchain.",
+    )
+    parser.add_argument(
+        "--rust-project", type=Path,
+        help="Rust project providing the toolchain and capability declarations.",
+    )
+    args = parser.parse_args()
+    if (args.toolchain == "rust") != (args.rust_project is not None):
+        parser.error("--toolchain rust and --rust-project must be specified together")
+    if args.toolchain and args.python_version is not None:
+        parser.error("--python-version applies to Conan host preparation")
+    return args
 
 
 def main() -> int:
     args = parse_args()
+    if args.toolchain == "rust":
+        ensure_rust_toolchain(FORGE_ROOT, args.rust_project.resolve())
+        return 0
+    if args.toolchain == "zig":
+        ensure_zig_toolchain()
+        return 0
     repo_config = load_repo_config(Path(__file__))
     DebianPreparer(
         script_path=Path(__file__),

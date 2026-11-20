@@ -6,6 +6,8 @@
 =ZigTarget=。当前工具链精确锁定 =0.17.0=，消费项目原生构建定义须与此
 基线一致。适配器不安装或升级 Zig，也不引入外部包依赖图。
 
+在 Forge 工作区运行 =python3 common/prepare_debian.py --toolchain zig= 安装当前 Linux 架构的精确版本。安装器验证归档和可执行文件后再切换受管入口。
+
 项目通过薄启动器登记原生 step 及可选可执行文件名；=build.zig= 负责模块
 导入、编译选项、测试和原生依赖。Debug/release 分别映射 Debug/ReleaseFast。
 输出和本地缓存归 =build/zig/<profile>/=；clean/rebuild 声明影响同一原生

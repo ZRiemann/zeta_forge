@@ -66,7 +66,7 @@ For private ZetaX environments, the preparation flow can be split into two layer
 If =zsa= is checked out next to =zeta_forge=, you can bootstrap the host with:
 
 #+begin_src bash
-../zsa/util/bootstrap_debian.sh --minimal
+python3 ../zsa/util/zeta_ubuntu.py prepare --host
 #+end_src
 
 Public users can prepare the same host packages manually, then prepare the =zeta_forge= workspace with:
@@ -75,7 +75,7 @@ Public users can prepare the same host packages manually, then prepare the =zeta
 ./common/prepare_debian.sh
 #+end_src
 
-=./common/prepare_debian.sh= focuses on =zeta_forge=-local toolchain management: build dependencies, Conan 2, and submodule initialization. By default it follows the active ZetaX/uv Python environment prepared by =zsa=; pass =--python-version X.Y= only when a project needs an explicit Conan Python runtime. =zsa= is optional for public users. If Python is not available yet, the wrapper prints the minimal host packages that must be installed first; when a sibling =zsa= checkout exists, it also shows the optional =../zsa/util/bootstrap_debian.sh --minimal= helper.
+With no arguments, =./common/prepare_debian.sh= prepares native build dependencies, Conan and submodules. Pass =--python-version X.Y= only to select an explicit Conan Python runtime. Public users can run host preparation without zsa.
 
 The preparation script installs =libopenmpi-dev= and =openmpi-bin= because
 Forge enables HPX's MPI parcelport. Open MPI is the default system MPI

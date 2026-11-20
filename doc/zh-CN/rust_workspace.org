@@ -3,6 +3,8 @@
 
 [[file:readme.org][返回文档首页]] | [[file:../en/rust_workspace.org][English Version]]
 
+在 Forge 工作区运行 =python3 common/prepare_debian.py --toolchain rust --rust-project ../zeta_cat=，按项目声明安装 Forge 批准的精确工具链、组件和目标。现有默认工具链及其它版本保留。
+
 * 目标与归属
 
 =zeta_forge= 统一批准 Rust 工具链、第三方直接 crate 的精确版本与来源，以及应用能力所需的 Cargo 工具。业务仓库拥有源码、workspace 成员、普通 Cargo feature 组合和提交的 =Cargo.lock=。Cargo 解析完整依赖图；Forge 校验直接依赖声明与锁定身份是否匹配唯一版本目录。Conan 只管理 C/C++ package。

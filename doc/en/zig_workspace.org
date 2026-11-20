@@ -7,6 +7,8 @@ native Zig projects. The current approved toolchain is exactly =0.17.0=;
 projects must agree with this baseline in their native build definition.
 The adapter never installs or upgrades Zig and has no external package graph.
 
+Run =python3 common/prepare_debian.py --toolchain zig= from the Forge checkout to install the exact shared version for the current Linux architecture. The installer validates the archive and executable before changing the managed launcher.
+
 A project registers native step names and optional executable names through its
 thin launcher. =build.zig= owns module imports, compiler options, test cases and
 native dependencies. Debug/release map to Debug/ReleaseFast. Outputs and local

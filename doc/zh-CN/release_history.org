@@ -5,6 +5,19 @@
 
 * 发布历史
 
+** v1.25.0 - 2026-11-20T01:31:01Z
+:PROPERTIES:
+:CUSTOM_ID: v1.25.0
+:END:
+
+*** 变更
+- 为 =prepare_debian.py= 新增 Rust 和 Zig 的独立 =--toolchain= 操作。
+- 按项目声明准备 Rust 工具链，并安装或复用 Forge 固定的 Zig 版本，校验下载归档。
+- 明确系统 Python 前置条件，并记录两个工具链入口。
+
+*** 验证
+- 检查了暂存内容的空白格式。本次提交未额外运行测试或构建。
+
 ** v1.24.3 - 2026-11-16T01:21:15Z
 :PROPERTIES:
 :CUSTOM_ID: v1.24.3
